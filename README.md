@@ -49,6 +49,29 @@ video ─► MediaPipe Pose (33 landmarks, 2D + rough 3D)     lib/tracker.ts
 - **Score JSON**: `{ source, grid, smooth, lift, body, raw[], frames[], keyframes[] }`
   where `raw` and `frames` are per-sample `Pose`s (`t, facing, x, z, hipY, bones{id: [az, el]}, conf`).
 
+## Sections & the studio
+
+Once a clip is analyzed, the **section** panel (right column) estimates the
+clip's tempo from the motion (always adjustable: slider, tap, ⅛-beat offset
+nudges), snaps the score's keyframes to the nearest **quarter-beat**, and lets
+you drag out a window of up to **8 beats**. Save it to the browser's library
+(IndexedDB, shared across this origin) or download it as JSON.
+
+The static pages under `public/movement-languages/` are the companion site:
+
+- `/movement-languages/danceforms.html` — the studio: a **library** of saved
+  sections, a **choreography** builder that sequences sections (with repeats)
+  onto a dancer track, playback, editable Labanotation (16 directions + level
+  pins) / Benesh / Eshkol-Wachman (22.5° half-units) renderings, JSON export,
+  and **⏺ Capture** — records a playback pass to a video file.
+- `/movement-languages/index.html` — the parameters page; can load a section
+  from the library, compressed into its four-channel comparison model.
+
+The shared format and DB schema live in `lib/sectionize.ts` / `lib/sectionsDb.ts`
+with a vanilla twin at `public/movement-languages/section-store.js` — change
+one, change both. Tests: `npm test` (node:test) and `npm run e2e` (Playwright,
+needs the dev server + `npx playwright install chromium`).
+
 ## Stack
 
 Next.js 16 · React 19 · Tailwind 4 · @mediapipe/tasks-vision · three / react-three-fiber / drei.

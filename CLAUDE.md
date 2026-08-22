@@ -9,5 +9,6 @@ See README.md for what this is and how the pipeline fits together.
 - Typecheck with `npx tsc --noEmit -p .` (the `LayoutProps` error is a Next-generated global; ignore until `next dev`/`build` has run). Lint with `npx eslint .`.
 - The dev server may already be running on :3000 (`.next/dev/logs/next-development.log` has browser + server logs). Headless e2e: a Playwright script that uploads a clip and waits for "keyframes" text works; the sample clip used in development was a 10 s Kathak excerpt from Wikimedia Commons.
 - MediaPipe's world (3D) depth is unreliable; `lib/lift.ts` keeps image xy exact and clamps depth by bone length. Smoothing must stay fast (`beta` ≈ 1) or fast arm sweeps lag by several frames.
+- Sections/choreography: `lib/sectionize.ts` + `lib/sectionsDb.ts` have a deliberately duplicated vanilla twin in `public/movement-languages/section-store.js` (static pages can't import from the app) — keep the schema in step. The static pages under `public/movement-languages/` are copies; the originals in `../` are not touched. `npm test` runs node:test units; `npm run e2e` needs the dev server.
 
 @AGENTS.md

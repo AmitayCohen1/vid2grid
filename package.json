@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "test": "node --import tsx --test test/*.test.ts && node --test test/*.test.mjs",
+    "e2e": "node scripts/e2e-sections.mjs",
     "lint": "eslint",
     "postinstall": "node scripts/setup-assets.mjs"
   },
@@ -29,6 +30,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "fake-indexeddb": "^6.2.5",
+    "playwright": "^1.62.1",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
     "typescript": "^5"
