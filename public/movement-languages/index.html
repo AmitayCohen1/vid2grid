@@ -1,0 +1,1183 @@
+<title>Movement Languages — Parameters of Notation</title>
+<style>
+  /* ---------- tokens ---------- */
+  :root{
+    --paper:#ECEBE5;
+    --paper-2:#E3E2DA;
+    --ink:#171A21;
+    --ink-soft:#4A4E58;
+    --ink-faint:#9A9DA3;
+    --line:#C9C8BF;
+    --accent:#2B3EC4;
+    --accent-soft:rgba(43,62,196,.12);
+    --signal:#C43A24;
+    --card:#F2F1EB;
+    --mono-bg:#E7E6DF;
+    --shadow:0 1px 0 rgba(23,26,33,.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0C0E13;
+      --paper-2:#11141B;
+      --ink:#DCE3E1;
+      --ink-soft:#93A09D;
+      --ink-faint:#525C60;
+      --line:#252B33;
+      --accent:#62E6D4;
+      --accent-soft:rgba(98,230,212,.13);
+      --signal:#F0604A;
+      --card:#10131A;
+      --mono-bg:#151922;
+      --shadow:0 1px 0 rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="light"]{
+    --paper:#ECEBE5; --paper-2:#E3E2DA; --ink:#171A21; --ink-soft:#4A4E58;
+    --ink-faint:#9A9DA3; --line:#C9C8BF; --accent:#2B3EC4;
+    --accent-soft:rgba(43,62,196,.12); --signal:#C43A24; --card:#F2F1EB;
+    --mono-bg:#E7E6DF; --shadow:0 1px 0 rgba(23,26,33,.08);
+  }
+  :root[data-theme="dark"]{
+    --paper:#0C0E13; --paper-2:#11141B; --ink:#DCE3E1; --ink-soft:#93A09D;
+    --ink-faint:#525C60; --line:#252B33; --accent:#62E6D4;
+    --accent-soft:rgba(98,230,212,.13); --signal:#F0604A; --card:#10131A;
+    --mono-bg:#151922; --shadow:0 1px 0 rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Baskerville","Palatino Linotype",Palatino,Georgia,serif;
+    font-size:17px; line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .disp{ font-family:"Futura","Avenir Next","Century Gothic","Trebuchet MS",sans-serif; }
+  .mono{ font-family:"Menlo","SF Mono",Consolas,"Liberation Mono",monospace; font-variant-numeric:tabular-nums; }
+
+  a{color:var(--accent)}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;padding:0}
+  button:focus-visible, .switch:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+  svg text{user-select:none}
+
+  .wrap{max-width:1060px;margin:0 auto;padding:0 24px}
+
+  /* ---------- header ---------- */
+  header{
+    position:sticky;top:0;z-index:40;
+    background:color-mix(in srgb, var(--paper) 88%, transparent);
+    backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);
+  }
+  .head-in{display:flex;align-items:center;gap:18px;padding:12px 0;flex-wrap:wrap}
+  .brand{font-size:15px;letter-spacing:.22em;text-transform:uppercase;font-weight:600}
+  .brand small{display:block;font-weight:400;letter-spacing:.14em;color:var(--ink-soft);font-size:10.5px;margin-top:2px}
+  .head-spacer{flex:1}
+
+  nav.pages{display:flex;gap:4px;border:1px solid var(--ink);border-radius:2px;overflow:hidden;
+    font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:600}
+  nav.pages a{padding:8px 14px;text-decoration:none;color:var(--ink-soft)}
+  nav.pages a.here{background:var(--ink);color:var(--paper)}
+
+  /* mode switch */
+  .switch{
+    display:flex;align-items:center;border:1px solid var(--ink);border-radius:2px;overflow:hidden;
+    font-size:11px;letter-spacing:.18em;text-transform:uppercase;font-weight:600;
+  }
+  .switch button{padding:8px 14px;color:var(--ink-soft);transition:background .18s,color .18s}
+  .switch button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+
+  /* ---------- hero ---------- */
+  .hero{padding:64px 0 34px;border-bottom:1px solid var(--line)}
+  .hero h1{
+    font-family:"Futura","Avenir Next","Century Gothic","Trebuchet MS",sans-serif;
+    font-size:clamp(34px,6vw,62px);line-height:1.02;margin:0 0 18px;
+    letter-spacing:.015em;text-transform:uppercase;font-weight:700;text-wrap:balance;
+  }
+  .hero h1 em{font-style:normal;color:var(--accent)}
+  .hero .lede{max-width:62ch;color:var(--ink-soft);font-size:18px;margin:0 0 10px}
+  .hero .lede strong{color:var(--ink)}
+  .glyph-strip{margin-top:30px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);overflow:hidden}
+  .glyph-strip svg{display:block;width:100%;height:56px}
+
+  /* ---------- sections ---------- */
+  section{padding:52px 0 40px;border-bottom:1px solid var(--line)}
+  .sec-head{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+  .rehearsal{
+    font-family:"Menlo","SF Mono",Consolas,monospace;font-size:12px;color:var(--paper);
+    background:var(--ink);padding:3px 8px;letter-spacing:.1em;border-radius:2px;
+  }
+  h2{
+    font-family:"Futura","Avenir Next","Century Gothic","Trebuchet MS",sans-serif;
+    font-size:clamp(21px,3vw,28px);margin:0;text-transform:uppercase;letter-spacing:.06em;font-weight:700;
+  }
+  .sec-sub{color:var(--ink-soft);font-size:14px}
+  .sec-note{max-width:66ch;color:var(--ink-soft);font-size:15.5px;margin:8px 0 22px}
+  .sec-note strong{color:var(--ink)}
+
+  /* parameter chips */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 20px}
+  .chip{
+    border:1px solid var(--line);background:var(--card);border-radius:2px;
+    padding:7px 11px;font-size:12.5px;box-shadow:var(--shadow);
+  }
+  .chip .k{
+    font-family:"Futura","Avenir Next","Century Gothic",sans-serif;
+    text-transform:uppercase;letter-spacing:.14em;font-size:10px;color:var(--ink-faint);display:block;margin-bottom:2px;
+  }
+  .chip .v{font-family:"Menlo","SF Mono",Consolas,monospace;font-size:11.5px;color:var(--ink)}
+  body.abstract .chip{border-color:var(--accent);background:var(--accent-soft)}
+  body.abstract .chip .k{color:var(--accent)}
+
+  .panel{
+    border:1px solid var(--line);background:var(--card);border-radius:3px;
+    box-shadow:var(--shadow);overflow:hidden;
+  }
+  .panel + .panel{margin-top:18px}
+  .panel-cap{
+    padding:9px 14px;border-bottom:1px solid var(--line);
+    font-family:"Futura","Avenir Next","Century Gothic",sans-serif;
+    font-size:10.5px;text-transform:uppercase;letter-spacing:.2em;color:var(--ink-soft);
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+  }
+  .panel-cap .dotk{width:8px;height:8px;background:var(--accent);border-radius:50%;flex:none}
+  .scrollx{overflow-x:auto;overflow-y:hidden}
+  .pad{padding:16px}
+
+  .caption{font-size:13.5px;color:var(--ink-soft);margin-top:10px;max-width:72ch}
+  .caption .mono{font-size:12px}
+
+  /* ---------- phrase section ---------- */
+  .phrase-tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 16px}
+  .btn{
+    display:inline-flex;align-items:center;gap:9px;
+    font-family:"Futura","Avenir Next","Century Gothic",sans-serif;
+    font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;
+    border:1px solid var(--ink);border-radius:2px;padding:9px 16px;
+    transition:transform .08s, background .15s, color .15s;
+    background:var(--card);
+  }
+  .btn:hover{background:var(--ink);color:var(--paper)}
+  .btn:active{transform:translateY(1px)}
+  .btn.chance{border-color:var(--signal);color:var(--signal)}
+  .btn.chance:hover{background:var(--signal);color:var(--paper)}
+  .btn .die{font-size:15px;line-height:1}
+  .btn[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+
+  .duet{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px}
+  @media (max-width:860px){ .duet{grid-template-columns:minmax(0,1fr)} }
+
+  #timelineWrap svg{display:block}
+  .kf{cursor:pointer}
+  .kf:hover .kf-shape{stroke:var(--accent)}
+  .kf.sel .kf-shape{stroke:var(--accent)}
+
+  canvas{display:block;width:100%}
+
+  /* inspector */
+  .inspector{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;padding:16px}
+  .field .lab{
+    font-family:"Futura","Avenir Next","Century Gothic",sans-serif;
+    font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:7px;
+  }
+  .optrow{display:flex;flex-wrap:wrap;gap:5px}
+  .opt{
+    border:1px solid var(--line);border-radius:2px;background:var(--paper-2);
+    font-family:"Menlo","SF Mono",Consolas,monospace;font-size:11.5px;
+    padding:6px 9px;min-width:32px;text-align:center;color:var(--ink-soft);
+    transition:background .12s,color .12s,border-color .12s;
+  }
+  .opt:hover{border-color:var(--ink)}
+  .opt[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .rose{display:grid;grid-template-columns:repeat(3,32px);gap:4px}
+  .rose .opt{min-width:0;padding:6px 0}
+
+  /* ---------- table ---------- */
+  table.map{border-collapse:collapse;width:100%;font-size:13.5px;min-width:760px}
+  table.map th,table.map td{border:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top}
+  table.map th{
+    font-family:"Futura","Avenir Next","Century Gothic",sans-serif;
+    font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;background:var(--paper-2);
+  }
+  table.map td.param{
+    font-family:"Futura","Avenir Next","Century Gothic",sans-serif;
+    font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;
+  }
+  table.map td.abs{color:var(--accent);font-family:"Menlo","SF Mono",Consolas,monospace;font-size:12px}
+
+  /* ---------- footer ---------- */
+  footer{padding:44px 0 70px;color:var(--ink-soft);font-size:14.5px}
+  footer h3{
+    font-family:"Futura","Avenir Next","Century Gothic",sans-serif;
+    font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink);margin:26px 0 8px;
+  }
+  footer p{max-width:74ch;margin:0 0 10px}
+
+  @media (prefers-reduced-motion: reduce){
+    .drift{animation:none !important}
+  }
+  @keyframes drift{ from{transform:translateX(0)} to{transform:translateX(-50%)} }
+  .drift{animation:drift 60s linear infinite}
+</style>
+
+<header>
+  <div class="wrap head-in">
+    <div class="brand disp">Movement Languages
+      <small>Laban · Benesh · Eshkol-Wachman · LifeForms</small>
+    </div>
+    <div class="head-spacer"></div>
+    <nav class="pages disp">
+      <a href="/">Capture</a>
+      <a href="index.html" class="here" aria-current="page">Parameters</a>
+      <a id="navStudio" href="danceforms.html">Studio</a>
+    </nav>
+    <div class="switch disp" role="group" aria-label="Representation mode">
+      <button id="modeBody" aria-pressed="true">Embodied</button>
+      <button id="modeAbs" aria-pressed="false">Abstracted</button>
+    </div>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap">
+    <h1>One phrase,<br>four notations,<br><em>no body required.</em></h1>
+    <p class="lede">Every movement notation is a claim about which <strong>parameters</strong> of movement matter.
+      Below, a single movement phrase is written simultaneously in <strong>Labanotation</strong>,
+      <strong>Benesh Movement Notation</strong>, and <strong>Eshkol-Wachman Movement Notation</strong> —
+      and as a keyframe timeline in the manner of <strong>LifeForms</strong>, the software Merce Cunningham
+      composed with from 1989 onward.</p>
+    <p class="lede">Use the <strong>Embodied / Abstracted</strong> switch to strip the body away:
+      limbs become numbered channels, directions become unit vectors, the score becomes pure coordinates over time.</p>
+  </div>
+  <div class="glyph-strip" aria-hidden="true"><svg id="stripSvg" preserveAspectRatio="xMidYMid slice"></svg></div>
+</div>
+
+<main class="wrap">
+
+  <!-- ===================== PHRASE ===================== -->
+  <section id="sec-phrase">
+    <div class="sec-head">
+      <span class="rehearsal">A</span>
+      <h2>The Phrase — a LifeForms timeline</h2>
+      <span class="sec-sub">Cunningham’s digital notation, 1989–</span>
+    </div>
+    <p class="sec-note">LifeForms (Simon Fraser University; later <em>DanceForms</em>) represented choreography as
+      <strong>keyframes on body-part channels</strong> — a wireframe figure with no weight, breath, or habit.
+      Cunningham paired it with the <strong>chance operations</strong> he had used since the 1950s: cast the dice,
+      accept the result, and let the body catch up to what the diagram proposes.</p>
+
+    <div class="chips" id="chipsLifeforms"></div>
+
+    <div class="phrase-tools">
+      <button class="btn chance disp" id="btnChance"><span class="die" id="dieFace">⚄</span> Cast chance operation</button>
+      <button class="btn disp" id="btnPlay" aria-pressed="false">▶ Play phrase</button>
+      <span class="sec-sub mono" id="playClock">beat 0.0</span>
+    </div>
+
+    <div class="duet">
+      <div class="panel">
+        <div class="panel-cap"><span class="dotk"></span><span id="capTimeline">Channels × keyframes — click a keyframe to edit</span></div>
+        <div class="scrollx" id="timelineWrap"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-cap"><span class="dotk"></span><span id="capViewer">Figure viewer</span></div>
+        <canvas id="viewerCanvas" height="300"></canvas>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:18px">
+      <div class="panel-cap"><span class="dotk"></span><span>Event inspector — <span class="mono" id="inspTitle"></span></span></div>
+      <div class="inspector" id="inspector"></div>
+    </div>
+    <p class="caption">Each event sets one target for one channel: a direction, a level, a duration in beats,
+      and a dynamic (Laban’s effort factors <em>time</em> and <em>weight</em>), which shapes the interpolation —
+      <em>sustained</em> eases across the whole duration, <em>sudden</em> snaps early and holds.</p>
+  </section>
+
+  <!-- ===================== LABAN ===================== -->
+  <section id="sec-laban">
+    <div class="sec-head">
+      <span class="rehearsal">B</span>
+      <h2>Labanotation</h2>
+      <span class="sec-sub">Rudolf Laban, <em>Kinetographie</em>, 1928</span>
+    </div>
+    <p class="sec-note">A vertical staff read <strong>bottom to top</strong>. The staff’s columns name body parts;
+      the <strong>shape</strong> of a symbol gives direction, its <strong>shading</strong> gives level
+      (hatched = high, dot = middle, solid = low), and its <strong>length</strong> gives duration.
+      Every parameter is spatial-temporal geometry first — the body is an address, not a picture.</p>
+
+    <div class="chips" id="chipsLaban"></div>
+
+    <div class="panel">
+      <div class="panel-cap"><span class="dotk"></span><span id="capLaban">Simplified staff — arm and leg gesture columns</span></div>
+      <div class="scrollx pad" id="labanWrap"></div>
+    </div>
+    <p class="caption" id="capLabanNote">Read upward from the double start line. Simplified here to four gesture
+      columns (support columns omitted). In abstract mode the staff dissolves into Laban’s own deeper claim:
+      direction is one of 26 rays of a point-centred lattice (the <em>kinesphere</em>), and duration is bare interval length.</p>
+  </section>
+
+  <!-- ===================== BENESH ===================== -->
+  <section id="sec-benesh">
+    <div class="sec-head">
+      <span class="rehearsal">C</span>
+      <h2>Benesh Movement Notation</h2>
+      <span class="sec-sub">Rudolf &amp; Joan Benesh, 1955</span>
+    </div>
+    <p class="sec-note">A five-line stave read left to right, like music — but the lines are a <strong>coordinate frame
+      laid over the body seen from behind</strong>: top of head, shoulders, waist, knees, floor. Extremities are plotted
+      <em>where they appear</em> in that frame; a stroke qualifier gives depth
+      (<span class="mono">|</span> in front · <span class="mono">—</span> level · <span class="mono">•</span> behind).
+      Each entry is a frame of film: notation as keyframing, thirty years before the software.</p>
+
+    <div class="chips" id="chipsBenesh"></div>
+
+    <div class="panel">
+      <div class="panel-cap"><span class="dotk"></span><span id="capBenesh">Stave — one frame per event</span></div>
+      <div class="scrollx pad" id="beneshWrap"></div>
+    </div>
+    <p class="caption">Rhythm marks above the stave give each frame’s duration in beats.
+      In abstract mode the dancer vanishes and the parameter shows itself plainly:
+      a point <span class="mono">(x, y)</span> in a picture plane plus a three-valued depth — a shallow 3-D coordinate.</p>
+  </section>
+
+  <!-- ===================== ESHKOL-WACHMAN ===================== -->
+  <section id="sec-ew">
+    <div class="sec-head">
+      <span class="rehearsal">D</span>
+      <h2>Eshkol-Wachman Movement Notation</h2>
+      <span class="sec-sub">Noa Eshkol &amp; Avraham Wachman, 1958</span>
+    </div>
+    <p class="sec-note">The body is treated as a chain of <strong>straight-line segments</strong>, each moving on the
+      surface of a sphere centred at its joint. A position is just two numbers — a <strong>vertical</strong> and a
+      <strong>horizontal</strong> coordinate in 45° units — and the score is a grid: rows for limbs, columns for time.
+      It is the most abstract of the three by design, and has notated dance, sign language, and animal behaviour alike.</p>
+
+    <div class="chips" id="chipsEW"></div>
+
+    <div class="duet">
+      <div class="panel">
+        <div class="panel-cap"><span class="dotk"></span><span id="capEWGrid">Score grid — rows × time units</span></div>
+        <div class="scrollx pad" id="ewWrap"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-cap"><span class="dotk"></span><span id="capSphere">System of reference — selected event</span></div>
+        <canvas id="sphereCanvas" height="300"></canvas>
+      </div>
+    </div>
+    <p class="caption">Coordinates are written <span class="mono">vertical / horizontal</span>:
+      vertical <span class="mono">0</span> points straight down and <span class="mono">4</span> straight up;
+      horizontal counts 45° units around the body (<span class="mono">0</span> = forward).
+      The sphere <em>is</em> the notation — in abstract mode nothing is removed but a label.</p>
+  </section>
+
+  <!-- ===================== ROSETTA ===================== -->
+  <section id="sec-map">
+    <div class="sec-head">
+      <span class="rehearsal">E</span>
+      <h2>Parameter correspondences</h2>
+      <span class="sec-sub">the same movement fact, four spellings</span>
+    </div>
+    <p class="sec-note">Each row is one parameter of movement; each column, how a language spells it.
+      The last column is the parameter with the body subtracted — what survives every spelling.</p>
+    <div class="panel"><div class="scrollx">
+      <table class="map">
+        <thead><tr>
+          <th>Parameter</th><th>Labanotation</th><th>Benesh</th><th>Eshkol-Wachman</th><th>LifeForms (digital)</th><th>Abstraction</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td class="param">Space / where</td>
+            <td>Direction symbol — 8 rays + place, by symbol <em>shape</em></td>
+            <td>Position of the extremity in the stave frame, with depth stroke</td>
+            <td>Horizontal coordinate, 45° units around the joint</td>
+            <td>Joint rotation / 3-D position of a segment</td>
+            <td class="abs">unit vector v ∈ S²</td>
+          </tr>
+          <tr>
+            <td class="param">Level / height</td>
+            <td>Symbol <em>shading</em>: hatched high · dot middle · solid low</td>
+            <td>Vertical placement against the five body-lines</td>
+            <td>Vertical coordinate, 0 (down) → 4 (up)</td>
+            <td>Elevation component of the keyframe pose</td>
+            <td class="abs">elevation angle θ</td>
+          </tr>
+          <tr>
+            <td class="param">Time</td>
+            <td>Symbol <em>length</em> along the staff</td>
+            <td>Left-to-right order; rhythm marks above the stave</td>
+            <td>Columns of the grid — equal time units</td>
+            <td>Keyframe placement on the timeline</td>
+            <td class="abs">interval [t₀, t₀+Δt]</td>
+          </tr>
+          <tr>
+            <td class="param">Body / who moves</td>
+            <td>Staff <em>column</em> for the body part</td>
+            <td>Which extremity is plotted in the frame</td>
+            <td>Grid <em>row</em> per limb segment</td>
+            <td>Channel of the articulated figure</td>
+            <td class="abs">channel index k</td>
+          </tr>
+          <tr>
+            <td class="param">Dynamics / how</td>
+            <td>Effort signs — weight, time, space, flow</td>
+            <td>Phrasing and dynamic marks</td>
+            <td>Largely omitted — quantity over quality</td>
+            <td>Interpolation curve between keyframes</td>
+            <td class="abs">easing e(t) of the transition</td>
+          </tr>
+        </tbody>
+      </table>
+    </div></div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <h3 class="disp">Cunningham and the digitized body</h3>
+    <p>Merce Cunningham began working with <em>LifeForms</em> in 1989, in collaboration with the team led by
+      Tom Calvert at Simon Fraser University; the software was later commercialized as <em>DanceForms</em> (Credo
+      Interactive). <em>Trackers</em> (1991) was his first stage work choreographed with it. For <em>BIPED</em> (1999)
+      he went further, working with the digital artists Paul Kaiser and Shelley Eshkar to motion-capture dancers and
+      project their hand-drawn, bodiless traces over the live stage. He valued the software precisely for its
+      abstraction — it proposed articulations a trained body would never volunteer.</p>
+    <h3 class="disp">On the reduction</h3>
+    <p>Each system is radically simplified here for comparison: one gesture per event, four limb channels, eight
+      directions and three levels. Real Labanotation has support, body, and head columns and a large symbol
+      repertory; real Benesh notates whole-body frames with locomotion below the stave; real Eshkol-Wachman
+      subdivides angles as finely as needed and distinguishes plane, conical, and rotatory movement.
+      The point of the reduction is the comparison: what remains constant when the spelling changes.</p>
+    <h3 class="disp">Method</h3>
+    <p>A single shared data structure — <span class="mono">{channel, direction, level, duration, dynamic}</span> —
+      drives every rendering on this page. That structure is itself the answer to the question the page asks:
+      the abstracted parameter set, without a body.</p>
+  </div>
+</footer>
+
+<script src="section-store.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* ============ model ============ */
+  const LIMBS = [
+    {id:"RA", body:"Right arm",  abs:"Channel 1", joint:"shoulder", side: 1},
+    {id:"LA", body:"Left arm",   abs:"Channel 2", joint:"shoulder", side:-1},
+    {id:"RL", body:"Right leg",  abs:"Channel 3", joint:"hip",      side: 1},
+    {id:"LL", body:"Left leg",   abs:"Channel 4", joint:"hip",      side:-1},
+  ];
+  const LIMB = Object.fromEntries(LIMBS.map(l=>[l.id,l]));
+
+  const DIRS = {
+    place:  {az:null, label:"place",         arrow:"●"},
+    forward:{az:0,    label:"forward",       arrow:"↑"},
+    rf:     {az:45,   label:"right-forward", arrow:"↗"},
+    right:  {az:90,   label:"right",         arrow:"→"},
+    rb:     {az:135,  label:"right-back",    arrow:"↘"},
+    back:   {az:180,  label:"back",          arrow:"↓"},
+    lb:     {az:225,  label:"left-back",     arrow:"↙"},
+    left:   {az:270,  label:"left",          arrow:"←"},
+    lf:     {az:315,  label:"left-forward",  arrow:"↖"},
+  };
+  const LEVELS = {low:{el:-45,label:"low"}, middle:{el:0,label:"middle"}, high:{el:45,label:"high"}};
+
+  const state = {
+    mode:"embodied",           // embodied | abstract
+    selected:0,
+    playing:false,
+    t:0,                       // playhead in beats
+    phrase:[
+      {limb:"RA", dir:"forward", level:"middle", beats:2, time:"sustained", weight:"light"},
+      {limb:"LL", dir:"left",    level:"low",    beats:1, time:"sudden",    weight:"strong"},
+      {limb:"LA", dir:"lf",      level:"high",   beats:2, time:"sustained", weight:"light"},
+      {limb:"RL", dir:"back",    level:"middle", beats:1, time:"sudden",    weight:"strong"},
+      {limb:"RA", dir:"place",   level:"high",   beats:2, time:"sustained", weight:"strong"},
+    ],
+  };
+
+  /* ============ geometry ============ */
+  // body space: x right, y up, z forward. unit vector of an event target
+  function vecOf(ev){
+    if(ev.dir==="place"){
+      return ev.level==="high" ? {x:0,y:1,z:0} : {x:0,y:-1,z:0};
+    }
+    const az = DIRS[ev.dir].az * Math.PI/180;
+    const el = LEVELS[ev.level].el * Math.PI/180;
+    return {x:Math.sin(az)*Math.cos(el), y:Math.sin(el), z:Math.cos(az)*Math.cos(el)};
+  }
+  function ewOf(ev){ // Eshkol-Wachman coordinates {v,h}
+    if(ev.dir==="place") return {v: ev.level==="high"?4:0, h:0};
+    const v = {low:1, middle:2, high:3}[ev.level];
+    return {v, h: DIRS[ev.dir].az/45};
+  }
+  function depthOf(ev){ // Benesh depth qualifier from sagittal component
+    const z = vecOf(ev).z;
+    if(z > .35) return "front";
+    if(z < -.35) return "behind";
+    return "level";
+  }
+  const DEPTH_GLYPH = {front:"|", level:"—", behind:"•"};
+
+  function starts(){ let t=0; return state.phrase.map(ev=>{const s=t; t+=ev.beats; return s;}); }
+  function totalBeats(){ return state.phrase.reduce((a,e)=>a+e.beats,0); }
+
+  function lerpVec(a,b,u){
+    const x=a.x+(b.x-a.x)*u, y=a.y+(b.y-a.y)*u, z=a.z+(b.z-a.z)*u;
+    const m=Math.hypot(x,y,z)||1; return {x:x/m,y:y/m,z:z/m};
+  }
+  function ease(ev,u){
+    u=Math.max(0,Math.min(1,u));
+    if(ev.time==="sudden"){ const c=Math.min(1,u/0.28); return c*c*(3-2*c); }
+    return u*u*(3-2*u); // sustained smoothstep
+  }
+  const REST = {x:0,y:-1,z:0};
+  // pose of a limb at playhead time t (beats)
+  function poseAt(limbId,t){
+    const st = starts();
+    let cur = REST;
+    for(let i=0;i<state.phrase.length;i++){
+      const ev = state.phrase[i];
+      if(ev.limb!==limbId) continue;
+      const s = st[i], e = s+ev.beats, target = vecOf(ev);
+      if(t < s) return cur;
+      if(t < e) return lerpVec(cur, target, ease(ev,(t-s)/ev.beats));
+      cur = target;
+    }
+    return cur;
+  }
+
+  /* ============ helpers ============ */
+  const $ = s=>document.querySelector(s);
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+  function limbLabel(id){ return state.mode==="abstract" ? LIMB[id].abs : LIMB[id].body; }
+  function css(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ============ chips ============ */
+  const CHIPSETS = {
+    chipsLifeforms:[
+      ["Keyframe","target pose at a beat","(k, t₀) ↦ pose"],
+      ["Channel","body part of the figure","channel index k ∈ {1…4}"],
+      ["Timeline","beats left to right","t ∈ [0, T]"],
+      ["Interpolation","how the figure travels","easing e(t)"],
+      ["Chance","dice decide the next event","uniform sample of the parameter space"],
+    ],
+    chipsLaban:[
+      ["Direction","symbol shape · 8 rays + place","one of 26 lattice rays + centre"],
+      ["Level","shading: hatch / dot / solid","elevation band θ ∈ {−45°, 0°, +45°}"],
+      ["Duration","symbol length","interval length Δt"],
+      ["Body part","staff column","channel index k"],
+      ["Effort","weight · time qualities","easing + amplitude of e(t)"],
+    ],
+    chipsBenesh:[
+      ["Position","where the extremity sits in the frame","point (x, y) in a picture plane"],
+      ["Depth","stroke: | in front · — level · • behind","ternary z ∈ {+1, 0, −1}"],
+      ["Body lines","head / shoulder / waist / knee / floor","horizontal rulings of the frame"],
+      ["Rhythm","marks above the stave","frame duration Δt"],
+      ["Frame","one drawing per moment","keyframe sample of the path"],
+    ],
+    chipsEW:[
+      ["Vertical","angle from straight down, 45° units","v ∈ {0…4}"],
+      ["Horizontal","angle around the body, 45° units","h ∈ {0…7}"],
+      ["Limb","straight segment on its joint-sphere","radius of S², any linkage"],
+      ["Time unit","one grid column","tick of a discrete clock"],
+      ["Movement type","plane · conical · rotatory","class of path on the sphere"],
+    ],
+  };
+  function renderChips(){
+    for(const [holderId, rows] of Object.entries(CHIPSETS)){
+      const abs = state.mode==="abstract";
+      document.getElementById(holderId).innerHTML = rows.map(([k, body, absv])=>
+        `<span class="chip"><span class="k disp">${esc(k)}</span><span class="v">${esc(abs?absv:body)}</span></span>`
+      ).join("");
+    }
+  }
+
+  /* ============ glyph strip (hero) ============ */
+  function renderStrip(){
+    const svg = $("#stripSvg");
+    const glyphs = [];
+    let x = 20;
+    const seq = ["forward","right","lf","back","place","rb","left","rf","forward","lb","right","place"];
+    const lv = ["high","middle","low"];
+    seq.forEach((d,i)=>{
+      glyphs.push(labanSymbol(d, lv[i%3], x, 10, 16, 36, "RA"));
+      x += 34;
+      glyphs.push(`<text x="${x+2}" y="38" class="mono" font-size="13" fill="var(--ink-soft)">${(i%5)}/${(i*3)%8}</text>`);
+      x += 40;
+      glyphs.push(`<text x="${x}" y="34" font-size="20" fill="var(--ink-soft)">${["|","—","•"][i%3]}</text>`);
+      x += 34;
+    });
+    const W = x+20;
+    svg.setAttribute("viewBox", `0 0 ${W*2} 56`);
+    svg.innerHTML = `<defs>${hatchDef("hz")}</defs><g class="drift">${glyphs.join("")}<g transform="translate(${W},0)">${glyphs.join("")}</g></g>`;
+  }
+
+  /* ============ Laban symbol drawing ============ */
+  function hatchDef(id){
+    return `<pattern id="${id}" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="6" style="stroke:var(--ink);stroke-width:1.4"/></pattern>`;
+  }
+  // symbol in box (x, y, w, h); y = top. dir shape + level shading.
+  function labanSymbol(dir, level, x, y, w, h, limbId, extra){
+    const fill = level==="low" ? "var(--ink)" : level==="high" ? "url(#hz)" : "var(--paper)";
+    const inner = LIMB[limbId] && LIMB[limbId].side<0; // notch orientation mirrors for left limbs
+    const nw = w*0.5, nh = Math.min(h*0.35, 14);
+    let d;
+    switch(dir){
+      case "place": d = `M${x},${y} h${w} v${h} h${-w} Z`; break;
+      case "forward": d = inner
+        ? `M${x},${y+nh} h${nw} v${-nh} h${w-nw} v${h} h${-w} Z`
+        : `M${x},${y} h${nw} v${nh} h${w-nw} v${h-nh} h${-w} Z`; break;
+      case "back": d = inner
+        ? `M${x},${y} h${w} v${h} h${-(w-nw)} v${-nh} h${-nw} Z`
+        : `M${x},${y} h${w} v${h-nh} h${-(w-nw)} v${nh} h${-nw} Z`; break;
+      case "right": d = `M${x},${y} h${w*0.55} L${x+w},${y+h/2} L${x+w*0.55},${y+h} h${-w*0.55} Z`; break;
+      case "left":  d = `M${x+w*0.45},${y} h${w*0.55} v${h} h${-w*0.55} L${x},${y+h/2} Z`; break;
+      case "rf": d = `M${x},${y+nh} L${x+w*0.55},${y+nh} L${x+w},${y} L${x+w},${y+h} L${x},${y+h} Z`; break;
+      case "lf": d = `M${x},${y} L${x+w*0.45},${y+nh} L${x+w},${y+nh} L${x+w},${y+h} L${x},${y+h} Z`; break;
+      case "rb": d = `M${x},${y} L${x+w},${y} L${x+w},${y+h} L${x+w*0.55},${y+h-nh} L${x},${y+h-nh} Z`; break;
+      case "lb": d = `M${x},${y} L${x+w},${y} L${x+w},${y+h-nh} L${x+w*0.45},${y+h-nh} L${x},${y+h} Z`; break;
+      default: d = `M${x},${y} h${w} v${h} h${-w} Z`;
+    }
+    const dot = level==="middle" ? `<circle cx="${x+w/2}" cy="${y+h/2}" r="2.4" fill="var(--ink)"/>` : "";
+    return `<g ${extra||""}><path d="${d}" fill="${fill}" style="stroke:var(--ink);stroke-width:1.5" stroke-linejoin="miter"/>${dot}</g>`;
+  }
+
+  /* ============ Laban panel ============ */
+  function renderLaban(){
+    const wrap = $("#labanWrap");
+    const st = starts(), T = totalBeats();
+    if(state.mode==="embodied"){
+      $("#capLaban").textContent = "Simplified staff — arm and leg gesture columns, read bottom to top";
+      const beatH = 44, top=34, bottom=68;
+      const H = T*beatH + top + bottom;
+      const colW = 46, gap = 10;
+      // columns from center: LA, LL | RL, RA
+      const cx = 300;
+      const colX = {LA: cx-2*colW-gap-14, LL: cx-colW-14, RL: cx+14, RA: cx+colW+gap+14};
+      let g = `<defs>${hatchDef("hz")}</defs>`;
+      // center double line
+      g += `<line x1="${cx-3}" y1="${top-14}" x2="${cx-3}" y2="${H-bottom+14}" style="stroke:var(--ink);stroke-width:1.6"/>`;
+      g += `<line x1="${cx+3}" y1="${top-14}" x2="${cx+3}" y2="${H-bottom+14}" style="stroke:var(--ink);stroke-width:1.6"/>`;
+      // start double bar at bottom
+      g += `<line x1="${cx-2.5*colW-gap-20}" y1="${H-bottom+6}" x2="${cx+2.5*colW+gap+20}" y2="${H-bottom+6}" style="stroke:var(--ink);stroke-width:1.4"/>`;
+      g += `<line x1="${cx-2.5*colW-gap-20}" y1="${H-bottom+11}" x2="${cx+2.5*colW+gap+20}" y2="${H-bottom+11}" style="stroke:var(--ink);stroke-width:1.4"/>`;
+      // beat ticks
+      for(let b=0;b<=T;b++){
+        const y = H-bottom - b*beatH;
+        g += `<line x1="${cx-2.5*colW-gap-20}" y1="${y}" x2="${cx-2.5*colW-gap-6}" y2="${y}" style="stroke:var(--line);stroke-width:1"/>`;
+        g += `<text x="${cx-2.5*colW-gap-26}" y="${y+4}" text-anchor="end" class="mono" font-size="10" fill="var(--ink-faint)">${b}</text>`;
+      }
+      // column labels — staggered rows so adjacent labels don't collide
+      for(const l of LIMBS){
+        const isArm = l.joint==="shoulder";
+        g += `<text x="${colX[l.id]+colW/2-9}" y="${H - (isArm?14:34)}" text-anchor="middle" font-size="10" style="letter-spacing:.08em" fill="var(--ink-soft)" font-family="Futura,'Avenir Next','Century Gothic',sans-serif">${esc(limbLabel(l.id)).toUpperCase()}</text>`;
+      }
+      // symbols
+      state.phrase.forEach((ev,i)=>{
+        const x = colX[ev.limb]+ (colW-28)/2 - 9;
+        const y1 = H-bottom - st[i]*beatH;
+        const y0 = H-bottom - (st[i]+ev.beats)*beatH;
+        const sel = i===state.selected ? `style="filter:drop-shadow(0 0 3px var(--accent))"` : "";
+        g += `<g class="kf ${i===state.selected?"sel":""}" data-idx="${i}" ${sel}>${labanSymbol(ev.dir, ev.level, x, y0+3, 28, (y1-y0)-6, ev.limb)}${i===state.selected?`<rect x="${x-5}" y="${y0}" width="38" height="${y1-y0}" fill="none" style="stroke:var(--accent);stroke-width:1.2" stroke-dasharray="3 3"/>`:""}</g>`;
+      });
+      wrap.innerHTML = `<svg viewBox="0 0 600 ${H}" width="600" height="${H}" style="max-width:100%">${g}</svg>`;
+    } else {
+      $("#capLaban").textContent = "Direction lattice — 26 rays + centre; duration as bare intervals";
+      // isometric direction cross + interval band
+      const W=600, H=360, cx=210, cy=168, L=104;
+      const P = v => ({x: cx + v.x*L + v.z*0.52*L, y: cy - v.y*L - v.z*0.30*L});
+      let g = `<defs>${hatchDef("hz")}</defs>`;
+      // lattice: 26 rays
+      const rays=[];
+      for(const xs of [-1,0,1]) for(const ys of [-1,0,1]) for(const zs of [-1,0,1]){
+        if(!xs&&!ys&&!zs) continue;
+        const m=Math.hypot(xs,ys,zs);
+        rays.push({x:xs/m,y:ys/m,z:zs/m});
+      }
+      for(const r of rays){
+        const p=P(r);
+        g += `<line x1="${cx}" y1="${cy}" x2="${p.x}" y2="${p.y}" style="stroke:var(--line);stroke-width:1"/><circle cx="${p.x}" cy="${p.y}" r="2" fill="var(--ink-faint)"/>`;
+      }
+      g += `<circle cx="${cx}" cy="${cy}" r="3" fill="var(--ink)"/>`;
+      // active vectors
+      state.phrase.forEach((ev,i)=>{
+        const p = P(vecOf(ev));
+        const selCls = i===state.selected?"sel":"";
+        const wgt = ev.weight==="strong"?3.4:2;
+        g += `<g class="kf ${selCls}" data-idx="${i}">
+          <line x1="${cx}" y1="${cy}" x2="${p.x}" y2="${p.y}" class="kf-shape" style="stroke:${i===state.selected?"var(--accent)":"var(--ink)"};stroke-width:${wgt}"/>
+          <circle cx="${p.x}" cy="${p.y}" r="${i===state.selected?6:4.5}" class="kf-shape" fill="${i===state.selected?"var(--accent)":"var(--ink)"}" style="stroke:var(--paper);stroke-width:1.5"/>
+          <text x="${p.x+9}" y="${p.y+4}" class="mono" font-size="11" fill="var(--ink-soft)">e${i+1}</text></g>`;
+      });
+      g += `<text x="${cx}" y="${cy+L+52}" text-anchor="middle" class="mono" font-size="11" fill="var(--ink-faint)">kinesphere lattice · 26 rays + centre</text>`;
+      // interval band
+      const bx=430, bw=140, T2=totalBeats(), bh=210, by=64;
+      g += `<line x1="${bx}" y1="${by}" x2="${bx}" y2="${by+bh}" style="stroke:var(--ink);stroke-width:1.4"/>`;
+      for(let b=0;b<=T2;b++){
+        const y=by+bh - b/T2*bh;
+        g += `<line x1="${bx-4}" y1="${y}" x2="${bx+4}" y2="${y}" style="stroke:var(--line)"/><text x="${bx-10}" y="${y+3.5}" text-anchor="end" class="mono" font-size="10" fill="var(--ink-faint)">${b}</text>`;
+      }
+      state.phrase.forEach((ev,i)=>{
+        const s=starts()[i];
+        const y1=by+bh - s/T2*bh, y0=by+bh - (s+ev.beats)/T2*bh;
+        g += `<g class="kf ${i===state.selected?"sel":""}" data-idx="${i}"><rect x="${bx+16+i*4}" y="${y0}" width="10" height="${y1-y0}" class="kf-shape" fill="${i===state.selected?"var(--accent)":"var(--ink-soft)"}" opacity="${i===state.selected?1:.75}"/></g>`;
+      });
+      g += `<text x="${bx+40}" y="${by+bh+30}" text-anchor="middle" class="mono" font-size="11" fill="var(--ink-faint)">Δt intervals</text>`;
+      wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:100%">${g}</svg>`;
+    }
+  }
+
+  /* ============ Benesh panel ============ */
+  function renderBenesh(){
+    const wrap = $("#beneshWrap");
+    const abs = state.mode==="abstract";
+    $("#capBenesh").textContent = abs
+      ? "Picture plane — coordinate + depth per frame, figure removed"
+      : "Stave — one frame per event, figure seen from behind";
+    const frames = state.phrase;
+    const FW=132, H=190, top=44, staveH=100;
+    const lines = [0,.25,.5,.75,1].map(u=>top+u*staveH); // head, shoulder, waist, knee, floor
+    const NAMES = ["top of head","shoulders","waist","knees","floor"];
+    const W = frames.length*FW + 118;
+    let g="";
+    // stave lines
+    lines.forEach((y,li)=>{
+      g += `<line x1="10" y1="${y}" x2="${frames.length*FW+10}" y2="${y}" style="stroke:var(--ink);stroke-width:1.1"/>`;
+      g += `<text x="${frames.length*FW+16}" y="${y+3.5}" font-size="9.5" fill="var(--ink-faint)" font-family="Futura,'Avenir Next',sans-serif" style="letter-spacing:.06em">${abs? "y="+(1-li*0.25).toFixed(2) : NAMES[li].toUpperCase()}</text>`;
+    });
+    frames.forEach((ev,i)=>{
+      const x0 = 10+i*FW;
+      // bar line
+      g += `<line x1="${x0+FW}" y1="${lines[0]}" x2="${x0+FW}" y2="${lines[4]}" style="stroke:var(--ink);stroke-width:${i===frames.length-1?2:1}"/>`;
+      // rhythm marks above stave
+      let rm=""; for(let b=0;b<ev.beats;b++) rm += `<circle cx="${x0+FW/2-((ev.beats-1)*7)/2 + b*14}" cy="${top-22}" r="3" fill="var(--ink-soft)"/>`;
+      g += rm;
+      g += `<text x="${x0+FW/2}" y="${top-32}" text-anchor="middle" class="mono" font-size="10" fill="var(--ink-faint)">${ev.beats} beat${ev.beats>1?"s":""}</text>`;
+      // geometry of extremity within frame (viewed from behind: dancer's right = viewer's right)
+      const v = vecOf(ev);
+      const isArm = ev.limb==="RA"||ev.limb==="LA";
+      const cxF = x0+FW/2;
+      const shoulderY = lines[1], waistY=lines[2], kneeY=lines[3], floorY=lines[4], headY=lines[0];
+      const jointY = isArm? shoulderY : waistY+4;
+      const jx = cxF + (LIMB[ev.limb].side)* (isArm? 17:8);
+      const reach = isArm? 40 : 62;
+      let ex = Math.min(x0+FW-10, Math.max(x0+10, jx + v.x*reach));
+      let eyv = jointY - v.y*reach;
+      eyv = Math.min(floorY-2, Math.max(headY-16, eyv));
+      const depth = depthOf(ev);
+      const sel = i===state.selected;
+      if(!abs){
+        // figure from behind
+        const hx=cxF;
+        let fig = `<circle cx="${hx}" cy="${headY+11}" r="8.5" fill="none" style="stroke:var(--ink-soft);stroke-width:1.4"/>`;
+        fig += `<line x1="${hx}" y1="${headY+19}" x2="${hx}" y2="${waistY}" style="stroke:var(--ink-soft);stroke-width:1.4"/>`;
+        fig += `<line x1="${hx-17}" y1="${shoulderY}" x2="${hx+17}" y2="${shoulderY}" style="stroke:var(--ink-soft);stroke-width:1.4"/>`;
+        for(const l of LIMBS){
+          const active = l.id===ev.limb;
+          const jy = (l.id==="RA"||l.id==="LA")? shoulderY : waistY+4;
+          const jxx = hx + l.side*((l.id==="RA"||l.id==="LA")?17:8);
+          let tx, ty;
+          if(active){ tx=ex; ty=eyv; }
+          else if(l.id==="RA"||l.id==="LA"){ tx=jxx+l.side*4; ty=jy+34; }
+          else { tx=jxx; ty=floorY; }
+          fig += `<line x1="${jxx}" y1="${jy}" x2="${tx}" y2="${ty}" style="stroke:${active? (sel?"var(--accent)":"var(--ink)") :"var(--ink-soft)"};stroke-width:${active?2.4:1.4}"/>`;
+        }
+        g += `<g class="kf ${sel?"sel":""}" data-idx="${i}">${fig}`;
+      } else {
+        g += `<g class="kf ${sel?"sel":""}" data-idx="${i}">`;
+        g += `<text x="${cxF}" y="${floorY+18}" text-anchor="middle" class="mono" font-size="10.5" fill="var(--ink-soft)">(${((ex-x0)/FW).toFixed(2)}, ${((floorY-eyv)/staveH).toFixed(2)}) · z:${depth}</text>`;
+      }
+      // the Benesh depth sign at the extremity location
+      const signCol = sel? "var(--accent)":"var(--ink)";
+      if(depth==="front") g += `<line x1="${ex}" y1="${eyv-7}" x2="${ex}" y2="${eyv+7}" class="kf-shape" style="stroke:${signCol};stroke-width:2.6"/>`;
+      else if(depth==="level") g += `<line x1="${ex-7}" y1="${eyv}" x2="${ex+7}" y2="${eyv}" class="kf-shape" style="stroke:${signCol};stroke-width:2.6"/>`;
+      else g += `<circle cx="${ex}" cy="${eyv}" r="3.6" class="kf-shape" fill="${signCol}"/>`;
+      if(sel) g += `<rect x="${x0+4}" y="${lines[0]-6}" width="${FW-8}" height="${staveH+12}" fill="none" style="stroke:var(--accent);stroke-width:1.2" stroke-dasharray="3 3"/>`;
+      g += `<text x="${cxF}" y="${floorY+34}" text-anchor="middle" class="mono" font-size="10" fill="var(--ink-faint)">e${i+1} · ${esc(limbLabel(ev.limb))}</text></g>`;
+    });
+    wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H+36}" width="${W}" height="${H+36}" style="max-width:none">${g}</svg>`;
+  }
+
+  /* ============ EW grid ============ */
+  function renderEW(){
+    const wrap = $("#ewWrap");
+    const st = starts(), T = totalBeats();
+    $("#capEWGrid").textContent = state.mode==="abstract"
+      ? "Score grid — channels × time units, coordinates only"
+      : "Score grid — limbs × time units";
+    const rowH=46, left=118, colW=54, top=30;
+    const W=left+T*colW+16, H=top+LIMBS.length*rowH+30;
+    let g="";
+    for(let b=0;b<=T;b++){
+      const x=left+b*colW;
+      g += `<line x1="${x}" y1="${top}" x2="${x}" y2="${top+LIMBS.length*rowH}" style="stroke:var(--line)"/>`;
+      if(b<T) g += `<text x="${x+colW/2}" y="${top-9}" text-anchor="middle" class="mono" font-size="10" fill="var(--ink-faint)">${b}</text>`;
+    }
+    LIMBS.forEach((l,r)=>{
+      const y=top+r*rowH;
+      g += `<line x1="${left-104}" y1="${y}" x2="${left+T*colW}" y2="${y}" style="stroke:var(--line)"/>`;
+      g += `<text x="${left-10}" y="${y+rowH/2+3.5}" text-anchor="end" font-size="10" fill="var(--ink-soft)" font-family="Futura,'Avenir Next',sans-serif" style="letter-spacing:.08em">${esc(limbLabel(l.id)).toUpperCase()}</text>`;
+    });
+    g += `<line x1="${left-104}" y1="${top+LIMBS.length*rowH}" x2="${left+T*colW}" y2="${top+LIMBS.length*rowH}" style="stroke:var(--line)"/>`;
+    state.phrase.forEach((ev,i)=>{
+      const r = LIMBS.findIndex(l=>l.id===ev.limb);
+      const x = left+st[i]*colW, y=top+r*rowH;
+      const c = ewOf(ev), sel=i===state.selected;
+      g += `<g class="kf ${sel?"sel":""}" data-idx="${i}">
+        <rect x="${x+2}" y="${y+3}" width="${ev.beats*colW-4}" height="${rowH-6}" class="kf-shape" fill="${sel?"var(--accent-soft)":"transparent"}" style="stroke:${sel?"var(--accent)":"var(--ink)"};stroke-width:1.3"/>
+        <text x="${x+colW/2}" y="${y+rowH/2-3}" text-anchor="middle" class="mono" font-size="13" fill="var(--ink)">${c.v}</text>
+        <line x1="${x+colW/2-9}" y1="${y+rowH/2+1}" x2="${x+colW/2+9}" y2="${y+rowH/2+1}" style="stroke:var(--ink-soft);stroke-width:1"/>
+        <text x="${x+colW/2}" y="${y+rowH/2+14}" text-anchor="middle" class="mono" font-size="13" fill="var(--ink)">${c.h}</text>
+        ${ev.beats>1?`<line x1="${x+colW}" y1="${y+rowH/2}" x2="${x+ev.beats*colW-8}" y2="${y+rowH/2}" style="stroke:var(--ink-soft);stroke-width:1.2" stroke-dasharray="4 3"/>`:""}
+      </g>`;
+    });
+    g += `<text x="${left}" y="${H-4}" class="mono" font-size="10" fill="var(--ink-faint)">cells: vertical / horizontal · 45° units</text>`;
+    wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:none">${g}</svg>`;
+  }
+
+  /* ============ timeline ============ */
+  function renderTimeline(){
+    const wrap = $("#timelineWrap");
+    const st = starts(), T = totalBeats();
+    const left=118, colW=64, rowH=44, top=28;
+    const W=left+T*colW+20, H=top+LIMBS.length*rowH+26;
+    let g="";
+    for(let b=0;b<=T;b++){
+      const x=left+b*colW;
+      g += `<line x1="${x}" y1="${top-6}" x2="${x}" y2="${top+LIMBS.length*rowH}" style="stroke:var(--line)"/>
+            <text x="${x}" y="${top-12}" text-anchor="middle" class="mono" font-size="10" fill="var(--ink-faint)">${b}</text>`;
+    }
+    LIMBS.forEach((l,r)=>{
+      const y=top+r*rowH+rowH/2;
+      g += `<text x="${left-10}" y="${y+3.5}" text-anchor="end" font-size="10" fill="var(--ink-soft)" font-family="Futura,'Avenir Next',sans-serif" style="letter-spacing:.08em">${esc(limbLabel(l.id)).toUpperCase()}</text>
+            <line x1="${left}" y1="${y}" x2="${left+T*colW}" y2="${y}" style="stroke:var(--line);stroke-width:1"/>`;
+    });
+    state.phrase.forEach((ev,i)=>{
+      const r=LIMBS.findIndex(l=>l.id===ev.limb);
+      const y=top+r*rowH+rowH/2, x=left+st[i]*colW;
+      const sel=i===state.selected;
+      const x2=left+(st[i]+ev.beats)*colW;
+      g += `<g class="kf ${sel?"sel":""}" data-idx="${i}">
+        <line x1="${x}" y1="${y}" x2="${x2}" y2="${y}" style="stroke:${sel?"var(--accent)":"var(--ink)"};stroke-width:${ev.weight==="strong"?3:1.8}" ${ev.time==="sudden"?'stroke-dasharray="2 3"':""}/>
+        <path class="kf-shape" d="M${x},${y-7} L${x+7},${y} L${x},${y+7} L${x-7},${y} Z" fill="${sel?"var(--accent)":"var(--paper)"}" style="stroke:${sel?"var(--accent)":"var(--ink)"};stroke-width:1.6"/>
+        <text x="${x}" y="${y+21}" text-anchor="middle" class="mono" font-size="9.5" fill="var(--ink-faint)">e${i+1}</text>
+      </g>`;
+    });
+    // playhead
+    const px = left + Math.min(state.t, T)*colW;
+    g += `<line id="playhead" x1="${px}" y1="${top-6}" x2="${px}" y2="${top+LIMBS.length*rowH}" style="stroke:var(--signal);stroke-width:1.6"/>`;
+    wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:none" id="tlSvg">${g}</svg>`;
+    wrap.dataset.left=left; wrap.dataset.colw=colW;
+  }
+  function movePlayhead(){
+    const svg = $("#tlSvg"); if(!svg) return;
+    const ph = svg.querySelector("#playhead"); if(!ph) return;
+    const left=+$("#timelineWrap").dataset.left, colW=+$("#timelineWrap").dataset.colw;
+    const px = left + Math.min(state.t, totalBeats())*colW;
+    ph.setAttribute("x1",px); ph.setAttribute("x2",px);
+    $("#playClock").textContent = "beat " + state.t.toFixed(1);
+  }
+
+  /* ============ viewer canvas ============ */
+  function sizeCanvas(cv){
+    const dpr = window.devicePixelRatio||1;
+    // capture the design height once — cv.height=… rewrites the height
+    // attribute, so re-reading it each frame would compound by dpr forever
+    if(!cv.dataset.designH){ cv.dataset.designH = cv.getAttribute("height")||300; cv.style.height = cv.dataset.designH+"px"; }
+    const h = +cv.dataset.designH;
+    const w = cv.clientWidth||600;
+    const pw = Math.round(w*dpr), ph = Math.round(h*dpr);
+    if(cv.width!==pw || cv.height!==ph){ cv.width = pw; cv.height = ph; }
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    return {ctx,w,h};
+  }
+  function drawViewer(){
+    const cv = $("#viewerCanvas");
+    const {ctx,w,h} = sizeCanvas(cv);
+    const ink=css("--ink"), soft=css("--ink-soft"), faint=css("--ink-faint"),
+          acc=css("--accent"), sig=css("--signal"), paper=css("--card");
+    ctx.clearRect(0,0,w,h);
+    if(state.mode==="embodied"){
+      $("#capViewer").textContent="Figure viewer — front view, interpolating";
+      // ground
+      const cx=w/2, floorY=h-34;
+      ctx.strokeStyle=faint; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(cx-110,floorY); ctx.lineTo(cx+110,floorY); ctx.stroke();
+      const scale=62;
+      const hipY=floorY-scale*1.15, shY=hipY-scale*0.95, headY=shY-scale*0.36;
+      // torso
+      ctx.strokeStyle=ink; ctx.lineWidth=2.4; ctx.lineCap="round";
+      ctx.beginPath(); ctx.moveTo(cx,shY); ctx.lineTo(cx,hipY); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx-scale*0.34,shY); ctx.lineTo(cx+scale*0.34,shY); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx,headY,scale*0.2,0,7); ctx.stroke();
+      // limbs at current playhead (front view mirrors x: dancer right = viewer left)
+      const st=starts();
+      for(const l of LIMBS){
+        const isArm = l.joint==="shoulder";
+        const jx = cx - l.side*(isArm? scale*0.34 : scale*0.17);
+        const jy = isArm? shY : hipY;
+        const len = isArm? scale*0.92 : scale*1.12;
+        const v = poseAt(l.id, state.t);
+        const px = jx - v.x*len; // mirror for front view
+        const py = jy - v.y*len;
+        // active during current event?
+        let active=false;
+        state.phrase.forEach((ev,i)=>{ if(ev.limb===l.id && state.t>=st[i] && state.t<st[i]+ev.beats) active=true; });
+        ctx.strokeStyle = active? acc : ink;
+        ctx.lineWidth = active? 3 : 2.4;
+        ctx.beginPath(); ctx.moveTo(jx,jy); ctx.lineTo(px,py); ctx.stroke();
+        // depth cue: nearer (z>0, toward viewer? forward is away in front view — mark with ring)
+        ctx.fillStyle = active? acc : soft;
+        ctx.beginPath(); ctx.arc(px,py, 3.4+2.2*Math.max(0,v.z*-1+1)/2 ,0,7); ctx.fill();
+        if(v.z>0.3){ ctx.strokeStyle=faint; ctx.beginPath(); ctx.arc(px,py,7.5,0,7); ctx.stroke(); }
+      }
+      ctx.fillStyle=faint; ctx.font="10px Menlo, monospace";
+      ctx.fillText("front view · ring = limb reaching forward", 14, h-12);
+    } else {
+      $("#capViewer").textContent="Channel curves — elevation θ per channel over beats";
+      const T=totalBeats(), padL=64, padR=16, padT=18, rowH=(h-padT-30)/LIMBS.length;
+      ctx.font="10px Menlo, monospace";
+      LIMBS.forEach((l,r)=>{
+        const y0=padT+r*rowH, midY=y0+rowH/2, amp=rowH*0.36;
+        ctx.strokeStyle=faint; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(padL,midY); ctx.lineTo(w-padR,midY); ctx.stroke();
+        ctx.fillStyle=soft;
+        ctx.fillText("k="+(r+1), 14, midY+3);
+        ctx.fillText("θ", padL-18, y0+10);
+        // curve
+        ctx.strokeStyle=ink; ctx.lineWidth=1.8; ctx.beginPath();
+        const N=140;
+        for(let s=0;s<=N;s++){
+          const t=s/N*T;
+          const v=poseAt(l.id,t);
+          const el=Math.asin(Math.max(-1,Math.min(1,v.y)));
+          const x=padL+(w-padL-padR)*t/T, y=midY-el/(Math.PI/2)*amp;
+          s? ctx.lineTo(x,y): ctx.moveTo(x,y);
+        }
+        ctx.stroke();
+        // keyframe dots
+        const st=starts();
+        state.phrase.forEach((ev,i)=>{
+          if(ev.limb!==l.id) return;
+          const t=st[i]+ev.beats;
+          const v=vecOf(ev), el=Math.asin(Math.max(-1,Math.min(1,v.y)));
+          const x=padL+(w-padL-padR)*Math.min(t,T)/T, y=midY-el/(Math.PI/2)*amp;
+          ctx.fillStyle = i===state.selected? acc: ink;
+          ctx.beginPath(); ctx.arc(x,y,i===state.selected?4.5:3.2,0,7); ctx.fill();
+        });
+      });
+      // playhead
+      const px=padL+(w-padL-padR)*Math.min(state.t,T)/T;
+      ctx.strokeStyle=sig; ctx.lineWidth=1.4;
+      ctx.beginPath(); ctx.moveTo(px,padT-6); ctx.lineTo(px,h-26); ctx.stroke();
+      ctx.fillStyle=faint;
+      ctx.fillText("elevation θ ∈ [−90°, +90°] · step targets, eased", 14, h-8);
+    }
+  }
+
+  /* ============ EW sphere canvas ============ */
+  let sphereAngle = 0.5;
+  function drawSphere(){
+    const cv=$("#sphereCanvas");
+    const {ctx,w,h}=sizeCanvas(cv);
+    const ink=css("--ink"), soft=css("--ink-soft"), faint=css("--ink-faint"), acc=css("--accent");
+    ctx.clearRect(0,0,w,h);
+    const cx=w/2, cy=h/2+4, R=Math.min(w,h)/2-38;
+    const rot = sphereAngle;
+    const rotP = v=>({ x:v.x*Math.cos(rot)+v.z*Math.sin(rot), y:v.y, z:-v.x*Math.sin(rot)+v.z*Math.cos(rot) });
+    const P = v=>{ const r=rotP(v); return {x:cx+r.x*R, y:cy-r.y*R, z:r.z}; };
+    function poly(pts,front){
+      ctx.beginPath(); let started=false;
+      for(const p of pts){
+        if((p.z>=0)!==front){ started=false; continue; }
+        if(!started){ ctx.moveTo(p.x,p.y); started=true; } else ctx.lineTo(p.x,p.y);
+      }
+      ctx.stroke();
+    }
+    // outline
+    ctx.strokeStyle=soft; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,7); ctx.stroke();
+    // wireframe at 45° — EW's own graduation
+    const paths=[];
+    for(let m=0;m<8;m++){ // meridians
+      const pts=[]; const az=m*45*Math.PI/180;
+      for(let s=0;s<=48;s++){ const el=-Math.PI/2+s/48*Math.PI;
+        pts.push(P({x:Math.sin(az)*Math.cos(el), y:Math.sin(el), z:Math.cos(az)*Math.cos(el)})); }
+      paths.push(pts);
+    }
+    for(const elv of [-45,0,45]){ // parallels
+      const pts=[]; const el=elv*Math.PI/180;
+      for(let s=0;s<=64;s++){ const az=s/64*2*Math.PI;
+        pts.push(P({x:Math.sin(az)*Math.cos(el), y:Math.sin(el), z:Math.cos(az)*Math.cos(el)})); }
+      paths.push(pts);
+    }
+    ctx.strokeStyle=faint; ctx.lineWidth=0.8;
+    for(const p of paths) poly(p,false);
+    ctx.strokeStyle=soft; ctx.lineWidth=1;
+    for(const p of paths) poly(p,true);
+    // selected event vector + arc from previous position of same limb
+    const ev = state.phrase[state.selected];
+    if(ev){
+      let prev = REST;
+      for(let i=0;i<state.selected;i++){ if(state.phrase[i].limb===ev.limb) prev=vecOf(state.phrase[i]); }
+      const target=vecOf(ev);
+      // arc (slerp)
+      ctx.strokeStyle=acc; ctx.lineWidth=1.4; ctx.setLineDash([4,4]);
+      ctx.beginPath();
+      for(let s=0;s<=32;s++){ const p=P(lerpVec(prev,target,s/32)); s?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y); }
+      ctx.stroke(); ctx.setLineDash([]);
+      // vector
+      const p=P(target), c={x:cx,y:cy};
+      ctx.strokeStyle=acc; ctx.lineWidth=2.6;
+      ctx.beginPath(); ctx.moveTo(c.x,c.y); ctx.lineTo(p.x,p.y); ctx.stroke();
+      ctx.fillStyle=acc; ctx.beginPath(); ctx.arc(p.x,p.y,5,0,7); ctx.fill();
+      ctx.beginPath(); ctx.arc(c.x,c.y,3,0,7); ctx.fill();
+      const co=ewOf(ev);
+      ctx.fillStyle=ink; ctx.font="12px Menlo, monospace";
+      ctx.fillText(`(${co.v} / ${co.h})`, p.x+9, p.y+4);
+      ctx.fillStyle=faint; ctx.font="10px Menlo, monospace";
+      const lab = state.mode==="abstract"
+        ? `unit vector on S² · event e${state.selected+1}`
+        : `${limbLabel(ev.limb).toLowerCase()} from the ${LIMB[ev.limb].joint} · event e${state.selected+1}`;
+      ctx.fillText(lab, 14, h-12);
+      $("#capSphere").textContent = state.mode==="abstract"
+        ? "System of reference — sphere, graduated in 45° units"
+        : "System of reference — limb on its joint-sphere";
+    }
+  }
+
+  /* ============ inspector ============ */
+  function renderInspector(){
+    const holder=$("#inspector");
+    const ev=state.phrase[state.selected];
+    if(!ev){ holder.innerHTML=""; return; }
+    $("#inspTitle").textContent = `e${state.selected+1} of ${state.phrase.length}`;
+    const abs=state.mode==="abstract";
+    const roseOrder=["lf","forward","rf","left","place","right","lb","back","rb"];
+    holder.innerHTML = `
+      <div class="field"><div class="lab disp">${abs?"Channel":"Body part"}</div>
+        <div class="optrow">${LIMBS.map(l=>`<button class="opt" data-set="limb" data-val="${l.id}" aria-pressed="${ev.limb===l.id}">${esc(abs?l.abs.replace("Channel ","k"):l.body)}</button>`).join("")}</div></div>
+      <div class="field"><div class="lab disp">${abs?"Azimuth φ":"Direction"}</div>
+        <div class="rose">${roseOrder.map(d=>`<button class="opt" data-set="dir" data-val="${d}" aria-pressed="${ev.dir===d}" title="${DIRS[d].label}">${DIRS[d].arrow}</button>`).join("")}</div></div>
+      <div class="field"><div class="lab disp">${abs?"Elevation θ":"Level"}</div>
+        <div class="optrow">${Object.keys(LEVELS).map(k=>`<button class="opt" data-set="level" data-val="${k}" aria-pressed="${ev.level===k}">${esc(abs?(LEVELS[k].el+"°"):k)}</button>`).join("")}</div></div>
+      <div class="field"><div class="lab disp">${abs?"Interval Δt":"Duration"}</div>
+        <div class="optrow">${[1,2,3,4].map(n=>`<button class="opt" data-set="beats" data-val="${n}" aria-pressed="${ev.beats===n}">${n}♩</button>`).join("")}</div></div>
+      <div class="field"><div class="lab disp">${abs?"Easing class":"Effort · time"}</div>
+        <div class="optrow">
+          <button class="opt" data-set="time" data-val="sustained" aria-pressed="${ev.time==="sustained"}">${abs?"smooth":"sustained"}</button>
+          <button class="opt" data-set="time" data-val="sudden" aria-pressed="${ev.time==="sudden"}">${abs?"snap":"sudden"}</button>
+        </div></div>
+      <div class="field"><div class="lab disp">${abs?"Amplitude":"Effort · weight"}</div>
+        <div class="optrow">
+          <button class="opt" data-set="weight" data-val="light" aria-pressed="${ev.weight==="light"}">${abs?"low gain":"light"}</button>
+          <button class="opt" data-set="weight" data-val="strong" aria-pressed="${ev.weight==="strong"}">${abs?"high gain":"strong"}</button>
+        </div></div>
+      <div class="field"><div class="lab disp">Readout</div>
+        <div class="mono" style="font-size:12px;line-height:1.9;color:var(--ink-soft)">
+          Laban: ${esc(DIRS[ev.dir].label)} ${esc(ev.level)}<br>
+          Benesh depth: ${DEPTH_GLYPH[depthOf(ev)]} ${esc(depthOf(ev))}<br>
+          E-W: ${ewOf(ev).v} / ${ewOf(ev).h}
+        </div></div>`;
+  }
+
+  /* ============ render all ============ */
+  function renderAll(){
+    document.body.classList.toggle("abstract", state.mode==="abstract");
+    $("#modeBody").setAttribute("aria-pressed", state.mode==="embodied");
+    $("#modeAbs").setAttribute("aria-pressed", state.mode==="abstract");
+    $("#capTimeline").textContent = (state.mode==="abstract"?"Channels":"Body parts")+" × keyframes — click a keyframe to edit";
+    renderChips();
+    renderTimeline();
+    renderLaban();
+    renderBenesh();
+    renderEW();
+    renderInspector();
+    drawViewer();
+    drawSphere();
+    movePlayhead();
+  }
+
+  /* ============ interactions ============ */
+  document.addEventListener("click", e=>{
+    const kf = e.target.closest(".kf");
+    if(kf && kf.dataset.idx!==undefined){
+      state.selected = +kf.dataset.idx;
+      renderAll();
+      return;
+    }
+    const opt = e.target.closest(".opt");
+    if(opt){
+      const ev = state.phrase[state.selected];
+      const k = opt.dataset.set;
+      ev[k] = (k==="beats")? +opt.dataset.val : opt.dataset.val;
+      renderAll();
+    }
+  });
+
+  $("#modeBody").addEventListener("click", ()=>{ state.mode="embodied"; renderAll(); });
+  $("#modeAbs").addEventListener("click", ()=>{ state.mode="abstract"; renderAll(); });
+
+  const DICE=["⚀","⚁","⚂","⚃","⚄","⚅"];
+  function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+  $("#btnChance").addEventListener("click", ()=>{
+    $("#dieFace").textContent = pick(DICE);
+    const n = 4+Math.floor(Math.random()*3);
+    const dirs = Object.keys(DIRS);
+    state.phrase = Array.from({length:n},()=>({
+      limb:pick(LIMBS).id,
+      dir: Math.random()<0.12 ? "place" : pick(dirs.filter(d=>d!=="place")),
+      level:pick(Object.keys(LEVELS)),
+      beats:1+Math.floor(Math.random()*3),
+      time:pick(["sustained","sudden"]),
+      weight:pick(["light","strong"]),
+    }));
+    state.selected=0; state.t=0; state.playing=false;
+    $("#btnPlay").setAttribute("aria-pressed","false");
+    $("#btnPlay").textContent="▶ Play phrase";
+    renderAll();
+  });
+
+  /* playback */
+  let lastFrame=null;
+  const BEATS_PER_SEC=1.25;
+  function tick(ts){
+    if(!state.playing) return;
+    if(lastFrame===null) lastFrame=ts;
+    const dt=(ts-lastFrame)/1000; lastFrame=ts;
+    state.t += dt*BEATS_PER_SEC;
+    if(state.t >= totalBeats()+0.6){ state.t=0; }
+    movePlayhead();
+    drawViewer();
+    requestAnimationFrame(tick);
+  }
+  $("#btnPlay").addEventListener("click", ()=>{
+    state.playing=!state.playing;
+    $("#btnPlay").setAttribute("aria-pressed", state.playing);
+    $("#btnPlay").textContent = state.playing? "❚❚ Pause":"▶ Play phrase";
+    if(state.playing){ lastFrame=null; requestAnimationFrame(tick); }
+  });
+
+  /* sphere ambient rotation */
+  function sphereLoop(){
+    if(!reduced) sphereAngle += 0.0035;
+    drawSphere();
+    requestAnimationFrame(sphereLoop);
+  }
+
+  window.addEventListener("resize", ()=>{ drawViewer(); drawSphere(); });
+
+  // theme changes: redraw canvases (they read CSS vars)
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", ()=>{ drawViewer(); drawSphere(); });
+  new MutationObserver(()=>{ drawViewer(); drawSphere(); })
+    .observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+
+  renderStrip();
+  renderAll();
+  if(!reduced) requestAnimationFrame(sphereLoop); else drawSphere();
+})();
+</script>
