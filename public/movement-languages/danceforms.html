@@ -205,6 +205,7 @@
           <span class="lab">Transport</span>
           <button class="btn disp" id="btnPlay" aria-pressed="false">▶ Play</button>
           <button class="btn sm disp" id="btnLoop" aria-pressed="true">Loop</button>
+          <button class="btn sm disp" id="btnCapture" title="record one pass of playback to a video file">⏺ Capture</button>
           <span class="mono" id="beatReadout" style="font-size:12px">beat 0.0</span>
           <span class="grow"></span>
           <span class="lab">Tempo</span>
@@ -1436,6 +1437,33 @@
     score.tempo=+e.target.value; $("#tempoReadout").textContent=score.tempo+" bpm"; save();
   });
 
+  /* ================= video capture ================= */
+  const CAPTURE_MIME=(typeof MediaRecorder!=="undefined")?
+    ["video/mp4;codecs=avc1","video/webm;codecs=vp9","video/webm"].find(m=>MediaRecorder.isTypeSupported(m)):null;
+  let captureRec=null, captureWasLoop=true;
+  (function(){
+    const btn=$("#btnCapture"), cv=$("#stageCanvas");
+    if(!CAPTURE_MIME || !cv.captureStream){ btn.disabled=true; btn.title="MediaRecorder canvas capture is not supported in this browser"; return; }
+    btn.addEventListener("click", ()=>{
+      if(captureRec) return;
+      const chunks=[];
+      captureRec=new MediaRecorder(cv.captureStream(60),{mimeType:CAPTURE_MIME});
+      captureRec.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); };
+      captureRec.onstop=()=>{
+        const ext=CAPTURE_MIME.indexOf("mp4")>=0?"mp4":"webm";
+        const a=document.createElement("a");
+        a.href=URL.createObjectURL(new Blob(chunks,{type:CAPTURE_MIME}));
+        a.download=(chor.name.replace(/\s+/g,"-")||"choreography")+"."+ext; a.click(); URL.revokeObjectURL(a.href);
+        captureRec=null; state.loop=captureWasLoop; $("#btnLoop").setAttribute("aria-pressed",state.loop);
+        btn.textContent="⏺ Capture";
+      };
+      captureWasLoop=state.loop; state.loop=false;
+      state.t=0; btn.textContent="⏹ recording…";
+      captureRec.start();
+      if(!state.playing) $("#btnPlay").click();
+    });
+  })();
+
   /* playback */
   let lastFrame=null;
   function tickPlay(ts){
@@ -1446,7 +1474,9 @@
     if(state.t>=score.length){
       if(state.loop) state.t=0;
       else { state.t=score.length; state.playing=false;
-        $("#btnPlay").setAttribute("aria-pressed","false"); $("#btnPlay").textContent="▶ Play"; }
+        $("#btnPlay").setAttribute("aria-pressed","false"); $("#btnPlay").textContent="▶ Play";
+        if(captureRec){ try{ captureRec.stop(); }catch(err){} }
+      }
     }
     movePlayheadOnly(); drawStage(); renderNotation();
     if(state.playing) requestAnimationFrame(tickPlay);
