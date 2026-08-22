@@ -1431,6 +1431,7 @@
     state.paths=!state.paths; e.currentTarget.setAttribute("aria-pressed",state.paths); drawStage();
   });
   $("#btnLoop").addEventListener("click", e=>{
+    if(captureRec) return;
     state.loop=!state.loop; e.currentTarget.setAttribute("aria-pressed",state.loop);
   });
   $("#tempoSlider").addEventListener("input", e=>{
@@ -1455,9 +1456,11 @@
         a.href=URL.createObjectURL(new Blob(chunks,{type:CAPTURE_MIME}));
         a.download=(chor.name.replace(/\s+/g,"-")||"choreography")+"."+ext; a.click(); URL.revokeObjectURL(a.href);
         captureRec=null; state.loop=captureWasLoop; $("#btnLoop").setAttribute("aria-pressed",state.loop);
+        $("#btnLoop").disabled=false;
         btn.textContent="⏺ Capture";
       };
       captureWasLoop=state.loop; state.loop=false;
+      $("#btnLoop").disabled=true;
       state.t=0; btn.textContent="⏹ recording…";
       captureRec.start();
       if(!state.playing) $("#btnPlay").click();
