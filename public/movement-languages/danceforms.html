@@ -208,7 +208,7 @@
           <span class="mono" id="beatReadout" style="font-size:12px">beat 0.0</span>
           <span class="grow"></span>
           <span class="lab">Tempo</span>
-          <input type="range" id="tempoSlider" min="50" max="180" value="100" style="width:120px" aria-label="Tempo in beats per minute">
+          <input type="range" id="tempoSlider" min="30" max="200" value="100" style="width:120px" aria-label="Tempo in beats per minute">
           <span class="mono" id="tempoReadout" style="font-size:11px">100 bpm</span>
         </div>
       </div>
@@ -255,6 +255,17 @@
         <button class="btn sm chance disp" id="btnChanceSpace">Space</button>
         <button class="btn sm disp" id="btnReset">Reset score</button>
       </div>
+    </div>
+
+    <!-- library -->
+    <div class="panel" style="margin-top:16px">
+      <div class="panel-cap"><span class="dotk"></span><span>Library — sections captured in vid2grid</span><span class="capsp"></span>
+        <span class="mono" id="libStatus" style="font-size:11px"></span>
+        <button class="btn sm disp" id="btnLibRefresh">Refresh</button>
+        <button class="btn sm disp" id="btnLibExport">Export JSON</button>
+        <label class="btn sm disp" style="cursor:pointer">Import JSON<input type="file" id="libImport" accept=".json,application/json" style="display:none"></label>
+      </div>
+      <div class="pad" id="libraryList"><p class="caption">No sections yet — capture one in <a href="/">vid2grid</a>, or import JSON.</p></div>
     </div>
     <p class="caption">Every keyframe stores a full stance — ten segment directions in the same
       <span class="mono">(azimuth, elevation)</span> terms as the Parameters page — plus hip height,
@@ -1244,6 +1255,65 @@
     renderAll();
   });
 
+  /* ================= library (shared IndexedDB) ================= */
+  function libStatus(msg){ const el=$("#libStatus"); el.textContent=msg||""; if(msg) setTimeout(()=>{ if(el.textContent===msg) el.textContent=""; }, 4000); }
+  function sectionToTrackKeys(sec){
+    return sec.keys.map(k=>({beat:k.beat, pose:JSON.parse(JSON.stringify(k.pose))}));
+  }
+  function fmtDate(ms){ const d=new Date(ms); return d.toLocaleDateString()+" "+d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
+  let librarySections=[];
+  function refreshLibrary(){
+    if(!window.SectionStore || !SectionStore.available()){
+      $("#libraryList").innerHTML=`<p class="caption">This browser mode has no IndexedDB — the library is unavailable. JSON import/export in vid2grid still works.</p>`;
+      return Promise.resolve();
+    }
+    return SectionStore.listSections().then(secs=>{
+      librarySections=secs;
+      if(!secs.length){ $("#libraryList").innerHTML=`<p class="caption">No sections yet — capture one in <a href="/">vid2grid</a>, or import JSON.</p>`; return; }
+      $("#libraryList").innerHTML = secs.map(s=>
+        `<div class="toolrow" style="border-bottom:1px solid var(--line);padding:6px 0">
+          <span style="min-width:180px">${s.name.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</span>
+          <span class="mono" style="font-size:11px">${s.beats} beats · ${s.keys.length} keys · ${Math.round(s.tempo)} bpm · ${fmtDate(s.createdAt)}</span>
+          <span class="grow"></span>
+          <button class="btn sm disp lib-add" data-id="${s.id}">→ choreography</button>
+          <button class="btn sm disp lib-load" data-id="${s.id}">Load to track</button>
+          <button class="btn sm disp lib-del" data-id="${s.id}">Delete</button>
+        </div>`).join("");
+    }).catch(e=>{ $("#libraryList").innerHTML=`<p class="caption">Library error: ${String(e).replace(/</g,"&lt;")}</p>`; });
+  }
+  $("#btnLibRefresh").addEventListener("click", refreshLibrary);
+  $("#btnLibExport").addEventListener("click", ()=>{
+    SectionStore.exportAll().then(data=>{
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:"application/json"}));
+      a.download="movement-languages-library.json"; a.click(); URL.revokeObjectURL(a.href);
+    }).catch(e=>libStatus(String(e)));
+  });
+  $("#libImport").addEventListener("change", e=>{
+    const f=e.target.files && e.target.files[0]; if(!f) return;
+    f.text().then(t=>SectionStore.importData(JSON.parse(t)))
+      .then(r=>{ libStatus(`imported ${r.sections} section(s), ${r.choreographies} choreograph${r.choreographies===1?"y":"ies"}`); refreshLibrary(); })
+      .catch(err=>libStatus("import failed: "+err));
+    e.target.value="";
+  });
+  document.addEventListener("click", e=>{
+    const load=e.target.closest(".lib-load");
+    if(load){
+      SectionStore.getSection(load.dataset.id).then(sec=>{
+        if(!sec) return libStatus("section not found");
+        const d=score.dancers[state.selD]; if(!d) return;
+        d.keys=sectionToTrackKeys(sec);
+        score.length=Math.max(8, sec.beats);
+        score.tempo=Math.round(sec.tempo);
+        state.selK=0; state.t=0; renderAll();
+        libStatus(`loaded “${sec.name}” onto ${d.name}`);
+      });
+      return;
+    }
+    const del=e.target.closest(".lib-del");
+    if(del){ SectionStore.deleteSection(del.dataset.id).then(()=>{ libStatus("deleted"); refreshLibrary(); }); return; }
+  });
+
   /* toggles */
   $("#btnGhosts").addEventListener("click", e=>{
     state.ghosts=!state.ghosts; e.currentTarget.setAttribute("aria-pressed",state.ghosts); drawStage();
@@ -1383,5 +1453,6 @@
 
   renderPalette();
   renderAll();
+  refreshLibrary();
 })();
 </script>
