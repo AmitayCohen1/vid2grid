@@ -28,16 +28,20 @@ export function movementSignal(raw: Pose[], fps: number): number[] {
   return out;
 }
 
-/** Normalized autocorrelation at a (fractional) lag, linear-interpolated. */
+/** Normalized autocorrelation at a (fractional) lag, linear-interpolated.
+    Symmetric normalization over the overlap window keeps scores across
+    different lags comparable on non-stationary signals; result in [-1, 1]. */
 function autocorr(s: number[], lag: number): number {
   const n = s.length;
   const i0 = Math.floor(lag), frac = lag - i0;
-  let num = 0, den = 0;
+  let num = 0, e0 = 0, e1 = 0;
   for (let i = 0; i + i0 + 1 < n; i++) {
     const lagged = s[i + i0] * (1 - frac) + s[i + i0 + 1] * frac;
     num += s[i] * lagged;
-    den += s[i] * s[i];
+    e0 += s[i] * s[i];
+    e1 += lagged * lagged;
   }
+  const den = Math.sqrt(e0 * e1);
   return den > 1e-9 ? num / den : 0;
 }
 
