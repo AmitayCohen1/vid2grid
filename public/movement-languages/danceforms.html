@@ -1394,7 +1394,7 @@
       $("#chorItems").innerHTML=chor.items.map((it,i)=>{
         const sec=byId[it.sectionId];
         const label=sec? `${escHtml(sec.name)} <span class="mono" style="font-size:11px">(${sec.beats} beats)</span>`
-                       : `<em>missing section</em> <span class="mono" style="font-size:11px">${escHtml(it.sectionId.slice(0,8))}…</span>`;
+                       : `<em>missing section</em> <span class="mono" style="font-size:11px">${escHtml(String(it.sectionId||"").slice(0,8))}…</span>`;
         return `<div class="toolrow" style="border-bottom:1px solid var(--line);padding:5px 0">
           <span class="mono" style="font-size:11px">${i+1}.</span><span>${label}</span>
           <span class="grow"></span>

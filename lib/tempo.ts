@@ -50,7 +50,9 @@ export function estimateTempo(raw: Pose[], keyframeTimes: number[], fps: number)
   const s0 = movementSignal(raw, fps);
   const mean = s0.reduce((a, b) => a + b, 0) / s0.length;
   const s = s0.map((v) => v - mean);
-  if (Math.max(...s0) < 5) return FALLBACK;   // essentially still
+  let mx = 0;
+  for (const v of s0) if (v > mx) mx = v;
+  if (mx < 5) return FALLBACK;   // essentially still
 
   let bestBpm = 0, bestR = -Infinity;
   for (let bpm = BPM_MIN; bpm <= BPM_MAX; bpm += BPM_STEP) {

@@ -46,7 +46,7 @@
     for (const it of items || []) {
       const sec = sectionsById[it.sectionId];
       if (!sec) { missing.push(it.sectionId); continue; }
-      const rep = Math.max(1, Math.round(it.repeat || 1));
+      const rep = Math.max(1, Math.min(8, Math.round(it.repeat) || 1));
       for (let r = 0; r < rep; r++) {
         for (const k of sec.keys) keys.push({ beat: cursor + k.beat, pose: JSON.parse(JSON.stringify(k.pose)) });
         cursor += sec.beats;
