@@ -23,6 +23,11 @@ test("put/list/delete sections round-trips, newest first", async () => {
   assert.deepEqual(all.map((s) => s.id), ["b"]);
 });
 
+test("putSection rejects (not throws) on invalid sections", async () => {
+  const bad = { ...mkSection("x", 3), beats: 9 };
+  await assert.rejects(putSection(bad), /beats/);
+});
+
 test("choreographies store round-trips", async () => {
   await putChoreography({ v: 1, id: "c1", name: "Study", tempo: 100, items: [{ sectionId: "b", repeat: 2 }] });
   const all = await listChoreographies();

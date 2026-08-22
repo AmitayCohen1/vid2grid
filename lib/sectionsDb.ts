@@ -28,17 +28,24 @@ function tx<T>(store: string, mode: IDBTransactionMode, run: (s: IDBObjectStore)
   return openDb().then(
     (db) =>
       new Promise<T>((resolve, reject) => {
-        const t = db.transaction(store, mode);
-        const req = run(t.objectStore(store));
-        t.oncomplete = () => { db.close(); resolve(req.result); };
-        t.onerror = () => { db.close(); reject(t.error); };
+        try {
+          const t = db.transaction(store, mode);
+          const req = run(t.objectStore(store));
+          t.oncomplete = () => { db.close(); resolve(req.result); };
+          t.onerror = () => { db.close(); reject(t.error); };
+        } catch (e) {
+          db.close();
+          reject(e);
+        }
       }),
   );
 }
 
 export function putSection(s: Section): Promise<void> {
-  validateSection(s);
-  return tx(STORE_SECTIONS, "readwrite", (st) => st.put(s)).then(() => undefined);
+  return Promise.resolve()
+    .then(() => { validateSection(s); })
+    .then(() => tx(STORE_SECTIONS, "readwrite", (st) => st.put(s)))
+    .then(() => undefined);
 }
 export function listSections(): Promise<Section[]> {
   return tx<Section[]>(STORE_SECTIONS, "readonly", (st) => st.getAll() as IDBRequest<Section[]>)
