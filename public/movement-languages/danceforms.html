@@ -952,8 +952,9 @@
       `<button class="opt" data-llevel="${l}" aria-pressed="${q&&q.level===l}">${l}</button>`).join("");
     $("#labanRose16").innerHTML=DIR16.filter((d,i)=>i%2===1).map(dd=>
       `<button class="opt" data-ldir="${dd}" aria-pressed="${q&&q.dir===dd}" title="between ${dd.replace("/"," and ")}">${DIR_ARROW[dd]}</button>`).join("");
-    $("#labanPins").innerHTML=[["-1","−¼"],["0","·"],["1","+¼"]].map(([v,l])=>
-      `<button class="opt" data-lpin="${v}" aria-pressed="${q&&String(q.pin)===v}" title="level ${v==="0"?"exact":"raised/lowered a half step"}">${l}</button>`).join("");
+    $("#labanPins").innerHTML=[["-1","−¼"],["0","·"],["1","+¼"]].map(([v,l])=>{
+      const dis=!q||q.dir==="place"||(v==="-1"&&q.level==="high")||(v==="1"&&q.level==="low");
+      return `<button class="opt" data-lpin="${v}" aria-pressed="${q&&String(q.pin)===v}"${dis?" disabled":""} title="level ${v==="0"?"exact":"raised/lowered a half step"}">${l}</button>`;}).join("");
   }
 
   /* ---- Benesh view ---- */
@@ -1149,6 +1150,7 @@
       const k=selKey(); if(!k) return;
       const q=labanOf(limbVec(k.pose,state.selPart));
       q.level=llevel.dataset.llevel;
+      q.pin=0;
       if(q.dir==="place" && q.level==="middle") q.dir="forward";
       setLimbVec(k.pose,state.selPart,labanToVec(q));
       snapSel(); renderAll(); return;
