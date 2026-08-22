@@ -1332,7 +1332,7 @@
       return;
     }
     const del=e.target.closest(".lib-del");
-    if(del){ SectionStore.deleteSection(del.dataset.id).then(()=>{ libStatus("deleted"); refreshLibrary(); renderChorItems(); }).catch(e=>libStatus("library error: "+e)); return; }
+    if(del){ SectionStore.deleteSection(del.dataset.id).then(()=>{ libStatus("deleted"); return refreshLibrary().then(renderChorItems); }).catch(e=>libStatus("library error: "+e)); return; }
   });
 
   /* ================= choreography ================= */
@@ -1343,7 +1343,8 @@
   let chorSaveTimer=null;
   function saveChor(){
     clearTimeout(chorSaveTimer);
-    chorSaveTimer=setTimeout(()=>{ if(chor.items.length||chor.name!=="Choreography") SectionStore.putChoreography(chor).then(refreshChorSelect).catch(()=>{}); },300);
+    const c=chor;
+    chorSaveTimer=setTimeout(()=>{ if(c.items.length||c.name!=="Choreography") SectionStore.putChoreography(c).then(refreshChorSelect).catch(()=>{}); },300);
   }
   function refreshChorSelect(){
     return SectionStore.listChoreographies().then(cs=>{
@@ -1363,7 +1364,7 @@
         return `<div class="toolrow" style="border-bottom:1px solid var(--line);padding:5px 0">
           <span class="mono" style="font-size:11px">${i+1}.</span><span>${label}</span>
           <span class="grow"></span>
-          <span class="lab">×</span><input type="number" class="chor-rep mono" data-i="${i}" min="1" max="8" value="${it.repeat}" style="width:3.2em" aria-label="Repeats">
+          <span class="lab">×</span><input type="number" class="chor-rep mono" data-i="${i}" min="1" max="8" value="${Math.max(1,Math.min(8,Math.round(+it.repeat)||1))}" style="width:3.2em" aria-label="Repeats">
           <button class="btn sm disp chor-up" data-i="${i}" ${i===0?"disabled":""}>↑</button>
           <button class="btn sm disp chor-down" data-i="${i}" ${i===chor.items.length-1?"disabled":""}>↓</button>
           <button class="btn sm disp chor-rm" data-i="${i}">✕</button>
