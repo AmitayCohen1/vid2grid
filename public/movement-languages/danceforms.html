@@ -1261,6 +1261,7 @@
     return sec.keys.map(k=>({beat:k.beat, pose:JSON.parse(JSON.stringify(k.pose))}));
   }
   function fmtDate(ms){ const d=new Date(ms); return d.toLocaleDateString()+" "+d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
+  const escHtml = v => String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
   let librarySections=[];
   function refreshLibrary(){
     if(!window.SectionStore || !SectionStore.available()){
@@ -1272,12 +1273,12 @@
       if(!secs.length){ $("#libraryList").innerHTML=`<p class="caption">No sections yet — capture one in <a href="/">vid2grid</a>, or import JSON.</p>`; return; }
       $("#libraryList").innerHTML = secs.map(s=>
         `<div class="toolrow" style="border-bottom:1px solid var(--line);padding:6px 0">
-          <span style="min-width:180px">${s.name.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</span>
+          <span style="min-width:180px">${escHtml(s.name)}</span>
           <span class="mono" style="font-size:11px">${s.beats} beats · ${s.keys.length} keys · ${Math.round(s.tempo)} bpm · ${fmtDate(s.createdAt)}</span>
           <span class="grow"></span>
-          <button class="btn sm disp lib-add" data-id="${s.id}">→ choreography</button>
-          <button class="btn sm disp lib-load" data-id="${s.id}">Load to track</button>
-          <button class="btn sm disp lib-del" data-id="${s.id}">Delete</button>
+          <button class="btn sm disp lib-add" data-id="${escHtml(s.id)}">→ choreography</button>
+          <button class="btn sm disp lib-load" data-id="${escHtml(s.id)}">Load to track</button>
+          <button class="btn sm disp lib-del" data-id="${escHtml(s.id)}">Delete</button>
         </div>`).join("");
     }).catch(e=>{ $("#libraryList").innerHTML=`<p class="caption">Library error: ${String(e).replace(/</g,"&lt;")}</p>`; });
   }
@@ -1307,11 +1308,11 @@
         score.tempo=Math.round(sec.tempo);
         state.selK=0; state.t=0; renderAll();
         libStatus(`loaded “${sec.name}” onto ${d.name}`);
-      });
+      }).catch(e=>libStatus("library error: "+e));
       return;
     }
     const del=e.target.closest(".lib-del");
-    if(del){ SectionStore.deleteSection(del.dataset.id).then(()=>{ libStatus("deleted"); refreshLibrary(); }); return; }
+    if(del){ SectionStore.deleteSection(del.dataset.id).then(()=>{ libStatus("deleted"); refreshLibrary(); }).catch(e=>libStatus("library error: "+e)); return; }
   });
 
   /* toggles */
