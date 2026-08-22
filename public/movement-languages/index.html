@@ -1232,7 +1232,7 @@
         state.selected=0; state.t=0;
         note.textContent=`"${sec.name}" — compressed to 4 channels × 8 dirs × 3 levels`;
         renderAll();
-      });
+      }).catch(err=>{ note.textContent = "could not load: " + err; });
     });
   })();
 
