@@ -8,9 +8,12 @@ import Timeline from "./Timeline";
 import BoneTable from "./BoneTable";
 import Controls from "./Controls";
 import Objects, { DEFAULT_OBJECTS, Drawing, type ObjectsOptions } from "./Objects";
+import SectionPanel, { type SectionCfg } from "./SectionPanel";
 import { DEFAULT_GRID, type GridConfig } from "@/lib/grid";
 import { DEFAULT_SMOOTH, type LiftMode, type Score, type SmoothConfig, type SourceInfo, frameAt, measureBody, parseScore, rawPoses, serializeScore, smoothPoses, snapPoses } from "@/lib/score";
 import { fillGaps, getLandmarker, trackVideo, type TrackedFrame } from "@/lib/tracker";
+import { quantizeKeys } from "@/lib/sectionize";
+import { estimateTempo } from "@/lib/tempo";
 import type { BoneId } from "@/lib/skeleton";
 import type { Body } from "@/lib/fk";
 import type { Pose } from "@/lib/pose";
@@ -84,6 +87,34 @@ export default function App() {
     if (!score) return;
     try { localStorage.setItem(LS_KEY, serializeScore(score)); } catch { /* quota */ }
   }, [score]);
+
+  const [sectionCfg, setSectionCfg] = useState<SectionCfg>({ bpm: 100, offsetSec: 0, startBeat: 0, lengthBeats: 8, preview: false });
+  const cfgTouched = useRef(false);
+  const onSectionCfg = useCallback((c: SectionCfg) => { cfgTouched.current = true; setSectionCfg(c); }, []);
+  const estimate = useMemo(
+    () => (score ? estimateTempo(score.raw, score.keyframes.map((i) => score.raw[i].t), score.source.fps) : null),
+    [score],
+  );
+  useEffect(() => {
+    if (!estimate || cfgTouched.current) return;
+    setSectionCfg((c) => ({
+      ...c,
+      bpm: estimate.bpm,
+      offsetSec: estimate.offsetSec,
+      lengthBeats: score ? Math.max(1, Math.min(8, Math.floor(((score.source.duration - estimate.offsetSec) * estimate.bpm) / 60))) : 8,
+    }));
+  }, [estimate, score]);
+  useEffect(() => { cfgTouched.current = false; }, [analysis, imported]);
+
+  const quantized = useMemo(() => (score ? quantizeKeys(score, sectionCfg) : null), [score, sectionCfg]);
+  const previewPose = useMemo(() => {
+    if (!score || !quantized || !sectionCfg.preview) return null;
+    const beat = ((time - sectionCfg.offsetSec) * sectionCfg.bpm) / 60 - sectionCfg.startBeat;
+    if (beat < 0 || beat >= sectionCfg.lengthBeats) return null;
+    let i = 0;
+    while (i < quantized.keys.length - 1 && quantized.keys[i + 1].beat <= beat) i++;
+    return score.frames[quantized.srcFrames[i]];
+  }, [score, quantized, sectionCfg, time]);
 
   const fi = score ? frameAt(score, time) : 0;
   const snappedPose = score?.frames[fi] ?? null;
@@ -239,6 +270,8 @@ export default function App() {
           <button className="btn" onClick={() => setShowSource((s) => !s)}>{showSource ? "hide source" : "new clip"}</button>
           <label className="btn cursor-pointer">import JSON<input type="file" accept="application/json,.json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) importJson(f); e.currentTarget.value = ""; }} /></label>
           <button className="btn" onClick={exportJson} disabled={!score}>export JSON</button>
+          <a className="btn" href="/movement-languages/danceforms.html">studio</a>
+          <a className="btn" href="/movement-languages/index.html">parameters</a>
         </div>
       </header>
 
@@ -281,7 +314,7 @@ export default function App() {
         <section className="bg-bg min-h-[320px] lg:min-h-0 relative">
           {score && body ? (
             view === "score" ? (
-              <Stage pose={snappedPose} raw={rawPose} body={body} grid={grid} showRaw={showRaw} selected={selected} onSelect={setSelected} />
+              <Stage pose={previewPose ?? snappedPose} raw={rawPose} body={body} grid={grid} showRaw={showRaw} selected={selected} onSelect={setSelected} />
             ) : (
               <Objects score={score} overlays={analysis ? analysis.tracked.map((t) => t.image) : null} video={analysis ? videoEl : null} frame={fi} options={objects} />
             )
@@ -321,6 +354,7 @@ export default function App() {
               <div className="mt-2">Click a limb (or a row) to see its grid sphere. Space plays; ←/→ step frames.</div>
             </div>
           )}
+          {score && <SectionPanel score={score} cfg={sectionCfg} onCfg={onSectionCfg} estimate={estimate} onSeek={seek} />}
           </>)}
         </section>
       </main>
