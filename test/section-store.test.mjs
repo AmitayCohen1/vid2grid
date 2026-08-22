@@ -33,6 +33,12 @@ test("validateSection rejects a section missing createdAt", () => {
   assert.throws(() => SectionStore.validateSection(s));
 });
 
+test("putSection rejects (never throws synchronously) on invalid input", async () => {
+  let p;
+  assert.doesNotThrow(() => { p = SectionStore.putSection(section("bad", 9, 1)); });
+  await assert.rejects(p, /beats/);
+});
+
 test("buildChoreographyKeys concatenates with repeats and reports missing", () => {
   const a = section("a", 2, 2), b = section("b", 4, 3);
   const { keys, totalBeats, missing } = SectionStore.buildChoreographyKeys(
