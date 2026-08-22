@@ -267,6 +267,26 @@
       </div>
       <div class="pad" id="libraryList"><p class="caption">No sections yet — capture one in <a href="/">vid2grid</a>, or import JSON.</p></div>
     </div>
+
+    <!-- choreography -->
+    <div class="panel" style="margin-top:16px">
+      <div class="panel-cap"><span class="dotk"></span><span>Choreography — sections in sequence</span><span class="capsp"></span>
+        <select id="chorSelect" class="disp" aria-label="Saved choreographies" style="max-width:180px"></select>
+        <button class="btn sm disp" id="btnChorNew">New</button>
+        <button class="btn sm disp" id="btnChorDelete">Delete</button>
+        <button class="btn sm disp" id="btnChorExport">Export JSON</button>
+        <button class="btn disp" id="btnChorBuild">Build → selected dancer</button>
+      </div>
+      <div class="pad">
+        <div class="toolrow" style="margin-bottom:8px">
+          <span class="lab">Name</span>
+          <input id="chorName" class="mono" style="font-size:12px;padding:4px 8px;background:var(--paper-2);border:1px solid var(--line);color:var(--ink)" aria-label="Choreography name">
+          <span class="grow"></span>
+          <span class="mono" id="chorTotal" style="font-size:11px"></span>
+        </div>
+        <div id="chorItems"><p class="caption">Empty — add sections from the library above.</p></div>
+      </div>
+    </div>
     <p class="caption">Every keyframe stores a full stance — ten segment directions in the same
       <span class="mono">(azimuth, elevation)</span> terms as the Parameters page — plus hip height,
       a floor position, and a facing. Between keyframes the figure is interpolated, which is the whole
@@ -936,8 +956,8 @@
       const x0=10+ki*FW, cxF=x0+FW/2;
       g+=`<line x1="${x0+FW}" y1="${lines[0]}" x2="${x0+FW}" y2="${floorY}" style="stroke:var(--ink);stroke-width:${ki===d.keys.length-1?2:1}"/>`;
       const beats = (ki<d.keys.length-1? d.keys[ki+1].beat : score.length) - k.beat;
-      let rm=""; for(let b=0;b<Math.min(beats,8);b++) rm+=`<circle cx="${cxF-(Math.min(beats,8)-1)*6/2+b*12}" cy="${top-20}" r="2.6" fill="var(--ink-soft)"/>`;
-      g+=rm+`<text x="${cxF}" y="${top-30}" text-anchor="middle" class="mono" font-size="9.5" fill="var(--ink-faint)">${beats} beat${beats===1?"":"s"} · beat ${k.beat}</text>`;
+      let rm=""; for(let b=0;b<Math.max(1,Math.min(Math.round(beats),8));b++) rm+=`<circle cx="${cxF-(Math.max(1,Math.min(Math.round(beats),8))-1)*6/2+b*12}" cy="${top-20}" r="2.6" fill="var(--ink-soft)"/>`;
+      g+=rm+`<text x="${cxF}" y="${top-30}" text-anchor="middle" class="mono" font-size="9.5" fill="var(--ink-faint)">${(+beats.toFixed(2))} beat${beats===1?"":"s"} · beat ${k.beat}</text>`;
       // body-space skeleton (from behind: dancer's right = viewer's right)
       const bp=clonePose(k.pose); bp.x=0; bp.z=0; bp.facing=0;
       const sk=skeleton(bp);
@@ -1160,7 +1180,7 @@
   }
   $("#btnAddKF").addEventListener("click", ()=>{
     const d=score.dancers[state.selD]; if(!d) return;
-    const beat=Math.round(state.t);
+    const beat=Math.round(state.t*4)/4;
     const existing=d.keys.findIndex(k=>k.beat===beat);
     const pose=poseAt(d, beat);
     if(existing>=0){ d.keys[existing].pose=pose; state.selK=existing; }
@@ -1175,7 +1195,7 @@
   });
   function nudge(dir){
     const d=score.dancers[state.selD]; const k=selKey(); if(!k) return;
-    k.beat=Math.max(0, Math.min(score.length, k.beat+dir));
+    k.beat=Math.max(0, Math.min(score.length, k.beat+dir*0.25));
     sortKeysKeepSel(d); snapSel(); renderAll();
   }
   $("#btnNudgeL").addEventListener("click", ()=>nudge(-1));
@@ -1312,8 +1332,94 @@
       return;
     }
     const del=e.target.closest(".lib-del");
-    if(del){ SectionStore.deleteSection(del.dataset.id).then(()=>{ libStatus("deleted"); refreshLibrary(); }).catch(e=>libStatus("library error: "+e)); return; }
+    if(del){ SectionStore.deleteSection(del.dataset.id).then(()=>{ libStatus("deleted"); refreshLibrary(); renderChorItems(); }).catch(e=>libStatus("library error: "+e)); return; }
   });
+
+  /* ================= choreography ================= */
+  function newChor(){ return {v:1, id:(crypto.randomUUID?crypto.randomUUID():String(Math.random()).slice(2)), name:"Choreography", tempo:0, items:[]}; }
+  let chor=newChor();
+  function chorSectionsById(){ const m={}; for(const s of librarySections) m[s.id]=s; return m; }
+  function chorTotalBeats(){ return SectionStore.buildChoreographyKeys(chor.items, chorSectionsById()).totalBeats; }
+  let chorSaveTimer=null;
+  function saveChor(){
+    clearTimeout(chorSaveTimer);
+    chorSaveTimer=setTimeout(()=>{ if(chor.items.length||chor.name!=="Choreography") SectionStore.putChoreography(chor).then(refreshChorSelect).catch(()=>{}); },300);
+  }
+  function refreshChorSelect(){
+    return SectionStore.listChoreographies().then(cs=>{
+      $("#chorSelect").innerHTML=`<option value="">— open saved —</option>`+cs.map(c=>
+        `<option value="${escHtml(c.id)}" ${c.id===chor.id?"selected":""}>${escHtml(c.name)}</option>`).join("");
+    }).catch(()=>{});
+  }
+  function renderChorItems(){
+    $("#chorName").value=chor.name;
+    const byId=chorSectionsById();
+    if(!chor.items.length){ $("#chorItems").innerHTML=`<p class="caption">Empty — add sections from the library above.</p>`; }
+    else {
+      $("#chorItems").innerHTML=chor.items.map((it,i)=>{
+        const sec=byId[it.sectionId];
+        const label=sec? `${escHtml(sec.name)} <span class="mono" style="font-size:11px">(${sec.beats} beats)</span>`
+                       : `<em>missing section</em> <span class="mono" style="font-size:11px">${escHtml(it.sectionId.slice(0,8))}…</span>`;
+        return `<div class="toolrow" style="border-bottom:1px solid var(--line);padding:5px 0">
+          <span class="mono" style="font-size:11px">${i+1}.</span><span>${label}</span>
+          <span class="grow"></span>
+          <span class="lab">×</span><input type="number" class="chor-rep mono" data-i="${i}" min="1" max="8" value="${it.repeat}" style="width:3.2em" aria-label="Repeats">
+          <button class="btn sm disp chor-up" data-i="${i}" ${i===0?"disabled":""}>↑</button>
+          <button class="btn sm disp chor-down" data-i="${i}" ${i===chor.items.length-1?"disabled":""}>↓</button>
+          <button class="btn sm disp chor-rm" data-i="${i}">✕</button>
+        </div>`;
+      }).join("");
+    }
+    $("#chorTotal").textContent = chor.items.length? `total ${chorTotalBeats()} beats` : "";
+  }
+  function buildChoreography(){
+    const {keys,totalBeats,missing}=SectionStore.buildChoreographyKeys(chor.items, chorSectionsById());
+    if(!keys.length){ libStatus("nothing to build"); return; }
+    const d=score.dancers[state.selD]; if(!d) return;
+    d.keys=keys;
+    score.length=Math.max(8, Math.ceil(totalBeats));
+    if(chor.tempo>0) score.tempo=Math.round(chor.tempo);
+    state.selK=0; state.t=0; renderAll();
+    libStatus(missing.length? `built — ${missing.length} missing section(s) skipped` : `built ${totalBeats} beats onto ${d.name}`);
+  }
+  document.addEventListener("click", e=>{
+    const add=e.target.closest(".lib-add");
+    if(add){
+      const sec=chorSectionsById()[add.dataset.id];
+      chor.items.push({sectionId:add.dataset.id, repeat:1});
+      if(!chor.tempo && sec) chor.tempo=sec.tempo;
+      renderChorItems(); saveChor(); return;
+    }
+    const up=e.target.closest(".chor-up"), down=e.target.closest(".chor-down"), rm=e.target.closest(".chor-rm");
+    if(up||down){
+      const i=+((up||down).dataset.i), j=up? i-1 : i+1;
+      const t=chor.items[i]; chor.items[i]=chor.items[j]; chor.items[j]=t;
+      renderChorItems(); saveChor(); return;
+    }
+    if(rm){ chor.items.splice(+rm.dataset.i,1); renderChorItems(); saveChor(); return; }
+  });
+  document.addEventListener("input", e=>{
+    if(e.target.classList && e.target.classList.contains("chor-rep")){
+      const i=+e.target.dataset.i;
+      chor.items[i].repeat=Math.max(1,Math.min(8,Math.round(+e.target.value||1)));
+      $("#chorTotal").textContent=`total ${chorTotalBeats()} beats`; saveChor();
+    }
+  });
+  $("#chorName").addEventListener("input", e=>{ chor.name=e.target.value||"Choreography"; saveChor(); });
+  $("#btnChorNew").addEventListener("click", ()=>{ chor=newChor(); renderChorItems(); refreshChorSelect(); });
+  $("#btnChorDelete").addEventListener("click", ()=>{
+    SectionStore.deleteChoreography(chor.id).then(()=>{ chor=newChor(); renderChorItems(); refreshChorSelect(); libStatus("choreography deleted"); }).catch(e=>libStatus("library error: "+e));
+  });
+  $("#chorSelect").addEventListener("change", e=>{
+    if(!e.target.value) return;
+    SectionStore.getChoreography(e.target.value).then(c=>{ if(c){ chor=c; renderChorItems(); } }).catch(e=>libStatus("library error: "+e));
+  });
+  $("#btnChorExport").addEventListener("click", ()=>{
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(chor)],{type:"application/json"}));
+    a.download=(chor.name.replace(/\s+/g,"-")||"choreography")+".choreography.json"; a.click(); URL.revokeObjectURL(a.href);
+  });
+  $("#btnChorBuild").addEventListener("click", buildChoreography);
 
   /* toggles */
   $("#btnGhosts").addEventListener("click", e=>{
@@ -1454,6 +1560,6 @@
 
   renderPalette();
   renderAll();
-  refreshLibrary();
+  refreshLibrary().then(()=>{ renderChorItems(); refreshChorSelect(); });
 })();
 </script>
