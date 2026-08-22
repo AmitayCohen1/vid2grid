@@ -48,12 +48,16 @@ export default function SectionPanel({ score, cfg, onCfg, estimate, onSeek }: Pr
     }
   };
   const download = () => {
-    const s = makeSection(score, cfg, name.trim() || "section");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(s)], { type: "application/json" }));
-    a.download = `${s.name.replace(/\s+/g, "-")}.section.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    try {
+      const s = makeSection(score, cfg, name.trim() || "section");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(s)], { type: "application/json" }));
+      a.download = `${s.name.replace(/\s+/g, "-")}.section.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      setStatus(`could not download: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   /* --- beat strip: beats, keyframe ticks, quantized keys, draggable window --- */
@@ -73,9 +77,10 @@ export default function SectionPanel({ score, cfg, onCfg, estimate, onSeek }: Pr
     } else if (e.type === "pointermove" && drag.current) {
       const dBeats = ((x - drag.current.x0) / stripW) * (duration / beatSec);
       if (drag.current.mode === "move") {
-        set({ startBeat: Math.max(0, Math.min(maxStart + cfg.lengthBeats - 1, Math.round(drag.current.start0 + dBeats))) });
+        set({ startBeat: Math.max(0, Math.min(Math.max(0, maxStart), Math.round(drag.current.start0 + dBeats))) });
       } else {
-        set({ lengthBeats: Math.max(1, Math.min(8, Math.round(drag.current.len0 + dBeats))) });
+        const maxLen = Math.max(1, Math.min(8, Math.floor((duration - cfg.offsetSec) / beatSec) - cfg.startBeat));
+        set({ lengthBeats: Math.max(1, Math.min(maxLen, Math.round(drag.current.len0 + dBeats))) });
       }
     } else if (e.type === "pointerup") {
       drag.current = null;
@@ -97,7 +102,7 @@ export default function SectionPanel({ score, cfg, onCfg, estimate, onSeek }: Pr
       <label className="grid grid-cols-[7.5rem_1fr_3.2rem] items-center gap-2">
         <span className="text-muted mono">tempo</span>
         <input type="range" min={30} max={200} step={0.5} value={cfg.bpm} onChange={(e) => set({ bpm: +e.target.value })} />
-        <input className="bg-panel-2 rounded px-1 py-0.5 mono" type="number" min={30} max={200} step={0.5} value={cfg.bpm} onChange={(e) => set({ bpm: +e.target.value })} aria-label="BPM" />
+        <input className="bg-panel-2 rounded px-1 py-0.5 mono" type="number" min={30} max={200} step={0.5} value={cfg.bpm} onChange={(e) => { const v = +e.target.value; if (Number.isFinite(v)) set({ bpm: Math.max(30, Math.min(200, v)) }); }} aria-label="BPM" />
       </label>
       <div className="flex items-center gap-2">
         <button className="btn" onClick={tap}>tap tempo</button>

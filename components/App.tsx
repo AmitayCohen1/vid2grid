@@ -95,6 +95,10 @@ export default function App() {
     () => (score ? estimateTempo(score.raw, score.keyframes.map((i) => score.raw[i].t), score.source.fps) : null),
     [score],
   );
+  // Ordering is load-bearing: this reset must be declared before the seed effect below
+  // so that on a new clip (both fire in the same commit, in declaration order) the seed
+  // reads the fresh cfgTouched=false, not the stale true from the previous clip.
+  useEffect(() => { cfgTouched.current = false; }, [analysis, imported]);
   useEffect(() => {
     if (!estimate || cfgTouched.current) return;
     setSectionCfg((c) => ({
@@ -104,7 +108,6 @@ export default function App() {
       lengthBeats: score ? Math.max(1, Math.min(8, Math.floor(((score.source.duration - estimate.offsetSec) * estimate.bpm) / 60))) : 8,
     }));
   }, [estimate, score]);
-  useEffect(() => { cfgTouched.current = false; }, [analysis, imported]);
 
   const quantized = useMemo(() => (score ? quantizeKeys(score, sectionCfg) : null), [score, sectionCfg]);
   const previewPose = useMemo(() => {
