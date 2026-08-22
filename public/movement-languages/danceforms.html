@@ -301,13 +301,17 @@
     <p class="sec-sub">the selected dancer’s track, written — and editable — in every language; every edit flows back to the stage and the other views</p>
 
     <div class="panel">
-      <div class="panel-cap"><span class="dotk"></span><span>Labanotation — click a slot on the staff, then set it with the rose</span>
+      <div class="panel-cap"><span class="dotk"></span><span>Labanotation — 16 directions; a chevron pins the level a half step up or down</span>
         <span class="capsp"></span><span class="mono" id="labanTarget"></span></div>
       <div class="toolrow" id="labanTools">
         <span class="lab">Direction</span>
         <span class="optrow" id="labanRose" style="display:grid;grid-template-columns:repeat(3,30px);gap:4px"></span>
         <span class="lab" style="margin-left:14px">Level</span>
         <span class="optrow" id="labanLevels"></span>
+        <span class="lab" style="margin-left:14px">Between</span>
+        <span class="optrow" id="labanRose16"></span>
+        <span class="lab" style="margin-left:14px">Pin</span>
+        <span class="optrow" id="labanPins"></span>
         <span class="grow"></span>
         <span class="lab">symbol length = time to next keyframe · unchanged limbs hold</span>
       </div>
@@ -329,15 +333,15 @@
     </div>
 
     <div class="panel" style="margin-top:16px">
-      <div class="panel-cap"><span class="dotk"></span><span>Eshkol-Wachman — click a cell, then step it in 45° units</span>
+      <div class="panel-cap"><span class="dotk"></span><span>Eshkol-Wachman — click a cell, then step it in 22.5° half-units</span>
         <span class="capsp"></span><span class="mono" id="ewTarget"></span></div>
       <div class="toolrow" id="ewTools">
         <span class="lab">Vertical</span>
-        <button class="opt" data-ewstep="el" data-dir="1" title="+45° elevation">▲</button>
-        <button class="opt" data-ewstep="el" data-dir="-1" title="−45° elevation">▼</button>
+        <button class="opt" data-ewstep="el" data-dir="1" title="+22.5° elevation">▲</button>
+        <button class="opt" data-ewstep="el" data-dir="-1" title="−22.5° elevation">▼</button>
         <span class="lab" style="margin-left:14px">Horizontal</span>
-        <button class="opt" data-ewstep="az" data-dir="-1" title="−45° azimuth">◀</button>
-        <button class="opt" data-ewstep="az" data-dir="1" title="+45° azimuth">▶</button>
+        <button class="opt" data-ewstep="az" data-dir="-1" title="−22.5° azimuth">◀</button>
+        <button class="opt" data-ewstep="az" data-dir="1" title="+22.5° azimuth">▶</button>
         <span class="grow"></span>
         <span class="lab">faint cells hold their previous value</span>
       </div>
@@ -835,18 +839,23 @@
 
   /* ---- Laban quantization + symbol ---- */
   const DIR8=["forward","rf","right","rb","back","lb","left","lf"];
-  const DIR_ARROW={forward:"↑",rf:"↗",right:"→",rb:"↘",back:"↓",lb:"↙",left:"←",lf:"↖",place:"●"};
+  const DIR16=["forward","f/rf","rf","rf/r","right","r/rb","rb","rb/b","back","b/lb","lb","lb/l","left","l/lf","lf","lf/f"];
+  const DIR_ARROW={forward:"↑",rf:"↗",right:"→",rb:"↘",back:"↓",lb:"↙",left:"←",lf:"↖",place:"●",
+    "f/rf":"↑↗","rf/r":"↗→","r/rb":"→↘","rb/b":"↘↓","b/lb":"↓↙","lb/l":"↙←","l/lf":"←↖","lf/f":"↖↑"};
   function labanOf(v){
     const ae=dirToAzEl(v), az=ae[0], el=ae[1];
-    if(el>67.5) return {dir:"place",level:"high"};
-    if(el<-67.5) return {dir:"place",level:"low"};
-    const idx=((Math.round(az/45)%8)+8)%8;
-    return {dir:DIR8[idx], level: el>22.5?"high": el<-22.5?"low":"middle"};
+    if(el>67.5) return {dir:"place",level:"high",pin:0};
+    if(el<-67.5) return {dir:"place",level:"low",pin:0};
+    const level = el>22.5?"high": el<-22.5?"low":"middle";
+    const base={high:45,middle:0,low:-45}[level];
+    const pin = (el-base)>11.25? 1 : (el-base)<-11.25? -1 : 0;
+    const i16=((Math.round(az/22.5)%16)+16)%16;
+    return {dir:DIR16[i16], level, pin};
   }
   function labanToVec(q){
     if(q.dir==="place") return q.level==="high"? {x:0,y:1,z:0}: {x:0,y:-1,z:0};
-    const el={low:-45,middle:0,high:45}[q.level];
-    return vec(DIR8.indexOf(q.dir)*45, el);
+    const el={low:-45,middle:0,high:45}[q.level] + (q.pin||0)*22.5;
+    return vec(DIR16.indexOf(q.dir)*22.5, el);
   }
   function hatchDef(id){
     return `<pattern id="${id}" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -914,7 +923,16 @@
         const held = ki>0 && JSON.stringify(q)===JSON.stringify(labanQuantAt(d,p,ki-1));
         const x=colX[p]+(colW-symW)/2-8;
         const sel = ki===state.selK && p===state.selPart;
-        if(!held) g+=`<g style="pointer-events:none">${labanSymbol(q.dir,q.level,x,y0+2,symW,Math.max(8,(y1-y0)-4),p[0]==="l")}</g>`;
+        if(!held){
+          const i16=DIR16.indexOf(q.dir);
+          const h=Math.max(8,(y1-y0)-4);
+          let sym;
+          if(q.dir==="place"||i16%2===0) sym=labanSymbol(q.dir==="place"?"place":DIR8[i16/2],q.level,x,y0+2,symW,h,p[0]==="l");
+          else sym=labanSymbol(DIR8[((i16-1)/2)%8],q.level,x,y0+2,symW/2,h,p[0]==="l")
+                  +labanSymbol(DIR8[(((i16+1)/2))%8],q.level,x+symW/2,y0+2,symW/2,h,p[0]==="l");
+          if(q.pin) sym+=`<path d="M${x+symW/2-3.5},${q.pin>0?y0+6:y0+h-2} l3.5,${q.pin>0?-4:4} l3.5,${q.pin>0?4:-4}" fill="none" style="stroke:var(--ink);stroke-width:1.3"/>`;
+          g+=`<g style="pointer-events:none">${sym}</g>`;
+        }
         else g+=`<line x1="${x+symW/2}" y1="${y0+3}" x2="${x+symW/2}" y2="${y1-3}" style="stroke:var(--ink-faint);stroke-width:1" stroke-dasharray="1 4" pointer-events="none"/>`;
         g+=`<rect class="lslot" data-k="${ki}" data-part="${p}" x="${x-4}" y="${y0}" width="${symW+8}" height="${y1-y0}" fill="transparent" style="cursor:pointer;${sel?"stroke:var(--accent);stroke-width:1.2;stroke-dasharray:3 3":""}"/>`;
       }
@@ -932,6 +950,10 @@
       `<button class="opt" data-ldir="${dd}" aria-pressed="${q&&q.dir===dd}" title="${dd}">${DIR_ARROW[dd]}</button>`).join("");
     $("#labanLevels").innerHTML=["low","middle","high"].map(l=>
       `<button class="opt" data-llevel="${l}" aria-pressed="${q&&q.level===l}">${l}</button>`).join("");
+    $("#labanRose16").innerHTML=DIR16.filter((d,i)=>i%2===1).map(dd=>
+      `<button class="opt" data-ldir="${dd}" aria-pressed="${q&&q.dir===dd}" title="between ${dd.replace("/"," and ")}">${DIR_ARROW[dd]}</button>`).join("");
+    $("#labanPins").innerHTML=[["-1","−¼"],["0","·"],["1","+¼"]].map(([v,l])=>
+      `<button class="opt" data-lpin="${v}" aria-pressed="${q&&String(q.pin)===v}" title="level ${v==="0"?"exact":"raised/lowered a half step"}">${l}</button>`).join("");
   }
 
   /* ---- Benesh view ---- */
@@ -1058,7 +1080,7 @@
           <text x="${x+colW/2}" y="${y+rowH/2+11}" text-anchor="middle" class="mono" font-size="10" fill="${held?"var(--ink-faint)":"var(--ink)"}">${c.h.toFixed(1)}</text></g>`;
       });
     });
-    g+=`<text x="${left}" y="${H-4}" class="mono" font-size="9" fill="var(--ink-faint)">cells: vertical / horizontal · 45° units · vertical 0 = straight down · horizontal 0 = forward</text>`;
+    g+=`<text x="${left}" y="${H-4}" class="mono" font-size="9" fill="var(--ink-faint)">cells: vertical / horizontal · 45° units, half units shown as .5 · vertical 0 = straight down · horizontal 0 = forward</text>`;
     holder.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:none">${g}</svg>`;
     renderEWTools();
   }
@@ -1131,6 +1153,15 @@
       setLimbVec(k.pose,state.selPart,labanToVec(q));
       snapSel(); renderAll(); return;
     }
+    const lpin=e.target.closest("[data-lpin]");
+    if(lpin){
+      const k=selKey(); if(!k) return;
+      const q=labanOf(limbVec(k.pose,state.selPart));
+      if(q.dir==="place") return;
+      q.pin=+lpin.dataset.lpin;
+      setLimbVec(k.pose,state.selPart,labanToVec(q));
+      snapSel(); renderAll(); return;
+    }
     const bdepth=e.target.closest("[data-bdepth]");
     if(bdepth && !bdepth.disabled){
       const k=selKey(); if(!k||!BENESH_PARTS[state.selPart]) return;
@@ -1146,8 +1177,8 @@
     if(ewstep && !ewstep.disabled){
       const k=selKey(); if(!k||!BONE[state.joint]) return;
       const b=k.pose.bones[state.joint];
-      if(ewstep.dataset.ewstep==="el") b[1]=Math.max(-90,Math.min(90,b[1]+45*(+ewstep.dataset.dir)));
-      else { b[0]=((b[0]+45*(+ewstep.dataset.dir)+540)%360)-180; }
+      if(ewstep.dataset.ewstep==="el") b[1]=Math.max(-90,Math.min(90,b[1]+22.5*(+ewstep.dataset.dir)));
+      else { b[0]=((b[0]+22.5*(+ewstep.dataset.dir)+540)%360)-180; }
       snapSel(); renderAll(); return;
     }
     const cam=e.target.closest("[data-cam]");
