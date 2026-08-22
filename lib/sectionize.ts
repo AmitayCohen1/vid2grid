@@ -5,7 +5,9 @@
    ------------------------------------------------------------------ */
 
 import type { AzEl } from "./geometry";
+import { fromAzEl } from "./geometry";
 import type { Pose } from "./pose";
+import { type Score, frameAt } from "./score";
 
 export const SECTION_BONE_IDS = [
   "torso", "head", "ruarm", "rfarm", "luarm", "lfarm",
@@ -69,4 +71,57 @@ export function validateSection(o: unknown): Section {
   }
   if (s.keys[0].beat !== 0) throw new Error("a key at beat 0 is required");
   return s;
+}
+
+export interface QuantizeOptions {
+  bpm: number; offsetSec: number; startBeat: number; lengthBeats: number;
+}
+
+/** Total angular movement (deg) of the ten section bones between two frames. */
+function changeMagnitude(score: Score, fi: number): number {
+  if (fi <= 0) return Infinity;
+  const a = score.frames[fi - 1], b = score.frames[fi];
+  let sum = 0;
+  for (const id of SECTION_BONE_IDS) {
+    const va = fromAzEl(a.bones[id]), vb = fromAzEl(b.bones[id]);
+    const d = Math.max(-1, Math.min(1, va.x * vb.x + va.y * vb.y + va.z * vb.z));
+    sum += (Math.acos(d) * 180) / Math.PI;
+  }
+  return sum;
+}
+
+const snapQuarter = (b: number) => Math.round(b * 4) / 4;
+
+export function quantizeKeys(score: Score, opts: QuantizeOptions): { keys: SectionKey[]; srcFrames: number[] } {
+  const { bpm, offsetSec, startBeat, lengthBeats } = opts;
+  const toBeat = (t: number) => ((t - offsetSec) * bpm) / 60 - startBeat;
+  // beat (quarter-multiple) → winning frame index
+  const byBeat = new Map<number, number>();
+  for (const fi of score.keyframes) {
+    const b = snapQuarter(toBeat(score.frames[fi].t));
+    if (b < 0 || b >= lengthBeats) continue;
+    const cur = byBeat.get(b);
+    if (cur === undefined || changeMagnitude(score, fi) > changeMagnitude(score, cur)) byBeat.set(b, fi);
+  }
+  if (!byBeat.has(0)) byBeat.set(0, frameAt(score, offsetSec + (startBeat * 60) / bpm));
+  const beats = [...byBeat.keys()].sort((a, b) => a - b);
+  return {
+    keys: beats.map((b) => ({ beat: b, pose: poseToSectionPose(score.frames[byBeat.get(b)!]) })),
+    srcFrames: beats.map((b) => byBeat.get(b)!),
+  };
+}
+
+export function makeSection(score: Score, opts: QuantizeOptions, name: string): Section {
+  const { keys } = quantizeKeys(score, opts);
+  const startSec = opts.offsetSec + (opts.startBeat * 60) / opts.bpm;
+  return validateSection({
+    v: 1,
+    id: crypto.randomUUID(),
+    name,
+    createdAt: Date.now(),
+    tempo: Math.round(opts.bpm * 100) / 100,
+    beats: opts.lengthBeats,
+    source: { file: score.source.name, startSec, endSec: startSec + (opts.lengthBeats * 60) / opts.bpm },
+    keys,
+  });
 }
