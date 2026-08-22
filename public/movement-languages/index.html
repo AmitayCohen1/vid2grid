@@ -273,6 +273,10 @@
       <button class="btn chance disp" id="btnChance"><span class="die" id="dieFace">⚄</span> Cast chance operation</button>
       <button class="btn disp" id="btnPlay" aria-pressed="false">▶ Play phrase</button>
       <span class="sec-sub mono" id="playClock">beat 0.0</span>
+      <span class="grow"></span>
+      <select id="libPick" class="disp" aria-label="Sections from the library" style="max-width:180px"></select>
+      <button class="btn disp" id="btnLibLoad">Load section</button>
+      <span class="sec-sub mono" id="libNote"></span>
     </div>
 
     <div class="duet">
@@ -1175,6 +1179,62 @@
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", ()=>{ drawViewer(); drawSphere(); });
   new MutationObserver(()=>{ drawViewer(); drawSphere(); })
     .observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+
+  /* ============ library picker: a section, compressed into this page's model ============ */
+  const SEG_LIMBS={RA:["ruarm","rfarm"],LA:["luarm","lfarm"],RL:["rthigh","rshin"],LL:["lthigh","lshin"]};
+  const SEG_LEN={ruarm:.27,rfarm:.25,luarm:.27,lfarm:.25,rthigh:.42,rshin:.40,lthigh:.42,lshin:.40};
+  const DIR_KEYS=["forward","rf","right","rb","back","lb","left","lf"];
+  function aeVec(az,el){ const a=az*Math.PI/180,e=el*Math.PI/180;
+    return {x:Math.sin(a)*Math.cos(e), y:Math.sin(e), z:Math.cos(a)*Math.cos(e)}; }
+  function limbV(pose,ids){
+    let x=0,y=0,z=0;
+    for(const id of ids){ const v=aeVec(pose.bones[id][0],pose.bones[id][1]), L=SEG_LEN[id]; x+=v.x*L; y+=v.y*L; z+=v.z*L; }
+    const m=Math.hypot(x,y,z)||1; return {x:x/m,y:y/m,z:z/m};
+  }
+  function angleBetween(a,b){ return Math.acos(Math.max(-1,Math.min(1,a.x*b.x+a.y*b.y+a.z*b.z)))*180/Math.PI; }
+  function eventOf(limb,v,beats){
+    const az=Math.atan2(v.x,v.z)*180/Math.PI, el=Math.asin(Math.max(-1,Math.min(1,v.y)))*180/Math.PI;
+    const dir = Math.abs(el)>67.5? "place" : DIR_KEYS[((Math.round(az/45)%8)+8)%8];
+    const level = dir==="place"? (el>0?"high":"low") : el>22.5?"high": el<-22.5?"low":"middle";
+    return {limb, dir, level, beats, time: beats<=0.5?"sudden":"sustained", weight:"light"};
+  }
+  function sectionToPhrase(sec){
+    const ks=sec.keys, ev=[];
+    if(ks.length===1){
+      ev.push(eventOf("RA", limbV(ks[0].pose,SEG_LIMBS.RA), sec.beats));
+      return ev;
+    }
+    for(let i=1;i<ks.length;i++){
+      let best="RA", bestA=-1;
+      for(const limb in SEG_LIMBS){
+        const a=angleBetween(limbV(ks[i-1].pose,SEG_LIMBS[limb]), limbV(ks[i].pose,SEG_LIMBS[limb]));
+        if(a>bestA){ bestA=a; best=limb; }
+      }
+      ev.push(eventOf(best, limbV(ks[i].pose,SEG_LIMBS[best]), ks[i].beat-ks[i-1].beat));
+    }
+    const tail=sec.beats-ks[ks.length-1].beat;
+    if(tail>0){ const last=ev[ev.length-1]; ev.push(Object.assign({},last,{beats:tail,time:"sustained"})); }
+    return ev;
+  }
+  (function(){
+    const escHtml = v => String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
+    const pick=$("#libPick"), btn=$("#btnLibLoad"), note=$("#libNote");
+    if(!window.SectionStore || !SectionStore.available()){ pick.style.display="none"; btn.style.display="none"; return; }
+    SectionStore.listSections().then(secs=>{
+      pick.innerHTML=`<option value="">— from the library —</option>`+secs.map(s=>
+        `<option value="${escHtml(s.id)}">${escHtml(s.name)} (${s.beats} beats)</option>`).join("");
+    }).catch(()=>{ pick.style.display="none"; btn.style.display="none"; });
+    btn.addEventListener("click", ()=>{
+      if(!pick.value) return;
+      SectionStore.getSection(pick.value).then(sec=>{
+        if(!sec) return;
+        state.phrase=sectionToPhrase(sec);
+        state.selected=0; state.t=0;
+        note.textContent=`"${sec.name}" — compressed to 4 channels × 8 dirs × 3 levels`;
+        renderAll();
+      });
+    });
+  })();
 
   renderStrip();
   renderAll();
