@@ -49,8 +49,12 @@ export function validateSection(o: unknown): Section {
   if (s.v !== 1) throw new Error("unsupported section version");
   if (typeof s.id !== "string" || !s.id) throw new Error("missing id");
   if (typeof s.name !== "string") throw new Error("missing name");
+  if (typeof s.createdAt !== "number") throw new Error("missing createdAt");
   if (!Number.isInteger(s.beats) || s.beats < 1 || s.beats > 8) throw new Error("beats must be an integer 1–8");
   if (typeof s.tempo !== "number" || s.tempo <= 0) throw new Error("bad tempo");
+  if (!s.source || typeof s.source !== "object" || typeof s.source.file !== "string" ||
+      typeof s.source.startSec !== "number" || typeof s.source.endSec !== "number")
+    throw new Error("bad source (need file, startSec, endSec)");
   if (!Array.isArray(s.keys) || !s.keys.length) throw new Error("a key at beat 0 is required");
   for (const k of s.keys) {
     if (!isQuarter(k.beat) || k.beat < 0 || k.beat >= s.beats) throw new Error("key beats must be quarter multiples in [0, beats)");

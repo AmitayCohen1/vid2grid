@@ -31,4 +31,9 @@ test("validateSection accepts a good section and rejects bad ones", () => {
   assert.throws(() => validateSection({ ...good, beats: 9 }), /beats/);
   assert.throws(() => validateSection({ ...good, keys: [] }), /beat 0/);
   assert.throws(() => validateSection({ ...good, keys: [{ beat: 0.1, pose: good.keys[0].pose }] }), /quarter/);
+  assert.throws(() => validateSection({ ...good, createdAt: undefined }), /createdAt/);
+  assert.throws(() => validateSection({ ...good, source: undefined }), /source/);
+  assert.throws(() => validateSection({ ...good, source: { ...good.source, file: 7 } }), /source/);
+  assert.throws(() => validateSection({ ...good, source: { ...good.source, startSec: "0" } }), /source/);
+  assert.throws(() => validateSection({ ...good, source: { ...good.source, endSec: null } }), /source/);
 });
