@@ -49,6 +49,51 @@ video ─► MediaPipe Pose (33 landmarks, 2D + rough 3D)     lib/tracker.ts
 - **Score JSON**: `{ source, grid, smooth, lift, body, raw[], frames[], keyframes[] }`
   where `raw` and `frames` are per-sample `Pose`s (`t, facing, x, z, hipY, bones{id: [az, el]}, conf`).
 
+## Changeable parameters
+
+Everything below lives in the **Controls** panel in the UI (`components/Controls.tsx`)
+and is stored on the `Score` itself (`grid`, `smooth`, `lift`), so changing a
+parameter re-derives the score from the smoothed track instantly — no re-tracking
+needed. Defaults live in `lib/grid.ts` (`DEFAULT_GRID`) and `lib/score.ts`
+(`DEFAULT_SMOOTH`).
+
+**3D from** (`lift`, `lib/score.ts` / `lib/lift.ts`) — how depth is derived, toggle
+between:
+- `anchored` (2D-anchored, default) — image x/y are taken as exact, and depth is
+  solved per segment from the dancer's own bone lengths (measured as medians
+  across the clip). More stable; recommended.
+- `world` — MediaPipe's raw metric 3D landmarks, unconstrained by bone length.
+  Only selectable once a clip has been analyzed (`canLift`).
+
+**Grid** (`GridConfig`, `lib/grid.ts`) — the discrete sphere grid that scores are
+snapped to; the Laban and Eshkol-Wachman readings are read straight off it:
+- `azStep` — azimuth step in degrees, one of `11.25 / 22.5 / 45`. Must divide
+  360 evenly. Default `22.5°` (Eshkol-Wachman's 45° unit is two of these).
+- `elStep` — elevation step in degrees, one of `11.25 / 22.5 / 45`. Must divide
+  90 evenly. Default `22.5°`.
+- `facingStep` — step for the dancer's facing direction, one of `22.5 / 45 / 90`.
+  Default `45°`.
+- `hysteresis` — fraction (0–0.5) of a step a raw value must cross past a cell
+  boundary before the notated cell actually changes. Higher = more resistant to
+  flicker at cell edges. Default `0.3`.
+- `minDwell` — minimum number of frames a candidate new cell must persist before
+  it's accepted as a real change (1–10). Higher = ignores brief passes through a
+  cell. Default `4`.
+
+**Smoothing** (`SmoothConfig`, `lib/filter.ts` / `lib/score.ts`) — One-Euro
+filter (Casiez et al. 2012) applied to the track before snapping:
+- `minCutoff` — minimum cutoff frequency in Hz (0.3–5). Lower = smoother/less
+  jitter when the dancer is still, at the cost of more lag. Default `1.5 Hz`.
+- `beta` (labeled "responsiveness" in the UI) — speed coefficient (0–3). Higher =
+  less lag during fast movement, at the cost of more jitter. Default `1.0`.
+
+**Display toggles** (component state in `components/App.tsx`, not saved to the
+score):
+- `showRaw` ("raw ghost") — overlay the unsnapped, continuous track alongside
+  the snapped one on the 3D stage.
+- `showOverlay` ("landmarks") — draw the MediaPipe pose landmarks on top of the
+  source video.
+
 ## Sections & the studio
 
 Once a clip is analyzed, the **section** panel (right column) estimates the

@@ -14,6 +14,7 @@ import { DEFAULT_SMOOTH, type LiftMode, type Score, type SmoothConfig, type Sour
 import { fillGaps, getLandmarker, trackVideo, type TrackedFrame } from "@/lib/tracker";
 import { quantizeKeys } from "@/lib/sectionize";
 import { estimateTempo } from "@/lib/tempo";
+import { describeError } from "@/lib/errors";
 import type { BoneId } from "@/lib/skeleton";
 import type { Body } from "@/lib/fk";
 import type { Pose } from "@/lib/pose";
@@ -179,7 +180,7 @@ export default function App() {
       setPhase("ready");
     } catch (e) {
       if (ac.signal.aborted) return; // superseded by a newer clip
-      setError(e instanceof Error ? e.message : String(e));
+      setError(describeError(e));
       setPhase("error");
     }
   }, []);
@@ -253,7 +254,7 @@ export default function App() {
       if (src) URL.revokeObjectURL(src);
       setSrc(null); setAnalysis(null); setImported(sc); setGrid(sc.grid); setSmooth(sc.smooth);
       setTime(0); setPlaying(false); setShowSource(false); setPhase("ready"); setError(null);
-    }).catch((e) => { setError(String(e)); setPhase("error"); });
+    }).catch((e) => { setError(describeError(e)); setPhase("error"); });
   };
 
   const busy = phase === "loading" || phase === "tracking";
