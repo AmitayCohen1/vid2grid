@@ -302,7 +302,8 @@
 
     <div class="panel">
       <div class="panel-cap"><span class="dotk"></span><span>Labanotation — 16 directions; a chevron pins the level a half step up or down</span>
-        <span class="capsp"></span><span class="mono" id="labanTarget"></span></div>
+        <span class="capsp"></span><span class="mono" id="labanTarget"></span>
+        <button class="btn sm disp" data-export="laban" title="print the Labanotation score to PDF">Export PDF</button></div>
       <div class="toolrow" id="labanTools">
         <span class="lab">Direction</span>
         <span class="optrow" id="labanRose" style="display:grid;grid-template-columns:repeat(3,30px);gap:4px"></span>
@@ -320,7 +321,8 @@
 
     <div class="panel" style="margin-top:16px">
       <div class="panel-cap"><span class="dotk"></span><span>Benesh — drag an extremity sign inside its frame; set depth with the strokes</span>
-        <span class="capsp"></span><span class="mono" id="beneshTarget"></span></div>
+        <span class="capsp"></span><span class="mono" id="beneshTarget"></span>
+        <button class="btn sm disp" data-export="benesh" title="print the Benesh score to PDF">Export PDF</button></div>
       <div class="toolrow" id="beneshTools">
         <span class="lab">Depth</span>
         <button class="opt" data-bdepth="front" title="in front of the body">|</button>
@@ -334,7 +336,8 @@
 
     <div class="panel" style="margin-top:16px">
       <div class="panel-cap"><span class="dotk"></span><span>Eshkol-Wachman — click a cell, then step it in 22.5° half-units</span>
-        <span class="capsp"></span><span class="mono" id="ewTarget"></span></div>
+        <span class="capsp"></span><span class="mono" id="ewTarget"></span>
+        <button class="btn sm disp" data-export="ew" title="print the Eshkol-Wachman score to PDF">Export PDF</button></div>
       <div class="toolrow" id="ewTools">
         <span class="lab">Vertical</span>
         <button class="opt" data-ewstep="el" data-dir="1" title="+22.5° elevation">▲</button>
@@ -892,9 +895,9 @@
     const holder=$("#labanView");
     const d=score.dancers[state.selD];
     if(!d||!d.keys.length){ holder.innerHTML=""; return; }
-    const T=score.length, beatH=15, top=20, bottom=64;
+    const T=score.length, beatH=34, top=24, bottom=80;
     const H=T*beatH+top+bottom;
-    const colW=40, symW=24, gap=8, cx=170;
+    const colW=54, symW=34, gap=12, cx=230;
     const colX={ larm:cx-2*colW-gap-12, lleg:cx-colW-12, rleg:cx+12, rarm:cx+colW+gap+12,
                  body:cx+2*colW+gap+44, head:cx+3*colW+gap+52 };
     let g=`<defs>${hatchDef("lhatch")}</defs>`;
@@ -908,11 +911,11 @@
     for(let b=0;b<=T;b+=4){
       const y=H-bottom-b*beatH;
       g+=`<line x1="${colX.larm-18}" y1="${y}" x2="${colX.larm-6}" y2="${y}" style="stroke:var(--line)"/>`;
-      g+=`<text x="${colX.larm-24}" y="${y+3.5}" text-anchor="end" class="mono" font-size="9.5" fill="var(--ink-faint)">${b}</text>`;
+      g+=`<text x="${colX.larm-24}" y="${y+4}" text-anchor="end" class="mono" font-size="12" fill="var(--ink-faint)">${b}</text>`;
     }
     // column labels (staggered)
     LABAN_COLS.forEach((p,i)=>{
-      g+=`<text x="${colX[p]+symW/2}" y="${H-(i%2?14:32)}" text-anchor="middle" font-size="9.5" fill="var(--ink-soft)" font-family="Futura,'Avenir Next',sans-serif" style="letter-spacing:.08em">${LIMBSETS[p].label.toUpperCase()}</text>`;
+      g+=`<text x="${colX[p]+symW/2}" y="${H-(i%2?22:42)}" text-anchor="middle" font-size="11.5" fill="var(--ink-soft)" font-family="Futura,'Avenir Next',sans-serif" style="letter-spacing:.08em">${LIMBSETS[p].label.toUpperCase()}</text>`;
     });
     // symbols + slots
     d.keys.forEach((k,ki)=>{
@@ -1093,6 +1096,47 @@
   }
 
   function renderNotationViews(){ renderLabanView(); renderBeneshView(); renderEWView(); }
+
+  /* ================= notation → PDF (browser print) ================= */
+  const EXPORTS = {
+    laban:  { holder:"#labanView",  render:renderLabanView,  title:"Labanotation",                 page:"portrait"  },
+    benesh: { holder:"#beneshView", render:renderBeneshView, title:"Benesh Movement Notation",     page:"landscape" },
+    ew:     { holder:"#ewView",     render:renderEWView,     title:"Eshkol-Wachman Movement Notation", page:"landscape" },
+  };
+  function exportNotationPDF(kind){
+    const meta = EXPORTS[kind]; if(!meta) return;
+    const d = score.dancers[state.selD];
+    if(!d || !d.keys.length){ return; }
+    // Re-render the notation with no selection so the printed score is clean, then restore.
+    const savedK = state.selK;
+    state.selK = -1; meta.render();
+    const svg = $(meta.holder).innerHTML;
+    state.selK = savedK; meta.render();
+    const heading = `${meta.title} — ${escHtml(d.name)} · ${score.tempo} bpm · ${score.length} beats`;
+    const svgFit = meta.page==="landscape" ? "width:100%;" : "max-width:100%;";
+    const css =
+      `@page{ size:${meta.page}; margin:14mm; }`+
+      `:root{ --ink:#141414; --ink-soft:#555; --ink-faint:#9a9a9a; --line:#c7c7c7; --paper:#fff; --paper-2:#f4f4f4; --card:#fff; --accent:#141414; --accent-soft:#ececec; --signal:#141414; }`+
+      `html,body{ background:#fff; color:#141414; margin:0; }`+
+      `body{ font-family:'Futura','Avenir Next','Century Gothic',sans-serif; }`+
+      `h1{ font-size:14px; letter-spacing:.05em; margin:0 0 6px; font-weight:600; }`+
+      `.meta{ font-size:10px; color:#666; margin:0 0 16px; letter-spacing:.04em; }`+
+      `svg{ ${svgFit} height:auto; }`;
+    const doc = `<!doctype html><html><head><meta charset="utf-8"><title>${heading}</title><style>${css}</style></head>`+
+      `<body><h1>${heading}</h1><div class="meta">generated ${escHtml(new Date().toLocaleString())} · Movement Languages studio</div>${svg}</body></html>`;
+    const ifr = document.createElement("iframe");
+    ifr.setAttribute("aria-hidden","true");
+    ifr.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
+    document.body.appendChild(ifr);
+    const cw = ifr.contentWindow;
+    cw.document.open(); cw.document.write(doc); cw.document.close();
+    const go = ()=>{ try{ cw.focus(); cw.print(); }catch(e){} setTimeout(()=>{ ifr.remove(); }, 1500); };
+    setTimeout(go, 200);
+  }
+  document.addEventListener("click", e=>{
+    const ex = e.target.closest("[data-export]");
+    if(ex){ exportNotationPDF(ex.dataset.export); }
+  });
 
   /* ================= render all ================= */
   function renderAll(){
