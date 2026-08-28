@@ -276,6 +276,7 @@ export default function App() {
           <button className="btn" onClick={exportJson} disabled={!score}>export JSON</button>
           <a className="btn" href="/movement-languages/danceforms.html">studio</a>
           <a className="btn" href="/movement-languages/index.html">parameters</a>
+          <a className="btn" href="/movement-languages/comparison.html">comparison</a>
         </div>
       </header>
 

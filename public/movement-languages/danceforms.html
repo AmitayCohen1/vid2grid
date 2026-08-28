@@ -163,6 +163,7 @@
       <a href="/">Capture</a>
       <a id="navParams" href="index.html">Parameters</a>
       <a id="navStudio" href="danceforms.html" class="here" aria-current="page">Studio</a>
+      <a href="comparison.html">Comparison</a>
     </nav>
   </div>
 </header>
@@ -1663,7 +1664,10 @@
     cv.addEventListener("pointermove", e=>{
       if(!dragging) return;
       state.cam.yaw += (e.clientX-lx)*0.45;
-      state.cam.pitch = Math.max(-4, Math.min(82, state.cam.pitch + (e.clientY-ly)*0.3));
+      // full 360° vertical orbit — tumble over the top and under the floor,
+      // wrapped to (-180°, 180°] so the readout stays readable
+      let p = state.cam.pitch + (e.clientY-ly)*0.3;
+      state.cam.pitch = ((p + 180) % 360 + 360) % 360 - 180;
       lx=e.clientX; ly=e.clientY;
       drawStage();
     });
