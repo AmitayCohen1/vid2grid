@@ -136,6 +136,11 @@
   .focusctl select,.presetctl select{font-size:14px;font-family:"Menlo","SF Mono",Consolas,monospace;
     border:1px solid var(--line);border-radius:2px;background:var(--paper-2);color:var(--ink);
     padding:6px 8px}
+  .nudgectl{border:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+  .nudgectl legend{font-family:"Futura","Avenir Next","Century Gothic",sans-serif;
+    font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);padding:0;margin:0 0 2px}
+  .nudgectl .row{display:flex;gap:4px}
+  .nudgectl button{display:inline-flex}
 
   .workspace{display:grid;gap:16px;align-items:start;
     grid-template-columns:minmax(0,1fr) minmax(0,1.6fr)}
@@ -198,6 +203,15 @@
       <label class="presetctl">Movement
         <select id="presetSel"></select>
       </label>
+      <fieldset class="nudgectl" aria-label="Nudge the focused joint">
+        <legend>Nudge</legend>
+        <div class="row">
+          <button class="btn sm" id="nudgeAzL" type="button" title="Rotate azimuth left">Az &minus;</button>
+          <button class="btn sm" id="nudgeAzR" type="button" title="Rotate azimuth right">Az +</button>
+          <button class="btn sm" id="nudgeElDown" type="button" title="Lower elevation">El &minus;</button>
+          <button class="btn sm" id="nudgeElUp" type="button" title="Raise elevation">El +</button>
+        </div>
+      </fieldset>
       <span class="sp" style="flex:1"></span>
       <button class="btn" id="guideBtn">Guide</button>
     </div>
@@ -278,6 +292,67 @@
     }
     sel.addEventListener("change", () => { CMP.focus = sel.value || null; CMP.render(); renderStage(); });
   })();
+
+  /* ---------- MOVEMENT menu: presets (Task 8) ----------
+     Five short phrases: a neutral reference, the Window-3 quality lowering
+     and the Window-1 held-direction phrase (kept faithful to the spec's
+     original windows), plus two more of our own — an arm raise to second
+     and a small plié — chosen because each is legible at a glance and each
+     invites a different "what to notice" across the three renderers. Every
+     pose is built via merge(standPose(), {...}); nothing here touches the
+     frozen single-dancer structure (invariant 1). */
+  const PRESETS = [
+    { id: "stand", name: "Stand (neutral)", note: "An upright reference pose.",
+      dancer: { beats: 2, keys: [
+        { beat: 0, pose: NotationRender.standPose() },
+      ] } },
+    { id: "w3", name: "One lowering (Window 3)", note: "A forearm lowering — three qualities read alike in EWMN.",
+      dancer: { beats: 2, keys: [
+        { beat: 0,   pose: NotationRender.merge(NotationRender.standPose(), { rfarm: [0, 20] }) },
+        { beat: 1,   pose: NotationRender.merge(NotationRender.standPose(), { rfarm: [0, -30] }) },
+        { beat: 1.5, pose: NotationRender.merge(NotationRender.standPose(), { rfarm: [0, -60] }) },
+      ] } },
+    { id: "w1", name: "Arm held forward (Window 1)", note: "One written direction, held two beats — read as a shape, a level, and a coordinate pair.",
+      dancer: { beats: 2, keys: [
+        { beat: 0, pose: NotationRender.merge(NotationRender.standPose(), { ruarm: [0, 0], rfarm: [0, 0] }) },
+      ] } },
+    { id: "arm2", name: "Arm raise to second", note: "The arm travels from low to side — watch each system mark the path, not just the endpoint.",
+      dancer: { beats: 3, keys: [
+        { beat: 0,   pose: NotationRender.standPose() },
+        { beat: 1.5, pose: NotationRender.merge(NotationRender.standPose(), { ruarm: [90, 0], rfarm: [90, 0] }) },
+      ] } },
+    { id: "plie", name: "Small plié", note: "A slight knee bend — no travel, just a change in level; compare how each system marks a hold that isn't a hold.",
+      dancer: { beats: 2, keys: [
+        { beat: 0, pose: NotationRender.standPose() },
+        { beat: 1, pose: NotationRender.merge(NotationRender.standPose(), { rthigh: [5, -65], rshin: [2, -70], lthigh: [-5, -65], lshin: [-2, -70] }) },
+      ] } },
+  ];
+
+  (function fillPresets(){
+    const sel = document.getElementById("presetSel");
+    sel.innerHTML = PRESETS.map(p => `<option value="${p.id}">${p.name}</option>`).join("");
+    sel.addEventListener("change", () => {
+      const p = PRESETS.find(x => x.id === sel.value); if (!p) return;
+      CMP.dancer = NotationRender.clonePose ? JSON.parse(JSON.stringify(p.dancer)) : p.dancer;
+      CMP.render(); renderStage();
+    });
+    CMP.dancer = JSON.parse(JSON.stringify(PRESETS[0].dancer));
+  })();
+
+  /* ---------- LIGHT editor: nudge the focused joint (Task 8) ----------
+     MVP: edits the focused bone's [az, el] on key 0 only. Bone-level focus
+     only (whole-body / limbset focus is a no-op) since a single [az,el]
+     pair is what a bone owns. */
+  function nudge(field, delta) {
+    const seg = CMP.focus; if (!seg || !NotationRender.BONES.some(b => b.id === seg)) return; // bone-level edits only
+    const k = CMP.dancer.keys[0]; const [az, el] = k.pose.bones[seg];
+    k.pose.bones[seg] = field === "az" ? [az + delta, el] : [az, Math.max(-90, Math.min(90, el + delta))];
+    CMP.render(); renderStage();
+  }
+  document.getElementById("nudgeAzL").onclick = () => nudge("az", -15);
+  document.getElementById("nudgeAzR").onclick = () => nudge("az", 15);
+  document.getElementById("nudgeElDown").onclick = () => nudge("el", -15);
+  document.getElementById("nudgeElUp").onclick = () => nudge("el", 15);
 
   function renderStage() {
     const sk = NotationRender.skeleton(CMP.dancer.keys[0].pose);

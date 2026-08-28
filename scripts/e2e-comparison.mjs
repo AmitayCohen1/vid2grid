@@ -56,6 +56,18 @@ try {
   const disagree = await page.$eval("#disagree", el => ({ hidden: el.hidden, txt: el.textContent }));
   if (disagree.hidden || !/eshkol|ewmn|dynamics/i.test(disagree.txt)) die("disagreement strip missing EWMN dynamics note");
 
+  // Presets load and change the score.
+  const before = await page.$eval('.pane[data-sys="laban"] .pane-body', el => el.innerHTML);
+  await page.selectOption("#presetSel", await page.$eval("#presetSel option:nth-child(2)", o => o.value));
+  const after = await page.$eval('.pane[data-sys="laban"] .pane-body', el => el.innerHTML);
+  if (before === after) die("selecting a preset did not change the Laban panel");
+  // Light editor nudges a joint and redraws.
+  await page.selectOption("#focusSel", "rfarm");
+  const pre = await page.$eval('.pane[data-sys="ewmn"] .pane-body', el => el.innerHTML);
+  await page.click('#nudgeElUp');
+  const post = await page.$eval('.pane[data-sys="ewmn"] .pane-body', el => el.innerHTML);
+  if (pre === post) die("nudging elevation did not change the EWMN panel");
+
   if (errs.length) die("console/page errors: " + JSON.stringify(errs));
   console.log("PASS: Comparison shell — picker, min-two, panes track selection");
 } catch (e) { console.error("FAIL:", e && e.message ? e.message : e); exitCode = 1; }
