@@ -255,13 +255,42 @@
   const SYS_LABEL = { laban: "Labanotation", benesh: "Benesh", ewmn: "Eshkol-Wachman" };
   function pickedList() { return ["laban", "benesh", "ewmn"].filter(s => CMP.picks[s]); }
 
+  const RENDERERS = { laban: NotationRender.renderLaban }; // benesh/ewmn added in Tasks 5–6
+
   function renderPanels() {
     const host = document.getElementById("panels");
-    host.innerHTML = pickedList().map(sys =>
-      `<div class="pane" data-sys="${sys}"><div class="pane-cap">${SYS_LABEL[sys]}</div>` +
-      `<div class="pane-body"><p class="ph">renderer arrives in a later task</p></div></div>`
-    ).join("");
+    host.innerHTML = pickedList().map(sys => {
+      const fn = RENDERERS[sys];
+      const body = fn ? fn(CMP.dancer, { focusSegment: CMP.focus }) : `<p class="ph">${SYS_LABEL[sys]} — soon</p>`;
+      return `<div class="pane" data-sys="${sys}"><div class="pane-cap">${SYS_LABEL[sys]}</div><div class="pane-body">${body}</div></div>`;
+    }).join("");
   }
+
+  // Focus options: whole body + each bone (label from BONES).
+  (function fillFocus(){
+    const sel = document.getElementById("focusSel");
+    for (const b of NotationRender.BONES) {
+      const o = document.createElement("option"); o.value = b.id; o.textContent = b.label; sel.appendChild(o);
+    }
+    sel.addEventListener("change", () => { CMP.focus = sel.value || null; CMP.render(); renderStage(); });
+  })();
+
+  function renderStage() {
+    const sk = NotationRender.skeleton(CMP.dancer.keys[0].pose);
+    const S = 150, cx = 150, cy = 260; // orthographic scale/origin
+    const pr = p => ({ x: cx + (p.x*0.92 + p.z*0.30)*S, y: cy - p.y*S });
+    const seg = sk.seg.map(([id, a, b]) => {
+      const pa = pr(a), pb = pr(b);
+      const on = !CMP.focus || id === CMP.focus || NotationRender.LIMBSETS[CMP.focus]?.segs?.includes(id);
+      return `<line x1="${pa.x.toFixed(1)}" y1="${pa.y.toFixed(1)}" x2="${pb.x.toFixed(1)}" y2="${pb.y.toFixed(1)}" ` +
+        `style="stroke:var(--ink);stroke-width:${on?3:1.4};opacity:${CMP.focus&&!on?0.35:1}" stroke-linecap="round"/>`;
+    }).join("");
+    const hc = pr(sk.headC);
+    document.getElementById("stage").innerHTML =
+      `<svg viewBox="0 0 300 300" width="100%" height="100%"><circle cx="${hc.x.toFixed(1)}" cy="${hc.y.toFixed(1)}" r="10" fill="none" style="stroke:var(--ink);stroke-width:1.6"/>${seg}</svg>`;
+  }
+
+  CMP.render = () => { renderPanels(); };
 
   document.querySelectorAll(".pick").forEach(box => {
     box.addEventListener("change", () => {
@@ -271,6 +300,7 @@
       CMP.render();
     });
   });
+  renderStage();
   renderPanels();
 
   /* ---------- guided tour (onboarding scaffolding, preserved) ----------

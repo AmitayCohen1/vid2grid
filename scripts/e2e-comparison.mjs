@@ -30,6 +30,16 @@ try {
   }
   if ((await page.$$eval(".pick", els => els.filter(e => e.checked).length)) < 2) die("picker allowed dropping below two notations");
 
+  // Laban pane draws a real staff.
+  await page.reload({ waitUntil: "networkidle" });
+  const labanBody = await page.$eval('.pane[data-sys="laban"] .pane-body', el => el.innerHTML);
+  if (!/^<svg/.test(labanBody) || !/path d="M/.test(labanBody)) die("Laban pane has no staff");
+  // Focus a segment: its column emphasized, another dimmed.
+  await page.selectOption("#focusSel", "rfarm");
+  const focused = await page.$eval('.pane[data-sys="laban"] .pane-body', el => el.innerHTML);
+  if (!/class="[^"]*focus[^"]*" data-col="rarm"/.test(focused)) die("focus did not emphasize the R arm column");
+  if (!/class="[^"]*dim[^"]*" data-col="larm"/.test(focused)) die("focus did not dim the other columns");
+
   if (errs.length) die("console/page errors: " + JSON.stringify(errs));
   console.log("PASS: Comparison shell — picker, min-two, panes track selection");
 } catch (e) { console.error("FAIL:", e && e.message ? e.message : e); exitCode = 1; }
