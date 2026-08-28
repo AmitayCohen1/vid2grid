@@ -68,8 +68,22 @@ try {
   const post = await page.$eval('.pane[data-sys="ewmn"] .pane-body', el => el.innerHTML);
   if (pre === post) die("nudging elevation did not change the EWMN panel");
 
+  // Guided tour: opens on Guide, closes on Skip, steps target live elements.
+  await page.click("#guideBtn");
+  if (!(await page.$eval("#tour", el => el.classList.contains("on")))) die("tour did not open");
+  await page.click("#tourSkip");
+  if (await page.$eval("#tour", el => el.classList.contains("on"))) die("tour did not close");
+
+  // Provisional-glyph guard: every drawn [data-prov] id must be registered.
+  // The live ported renderers reuse Studio's faithful glyphs and carry no
+  // data-prov markers, so this is expected to find zero drawn ids today —
+  // it is a safety net against a future unregistered provisional glyph.
+  const registered = await page.evaluate(() => window.Notation.PROVISIONAL_GLYPHS);
+  const drawn = await page.$$eval("[data-prov]", els => els.map(e => e.dataset.prov));
+  for (const id of drawn) if (!registered.includes(id)) die("unregistered provisional glyph: " + id);
+
   if (errs.length) die("console/page errors: " + JSON.stringify(errs));
-  console.log("PASS: Comparison shell — picker, min-two, panes track selection");
+  console.log("PASS: Comparison shell — picker, min-two, panes track selection, tour, provisional-glyph guard");
 } catch (e) { console.error("FAIL:", e && e.message ? e.message : e); exitCode = 1; }
 finally { await browser.close(); }
 process.exit(exitCode);

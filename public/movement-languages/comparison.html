@@ -203,7 +203,7 @@
       <label class="presetctl">Movement
         <select id="presetSel"></select>
       </label>
-      <fieldset class="nudgectl" aria-label="Nudge the focused joint">
+      <fieldset class="nudgectl nudge" aria-label="Nudge the focused joint">
         <legend>Nudge</legend>
         <div class="row">
           <button class="btn sm" id="nudgeAzL" type="button" title="Rotate azimuth left">Az &minus;</button>
@@ -231,7 +231,6 @@
       differences in kind, not in accuracy. The single-limb figure uses the same abstraction as the
       <a href="danceforms.html">Studio</a> and <a href="index.html">Parameters</a> pages — every segment is
       a direction on a sphere.</p>
-    <p id="windowNote" style="color:var(--ink-faint);font-size:13px"></p>
   </div>
 </footer>
 
@@ -393,22 +392,18 @@
   CMP.render();
 
   /* ---------- guided tour (onboarding scaffolding, preserved) ----------
-     Kept per spec: Task 9 retargets these steps at the new tool elements.
-     Some old selectors below (e.g. ".rig", "#winSwitch") point at markup
-     removed in this task; tourAt() degrades gracefully when a target is
-     missing (title/text still show, positioning is skipped). The former
-     final step read `fx.inertPanel`, a variable that no longer exists —
-     `fx` is stubbed here only so that step's selector still evaluates
-     without throwing; Task 9 replaces it. */
+     Task 9: steps retargeted at the live tool elements (picker, focus,
+     movement preset, a rendered panel, the light editor, the disagreement
+     strip). tourAt() degrades gracefully when a target is missing
+     (title/text still show, positioning is skipped). */
   const TOUR_KEY="ml_comparison_tour_v1";
-  const fx = { inertPanel: "ewmn" }; // stub for the tour step below; see comment above
   const TOUR=[
-    {sel:()=>".cell-stage", title:"The movement", text:"One limb moves in the middle. Everything around it is a way of writing down this single movement."},
-    {sel:()=>".rig", title:"Four readings", text:"Four notation systems surround the stage — Labanotation, Benesh, Eshkol-Wachman and Motif. Each writes the same gesture its own way."},
-    {sel:()=>".transport", title:"One playhead", text:"Press Play, or drag the scrubber. A single playhead drives all five at once — time runs upward in the tall panels and rightward in the wide ones."},
-    {sel:()=>"#winSwitch", title:"Windows", text:"Each window isolates one thing the systems disagree about. Switch between them here."},
-    {sel:()=>"#quals", title:"Vary it", text:"These buttons change the one thing this window is about. Watch how each panel responds — and how one of them doesn't."},
-    {sel:()=>`.pane[data-pane="${fx.inertPanel}"] .pane-head`, title:"The inert one", text:"In every window exactly one system can't see the difference. It is marked inert and holds still while the others change."},
+    {sel:()=>".picker", title:"Pick notations", text:"Choose two or three notation systems to compare — Labanotation, Benesh, and Eshkol-Wachman all read the same movement."},
+    {sel:()=>"#focusSel", title:"Focus a segment", text:"Pick a limb or joint here to highlight it in every panel and dim the rest, so you can follow one part across systems."},
+    {sel:()=>"#presetSel", title:"Choose a movement", text:"Switch the movement being compared — each preset phrase invites a different thing to notice across the three readings."},
+    {sel:()=>'.pane[data-sys="laban"]', title:"A reading", text:"Each panel is one system's own notation for the current movement, drawn live and kept in sync as you change focus or movement."},
+    {sel:()=>".controls .nudge", title:"Nudge the joint", text:"With a joint focused, these buttons nudge its direction — a light editor so you can see how a small change reads differently in each system."},
+    {sel:()=>"#disagree", title:"Where they disagree", text:"This strip names what the picked systems structurally disagree about — including when one of them simply can't record the difference."},
   ];
   const tourEl=document.getElementById("tour"), holeEl=document.getElementById("tourHole"), boxEl=document.getElementById("tourBox");
   let ti=-1;
