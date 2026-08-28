@@ -40,6 +40,10 @@ try {
   if (!/class="[^"]*focus[^"]*" data-col="rarm"/.test(focused)) die("focus did not emphasize the R arm column");
   if (!/class="[^"]*dim[^"]*" data-col="larm"/.test(focused)) die("focus did not dim the other columns");
 
+  // Benesh pane draws a real stave.
+  const beneshBody = await page.$eval('.pane[data-sys="benesh"] .pane-body', el => el.innerHTML);
+  if (!/^<svg/.test(beneshBody) || !/class="stave"/.test(beneshBody)) die("Benesh pane has no stave");
+
   if (errs.length) die("console/page errors: " + JSON.stringify(errs));
   console.log("PASS: Comparison shell — picker, min-two, panes track selection");
 } catch (e) { console.error("FAIL:", e && e.message ? e.message : e); exitCode = 1; }

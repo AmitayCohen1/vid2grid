@@ -206,5 +206,80 @@
     return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:none">${g}</svg>`;
   }
 
-  return { BONES, BONE, LIMBSETS, standPose, clonePose, merge, skeleton, limbVec, setLimbVec, vec, rotY, dirToAzEl, renderLaban };
+  /* ---- Benesh view: verbatim from danceforms.html:975-1039 (BENESH_PARTS,
+     beneshDepthOf, renderBeneshView), with the mechanical edits in comparison
+     spec Task 5: dancer/opts args replace score/state, holder.innerHTML
+     becomes a returned string, the five stave lines gain class="stave", the
+     selection flag is forced false and renderBeneshTools() is dropped, and
+     each part's extremity sign is wrapped for focus. No data-prov wrappers
+     exist in this source range, so none are ported. ---- */
+  const BENESH_PARTS={rarm:{wrist:"rwrist",joint:"rsh"}, larm:{wrist:"lwrist",joint:"lsh"},
+                      rleg:{wrist:"rankle",joint:"rhip"}, lleg:{wrist:"lankle",joint:"lhip"}};
+  function beneshDepthOf(v){ return v.z>0.3? "front" : v.z<-0.3? "behind" : "level"; }
+  const SEG_TO_BENESH = { ruarm:"rarm", rfarm:"rarm", luarm:"larm", lfarm:"larm", rthigh:"rleg", rshin:"rleg", lthigh:"lleg", lshin:"lleg" };
+  function segToBeneshPart(seg){ return SEG_TO_BENESH[seg] || (BENESH_PARTS[seg] ? seg : null); }
+  function renderBenesh(dancer, opts){
+    opts = opts || {};
+    const d = dancer, T = dancer.beats;
+    if (!d || !d.keys.length) return "";
+    const FW=132, staveH=104, top=42, H=top+staveH+52;
+    const S=staveH/1.78; // body units -> px
+    const lines=[0,.25,.5,.75,1].map(u=>top+u*staveH);
+    const NAMES=["TOP OF HEAD","SHOULDERS","WAIST","KNEES","FLOOR"];
+    const W=d.keys.length*FW+128;
+    let g="";
+    lines.forEach((y,li)=>{
+      g+=`<line class="stave" x1="10" y1="${y}" x2="${d.keys.length*FW+10}" y2="${y}" style="stroke:var(--ink);stroke-width:1"/>`;
+      g+=`<text x="${d.keys.length*FW+16}" y="${y+3.5}" font-size="9" fill="var(--ink-faint)" font-family="Futura,'Avenir Next',sans-serif" style="letter-spacing:.06em">${NAMES[li]}</text>`;
+    });
+    const floorY=lines[4];
+    d.keys.forEach((k,ki)=>{
+      const x0=10+ki*FW, cxF=x0+FW/2;
+      g+=`<line x1="${x0+FW}" y1="${lines[0]}" x2="${x0+FW}" y2="${floorY}" style="stroke:var(--ink);stroke-width:${ki===d.keys.length-1?2:1}"/>`;
+      const beats = (ki<d.keys.length-1? d.keys[ki+1].beat : T) - k.beat;
+      let rm=""; for(let b=0;b<Math.max(1,Math.min(Math.round(beats),8));b++) rm+=`<circle cx="${cxF-(Math.max(1,Math.min(Math.round(beats),8))-1)*6/2+b*12}" cy="${top-20}" r="2.6" fill="var(--ink-soft)"/>`;
+      g+=rm+`<text x="${cxF}" y="${top-30}" text-anchor="middle" class="mono" font-size="9.5" fill="var(--ink-faint)">${(+beats.toFixed(2))} beat${beats===1?"":"s"} · beat ${k.beat}</text>`;
+      // body-space skeleton (from behind: dancer's right = viewer's right)
+      const bp=clonePose(k.pose); bp.x=0; bp.z=0; bp.facing=0;
+      const sk=skeleton(bp);
+      const named={};
+      // recompute named joints from skeleton segments
+      // seg order: torso, clav, pelvis, ruarm, rfarm, luarm, lfarm, rthigh, rshin, lthigh, lshin
+      const segByName=Object.fromEntries(sk.seg.map(s=>[s[0],s]));
+      named.rsh=segByName.ruarm[1]; named.lsh=segByName.luarm[1];
+      named.rhip=segByName.rthigh[1]; named.lhip=segByName.lthigh[1];
+      named.rwrist=segByName.rfarm[2]; named.lwrist=segByName.lfarm[2];
+      named.rankle=segByName.rshin[2]; named.lankle=segByName.lshin[2];
+      const pr=p=>({x:cxF+p.x*S, y:floorY-p.y*S});
+      // faint figure
+      let fig="";
+      for(const [,a,b] of sk.seg){
+        const pa=pr(a), pb=pr(b);
+        fig+=`<line x1="${pa.x.toFixed(1)}" y1="${pa.y.toFixed(1)}" x2="${pb.x.toFixed(1)}" y2="${pb.y.toFixed(1)}" style="stroke:var(--ink-soft);stroke-width:1.3" stroke-linecap="round"/>`;
+      }
+      const hc=pr(sk.headC);
+      fig+=`<circle cx="${hc.x.toFixed(1)}" cy="${hc.y.toFixed(1)}" r="${(0.085*S).toFixed(1)}" fill="none" style="stroke:var(--ink-soft);stroke-width:1.2"/>`;
+      g+=`<g style="pointer-events:none">${fig}</g>`;
+      // extremity signs (draggable)
+      for(const part in BENESH_PARTS){
+        const meta=BENESH_PARTS[part];
+        const ep=pr(named[meta.wrist]), jp=pr(named[meta.joint]);
+        const v=limbVec(k.pose,part);
+        const depth=beneshDepthOf(v);
+        const sel = false;
+        const col = sel? "var(--accent)":"var(--ink)";
+        let sign="";
+        if(depth==="front") sign=`<line x1="${ep.x}" y1="${ep.y-6.5}" x2="${ep.x}" y2="${ep.y+6.5}" style="stroke:${col};stroke-width:2.5" pointer-events="none"/>`;
+        else if(depth==="level") sign=`<line x1="${ep.x-6.5}" y1="${ep.y}" x2="${ep.x+6.5}" y2="${ep.y}" style="stroke:${col};stroke-width:2.5" pointer-events="none"/>`;
+        else sign=`<circle cx="${ep.x}" cy="${ep.y}" r="3.4" fill="${col}" pointer-events="none"/>`;
+        const focusCls = opts.focusSegment ? (segToBeneshPart(opts.focusSegment)===part ? "focus":"dim") : "";
+        g+=`<g class="${focusCls}" data-seg="${part}"><g class="bsign" data-k="${ki}" data-part="${part}" data-jx="${jp.x.toFixed(1)}" data-jy="${jp.y.toFixed(1)}" style="cursor:grab">
+          <circle cx="${ep.x}" cy="${ep.y}" r="11" fill="transparent" ${sel?`style="stroke:var(--accent);stroke-width:1;stroke-dasharray:2 3"`:""}/>${sign}</g></g>`;
+      }
+      g+=`<text x="${cxF}" y="${floorY+20}" text-anchor="middle" class="mono" font-size="9.5" fill="var(--ink-faint)">k${ki+1}</text>`;
+    });
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:none" data-s="${S}">${g}</svg>`;
+  }
+
+  return { BONES, BONE, LIMBSETS, standPose, clonePose, merge, skeleton, limbVec, setLimbVec, vec, rotY, dirToAzEl, renderLaban, renderBenesh };
 });

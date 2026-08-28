@@ -249,3 +249,16 @@ test("renderLaban focus emphasizes the focused column and dims the rest", () => 
   assert.match(svg, /class="[^"]*focus[^"]*" data-col="rarm"/);
   assert.match(svg, /class="[^"]*dim[^"]*" data-col="larm"/);
 });
+
+/* ======================= notation-render.js: Benesh renderer ======================= */
+test("renderBenesh returns a five-line stave with an extremity sign", () => {
+  const svg = R.renderBenesh(w3dancer(), {});
+  assert.match(svg, /^<svg/);
+  const staveLines = (svg.match(/<line[^>]*class="stave"/g) || []).length;
+  assert.equal(staveLines, 5);                 // TOP OF HEAD / SHOULDERS / WAIST / KNEES / FLOOR
+});
+
+test("renderBenesh focus dims non-focused extremity signs", () => {
+  const svg = R.renderBenesh(w3dancer(), { focusSegment: "rfarm" });
+  assert.match(svg, /class="[^"]*focus[^"]*" data-seg="rarm"/);
+});
