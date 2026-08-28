@@ -152,6 +152,10 @@
 
   .disagree{margin-top:16px;border:1px solid var(--line);background:var(--card);border-radius:3px;
     box-shadow:var(--shadow);padding:12px 14px;font-size:13px;color:var(--ink-soft)}
+  .disagree h4{margin:0 0 8px;font-family:"Futura","Avenir Next","Century Gothic",sans-serif;
+    font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:var(--ink)}
+  .disagree p{margin:4px 0}
+  .disagree .inert-dot{color:var(--signal);font-size:11px}
 </style>
 
 <header>
@@ -290,7 +294,17 @@
       `<svg viewBox="0 0 300 300" width="100%" height="100%"><circle cx="${hc.x.toFixed(1)}" cy="${hc.y.toFixed(1)}" r="10" fill="none" style="stroke:var(--ink);stroke-width:1.6"/>${seg}</svg>`;
   }
 
-  CMP.render = () => { renderPanels(); };
+  function renderDisagree() {
+    const el = document.getElementById("disagree");
+    const gaps = Notation.structuralGaps(pickedList());
+    if (!gaps.length) { el.hidden = true; el.innerHTML = ""; return; }
+    el.hidden = false;
+    el.innerHTML = `<h4>Where they disagree</h4>` + gaps.map(g =>
+      `<p data-sys="${g.system}"><span class="inert-dot">○</span> <strong>${SYS_LABEL[g.system]}</strong> ${g.gap}</p>`
+    ).join("");
+  }
+
+  CMP.render = () => { renderPanels(); renderDisagree(); };
 
   document.querySelectorAll(".pick").forEach(box => {
     box.addEventListener("change", () => {
@@ -301,7 +315,7 @@
     });
   });
   renderStage();
-  renderPanels();
+  CMP.render();
 
   /* ---------- guided tour (onboarding scaffolding, preserved) ----------
      Kept per spec: Task 9 retargets these steps at the new tool elements.

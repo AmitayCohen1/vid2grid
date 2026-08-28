@@ -207,6 +207,19 @@ test("dynamics wedges and Motif strokes are registered as provisional", () => {
   assert.ok(!N.isProvisional("laban.direction.forward"));
 });
 
+/* --- Structural disagreement strip ---------------------------------------- */
+test("structuralGaps flags EWMN's missing dynamics against dynamics-carrying peers", () => {
+  const gaps = N.structuralGaps(["laban", "benesh", "ewmn"]);
+  const ew = gaps.find(g => g.system === "ewmn");
+  assert.ok(ew && /dynamics/i.test(ew.gap), "EWMN gap names dynamics");
+  // With only EWMN + another non-dynamics axis picked, still reports the dynamics gap vs peers that carry it.
+  assert.ok(N.structuralGaps(["laban", "ewmn"]).some(g => g.system === "ewmn"));
+});
+
+test("structuralGaps is empty when all picked systems share the compared capabilities", () => {
+  assert.deepEqual(N.structuralGaps(["laban", "benesh"]), []); // both carry dynamics
+});
+
 /* ======================= notation-render.js: pose model ======================= */
 const R = createRequire(import.meta.url)("../public/movement-languages/notation-render.js");
 

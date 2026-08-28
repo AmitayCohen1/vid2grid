@@ -129,6 +129,23 @@
     return DYNAMICS_SYSTEMS.indexOf(system) !== -1;
   }
 
+  /* ---- Structural disagreement (Task 7) -----------------------------------
+     Which picked systems structurally CANNOT express an axis a peer can.
+     Today we compare the one axis we can read from a pose-only dancer's
+     capability flags: dynamics. A system that cannot carry an axis some
+     *other picked* system can is a gap — invariant 8 (meaningful absence
+     gets drawn), surfaced as a line, not just an inert panel badge. */
+  function structuralGaps(picked) {
+    const gaps = [];
+    const anyCarriesDynamics = picked.some(systemCarriesDynamics);
+    for (const sys of picked) {
+      if (anyCarriesDynamics && !systemCarriesDynamics(sys)) {
+        gaps.push({ system: sys, gap: "carries no dynamics — its reading does not change with quality (§4.7)" });
+      }
+    }
+    return gaps;
+  }
+
   /* ---- Reference frames (invariant 3: resolve lazily, per beat) ----------
      Window 1's axis. A written direction means different things under
      different frames; the frame must be resolved at the beat it applies to,
@@ -308,7 +325,7 @@
     BONE_IDS, SYSTEMS, DYNAMICS_SYSTEMS, AXES,
     PANELS, axisVector, beatFraction, beatToAxis,
     TRISTATE, INK, inkFor, resolveField,
-    DYNAMICS, envelope, accentAt, systemCarriesDynamics,
+    DYNAMICS, envelope, accentAt, systemCarriesDynamics, structuralGaps,
     FRAMES, FRAME_HUE, frameHue, resolveDirection,
     PROVISIONAL_GLYPHS, isProvisional,
     validateFixture, axisOf, variantOf, variantDynamics, variantValue, readingField, serializeReading,

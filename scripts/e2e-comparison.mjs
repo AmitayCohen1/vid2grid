@@ -49,6 +49,13 @@ try {
   const ewBody = await page.$eval('.pane[data-sys="ewmn"] .pane-body', el => el.innerHTML);
   if (!/^<svg/.test(ewBody)) die("EWMN pane has no grid");
 
+  // Disagreement strip: with all three notations picked, EWMN's missing
+  // dynamics (§4.7) is surfaced below the panels.
+  const ewmnBox = await page.$('.pick[data-sys="ewmn"]');
+  if (!(await ewmnBox.isChecked())) await ewmnBox.click(); // ensure on
+  const disagree = await page.$eval("#disagree", el => ({ hidden: el.hidden, txt: el.textContent }));
+  if (disagree.hidden || !/eshkol|ewmn|dynamics/i.test(disagree.txt)) die("disagreement strip missing EWMN dynamics note");
+
   if (errs.length) die("console/page errors: " + JSON.stringify(errs));
   console.log("PASS: Comparison shell — picker, min-two, panes track selection");
 } catch (e) { console.error("FAIL:", e && e.message ? e.message : e); exitCode = 1; }
