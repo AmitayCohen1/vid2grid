@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "test": "node --import tsx --test test/*.test.ts && node --test test/*.test.mjs",
-    "e2e": "node scripts/e2e-sections.mjs",
+    "e2e": "node scripts/e2e-sections.mjs && node scripts/e2e-comparison.mjs",
     "lint": "eslint",
     "postinstall": "node scripts/setup-assets.mjs"
   },

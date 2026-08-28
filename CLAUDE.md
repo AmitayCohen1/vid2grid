@@ -11,4 +11,19 @@ See README.md for what this is and how the pipeline fits together.
 - MediaPipe's world (3D) depth is unreliable; `lib/lift.ts` keeps image xy exact and clamps depth by bone length. Smoothing must stay fast (`beta` ≈ 1) or fast arm sweeps lag by several frames.
 - Sections/choreography: `lib/sectionize.ts` + `lib/sectionsDb.ts` have a deliberately duplicated vanilla twin in `public/movement-languages/section-store.js` (static pages can't import from the app) — keep the schema in step. The static pages under `public/movement-languages/` are copies; the originals in `../` are not touched. `npm test` runs node:test units; `npm run e2e` needs the dev server.
 
+## Comparison explainer — "one movement, four readings" (invariants)
+
+The `public/movement-languages/comparison.html` explainer and its `notation.js` model (twin-tested via `test/notation.test.mjs`) obey these eight invariants. They come from `../movement-notation-parameters.md` §7 and `../movement-notation-visualization2.md` §7. Changing any of them is a design decision, not a refactor — stop and confirm.
+
+1. **Additive only.** Never change the frozen single-dancer structure (danceforms/`lib` geometric pose: keyframes over an abstract beat, each pose body-local `(az, el)` per segment). New notation detail is added *around* it.
+2. **Tri-state data, four ink states.** A data field is `value | UNSPECIFIED | NOT_APPLICABLE`. The renderer draws four states: `value`=solid filled, `UNSPECIFIED`=solid hollow outline (drawn confidently), `NOT_APPLICABLE`=nothing drawn, `UNKNOWN`=dashed grey (provenance only, never a stored data value).
+3. **Frames resolve lazily, per beat.** A reference frame (Cross of Axes / EWMN System of Reference) is resolved at the beat it applies to, not baked globally.
+4. **One abstract beat, four axis transforms.** A single beat source drives all panels; each panel maps it onto its own time axis (Laban/Motif vertical, up; Benesh/EWMN horizontal, right). Rotate the layout, never the glyphs.
+5. **Relationships are ranges with two typed endpoints** (start/end each carry their own type), not single points.
+6. **Channel discipline.** Hue = identity / active frame (never a movement parameter). Opacity = certainty / activity. Dash = provenance. Nothing else may claim these channels.
+7. **Sign proportion is semantic.** Each system has one size unit; a sign's size means what that system says it means — don't scale glyphs for layout convenience.
+8. **Meaningful absence gets drawn.** A system that deliberately omits an axis (e.g. EWMN carries no dynamics, §4.7) is shown as a marked, held panel — an inert badge, not a blank.
+
+Glyph fidelity: never invent a Laban-family symbol or autocomplete a Motif action stroke from memory. Unverified glyphs render as clearly provisional placeholders and are logged in `docs/glyph-verification-todo.md`.
+
 @AGENTS.md
