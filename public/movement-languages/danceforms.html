@@ -506,6 +506,12 @@
     cam:{yaw:28, pitch:24, dist:7.0},
   };
 
+  // Per-dancer identity colour. Hue = identity (so selection is shown through
+  // weight/opacity instead, not hue). Mid-tone values chosen to read on both the
+  // light and dark stage. Index-based, so nothing is stored on the dancer.
+  const DANCER_HUES = ["#0f9d94","#d1477a","#c98a12","#7b5cd6","#4a9d3f","#2f7fd1"];
+  const dancerColor = di => DANCER_HUES[((di%DANCER_HUES.length)+DANCER_HUES.length)%DANCER_HUES.length];
+
   let saveTimer=null;
   function save(){
     clearTimeout(saveTimer);
@@ -616,8 +622,7 @@
   function drawStage(){
     const cv = $("#stageCanvas");
     const {ctx,w,h} = sizeCanvas(cv);
-    const ink=css("--ink"), soft=css("--ink-soft"), faint=css("--ink-faint"),
-          acc=css("--accent"), sig=css("--signal");
+    const soft=css("--ink-soft"), faint=css("--ink-faint"), sig=css("--signal");
     ctx.clearRect(0,0,w,h);
     const P = project(w,h);
     const line=(a,b)=>{ const pa=P(a), pb=P(b); if(!pa||!pb) return; ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.stroke(); };
@@ -639,7 +644,9 @@
     if(state.paths){
       score.dancers.forEach((d,di)=>{
         if(d.keys.length<2) return;
-        ctx.strokeStyle = di===state.selD? acc : faint;
+        const hue = dancerColor(di);
+        ctx.globalAlpha = di===state.selD? 1 : .55;
+        ctx.strokeStyle = hue;
         ctx.lineWidth = 1.2; ctx.setLineDash([5,4]);
         ctx.beginPath(); let started=false;
         for(let s=0;s<=60;s++){
@@ -649,12 +656,14 @@
           if(!pt){ started=false; continue; }
           if(!started){ ctx.moveTo(pt.x,pt.y); started=true; } else ctx.lineTo(pt.x,pt.y);
         }
-        ctx.stroke(); ctx.setLineDash([]);
+        ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
         // keyframe spots
         d.keys.forEach((k,ki)=>{
           const pt = P({x:k.pose.x,y:0.012,z:k.pose.z}); if(!pt) return;
-          ctx.fillStyle = (di===state.selD && ki===state.selK)? sig : (di===state.selD? acc : faint);
+          ctx.globalAlpha = di===state.selD? 1 : .55;
+          ctx.fillStyle = (di===state.selD && ki===state.selK)? sig : hue;
           ctx.beginPath(); ctx.arc(pt.x,pt.y,2.6,0,7); ctx.fill();
+          ctx.globalAlpha = 1;
         });
       });
     }
@@ -679,9 +688,9 @@
       for(const k of around) drawFigure(k.pose, faint, 1.4, .5);
     }
 
-    // dancers at playhead
+    // dancers at playhead — hue = identity, selection shown by weight + opacity
     score.dancers.forEach((d,di)=>{
-      drawFigure(poseAt(d,state.t), di===state.selD? acc: ink, di===state.selD? 2.6: 2.2, 1);
+      drawFigure(poseAt(d,state.t), dancerColor(di), di===state.selD? 2.8: 2.2, di===state.selD? 1: .68);
     });
 
     $("#camReadout").textContent = `yaw ${Math.round(state.cam.yaw)}° · pitch ${Math.round(state.cam.pitch)}° · ${state.cam.dist.toFixed(1)}m`;
@@ -723,8 +732,10 @@
     }
     score.dancers.forEach((d,di)=>{
       const y=top+di*rowH+rowH/2;
+      const hue=dancerColor(di);
       g+=`<g class="drow" data-d="${di}" style="cursor:pointer">
         <rect x="0" y="${top+di*rowH}" width="${left-8}" height="${rowH}" fill="${di===state.selD?"var(--accent-soft)":"transparent"}"/>
+        <circle class="dchip" cx="10" cy="${y}" r="4.5" fill="${hue}"/>
         <text x="${left-14}" y="${y+3.5}" text-anchor="end" font-size="10" fill="${di===state.selD?"var(--ink)":"var(--ink-soft)"}" font-family="Futura,'Avenir Next',sans-serif" style="letter-spacing:.08em">${d.name.toUpperCase()}</text></g>`;
       g+=`<line x1="${left}" y1="${y}" x2="${left+T*colW}" y2="${y}" style="stroke:var(--line)"/>`;
       d.keys.forEach((k,ki)=>{
@@ -732,7 +743,7 @@
         const sel = di===state.selD && ki===state.selK;
         g+=`<g class="kf ${sel?"sel":""}" data-d="${di}" data-k="${ki}">
           <path class="kf-shape" d="M${x},${y-8} L${x+8},${y} L${x},${y+8} L${x-8},${y} Z"
-            fill="${sel?"var(--accent)":"var(--paper)"}" style="stroke:${sel?"var(--accent)":"var(--ink)"};stroke-width:1.6"/>
+            fill="${sel?hue:"var(--paper)"}" style="stroke:${hue};stroke-width:1.6"/>
           </g>`;
       });
     });
