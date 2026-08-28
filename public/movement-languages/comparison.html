@@ -85,22 +85,6 @@
   .opt:hover{border-color:var(--ink)}
   .opt[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 
-  /* ---- the cross rig: stage centred, four readings around it ---- */
-  .rig{
-    display:grid; gap:14px; align-items:stretch;
-    grid-template-columns:minmax(0,0.9fr) minmax(0,1.25fr) minmax(0,0.9fr);
-    grid-template-areas:
-      ".      ewmn    ."
-      "laban  stage   motif"
-      ".      benesh  .";
-  }
-  .cell-ewmn{grid-area:ewmn} .cell-laban{grid-area:laban}
-  .cell-stage{grid-area:stage} .cell-motif{grid-area:motif} .cell-benesh{grid-area:benesh}
-  @media (max-width:860px){
-    .rig{grid-template-columns:minmax(0,1fr);
-      grid-template-areas:"stage" "laban" "motif" "ewmn" "benesh";}
-  }
-
   .pane{border:1px solid var(--line);background:var(--card);border-radius:3px;
     box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;min-width:0}
   .pane-head{padding:8px 12px;border-bottom:1px solid var(--line);
@@ -114,23 +98,11 @@
     border:1px solid var(--signal);color:var(--signal);border-radius:2px;padding:2px 6px;white-space:nowrap}
   .pane-body{position:relative;flex:1;display:flex;align-items:center;justify-content:center;padding:8px}
   .pane-body svg{display:block;width:100%;height:auto}
-  #stageCanvas{display:block;width:100%;height:auto;touch-action:none}
   .held{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
     background:color-mix(in srgb,var(--card) 78%,transparent);
     font-family:"Futura","Avenir Next","Century Gothic",sans-serif;
     font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--signal);text-align:center;padding:10px}
   .held.show{display:flex}
-
-  .transport{margin-top:16px;border:1px solid var(--line);background:var(--card);
-    border-radius:3px;box-shadow:var(--shadow);padding:12px 14px;
-    display:flex;gap:14px;align-items:center;flex-wrap:wrap}
-  .transport .grow{flex:1;min-width:180px}
-  .transport .lab{font-family:"Futura","Avenir Next","Century Gothic",sans-serif;
-    font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint)}
-  .beatread{font-family:"Menlo","SF Mono",Consolas,monospace;font-size:12px;color:var(--ink)}
-  .quals{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-  .rm-note{display:none;font-size:12px;color:var(--ink-soft);font-style:italic}
-  .reduced .rm-note{display:inline}
 
   .axis-note{display:flex;gap:16px;flex-wrap:wrap;margin:14px 0 0;
     font-size:13px;color:var(--ink-soft)}
@@ -149,6 +121,37 @@
   #tourBox .row{display:flex;gap:8px;align-items:center}
   #tourBox .step{font-size:11px;color:var(--ink-faint);margin-left:auto;font-family:"Menlo",monospace}
   .reduced #tourHole{transition:none}
+
+  /* ---- focused-Studio tool shell (Task 2: layout first; renderers arrive later) ---- */
+  .tool{padding-top:4px}
+  .controls{display:flex;gap:20px;align-items:flex-end;flex-wrap:wrap;
+    border:1px solid var(--line);background:var(--card);border-radius:3px;
+    box-shadow:var(--shadow);padding:14px 16px;margin-bottom:16px}
+  .picker{border:none;margin:0;padding:0;display:flex;gap:14px;flex-wrap:wrap}
+  .picker label{display:flex;align-items:center;gap:6px;font-size:13.5px;color:var(--ink-soft);cursor:pointer}
+  .picker input{accent-color:var(--accent)}
+  .focusctl,.presetctl{display:flex;flex-direction:column;gap:4px;
+    font-family:"Futura","Avenir Next","Century Gothic",sans-serif;
+    font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint)}
+  .focusctl select,.presetctl select{font-size:14px;font-family:"Menlo","SF Mono",Consolas,monospace;
+    border:1px solid var(--line);border-radius:2px;background:var(--paper-2);color:var(--ink);
+    padding:6px 8px}
+
+  .workspace{display:grid;gap:16px;align-items:start;
+    grid-template-columns:minmax(0,1fr) minmax(0,1.6fr)}
+  @media (max-width:820px){ .workspace{grid-template-columns:minmax(0,1fr)} }
+  .stage{min-height:320px;border:1px solid var(--line);background:var(--card);border-radius:3px;
+    box-shadow:var(--shadow)}
+  .panels{display:flex;flex-wrap:wrap;gap:14px;align-content:flex-start}
+  .panels .pane{flex:1 1 220px;min-width:180px}
+  .pane-cap{padding:8px 12px;border-bottom:1px solid var(--line);
+    font-family:"Futura","Avenir Next","Century Gothic",sans-serif;
+    font-size:11px;letter-spacing:.18em;text-transform:uppercase;font-weight:700}
+  .panels .pane-body{min-height:220px}
+  .panels .ph{color:var(--ink-faint);font-size:13px;font-style:italic;text-align:center;padding:0 12px}
+
+  .disagree{margin-top:16px;border:1px solid var(--line);background:var(--card);border-radius:3px;
+    box-shadow:var(--shadow);padding:12px 14px;font-size:13px;color:var(--ink-soft)}
 </style>
 
 <header>
@@ -178,81 +181,28 @@
 </div>
 
 <main class="wrap">
-  <div class="rig">
-    <div class="pane cell-ewmn" data-pane="ewmn">
-      <div class="pane-head">
-        <span class="name">Eshkol&#8209;Wachman</span>
-        <span class="view">manuscript · left → right</span>
-        <span class="sp"></span>
-        <span class="badge" data-inert hidden>inert · no dynamics (§4.7)</span>
-      </div>
-      <div class="pane-body"><div class="held" data-held>nothing changed here</div></div>
+  <section class="tool">
+    <div class="controls">
+      <fieldset class="picker" aria-label="Notations to compare">
+        <label><input type="checkbox" class="pick" data-sys="laban" checked> Labanotation</label>
+        <label><input type="checkbox" class="pick" data-sys="benesh" checked> Benesh</label>
+        <label><input type="checkbox" class="pick" data-sys="ewmn"> Eshkol-Wachman</label>
+      </fieldset>
+      <label class="focusctl">Focus
+        <select id="focusSel"><option value="">Whole body</option></select>
+      </label>
+      <label class="presetctl">Movement
+        <select id="presetSel"></select>
+      </label>
+      <span class="sp" style="flex:1"></span>
+      <button class="btn" id="guideBtn">Guide</button>
     </div>
-
-    <div class="pane cell-laban" data-pane="laban">
-      <div class="pane-head">
-        <span class="name">Labanotation</span>
-        <span class="view">staff · bottom → top</span>
-        <span class="sp"></span>
-        <span class="badge" data-inert hidden>inert</span>
-      </div>
-      <div class="pane-body"><div class="held" data-held>nothing changed here</div></div>
+    <div class="workspace">
+      <div id="stage" class="stage" aria-label="Stage"></div>
+      <div id="panels" class="panels"></div>
     </div>
-
-    <div class="pane cell-stage" data-pane="stage">
-      <div class="pane-head">
-        <span class="name">The movement</span>
-        <span class="view" id="stageView">figure from behind</span>
-      </div>
-      <div class="pane-body"><canvas id="stageCanvas" width="520" height="420"></canvas></div>
-    </div>
-
-    <div class="pane cell-motif" data-pane="motif">
-      <div class="pane-head">
-        <span class="name">Motif</span>
-        <span class="view">action stroke · bottom → top</span>
-        <span class="sp"></span>
-        <span class="badge" data-inert hidden>inert</span>
-      </div>
-      <div class="pane-body"><div class="held" data-held>nothing changed here</div></div>
-    </div>
-
-    <div class="pane cell-benesh" data-pane="benesh">
-      <div class="pane-head">
-        <span class="name">Benesh</span>
-        <span class="view">stave from behind · left → right</span>
-        <span class="sp"></span>
-        <span class="badge" data-inert hidden>inert</span>
-      </div>
-      <div class="pane-body"><div class="held" data-held>nothing changed here</div></div>
-    </div>
-  </div>
-
-  <div class="transport">
-    <button class="btn" id="playBtn" aria-pressed="false">Play</button>
-    <div class="grow">
-      <input id="scrub" type="range" min="0" max="1" step="0.001" value="0" aria-label="scrub playhead">
-    </div>
-    <span class="beatread mono" id="beatRead">beat 0.00</span>
-    <button class="btn" id="loopBtn" aria-pressed="true">Loop</button>
-    <span class="rm-note">reduced motion — scrub to move the playhead</span>
-  </div>
-
-  <div class="transport">
-    <span class="lab">Window</span>
-    <div class="quals" id="winSwitch" role="group" aria-label="window"></div>
-    <span class="lab" id="axisLab" style="margin-left:10px">Quality</span>
-    <div class="quals" id="quals" role="group" aria-label="variant"></div>
-    <span class="sp" style="flex:1"></span>
-    <button class="btn" id="guideBtn">Guide</button>
-    <span class="beatread mono" id="windowRead"></span>
-  </div>
-
-  <div class="axis-note">
-    <span><b>Reading axes.</b> Laban &amp; Motif run bottom→top; Benesh &amp; EWMN run left→right.
-      One beat, four transforms — the layout rotates, the signs never do.</span>
-  </div>
-  <p class="axis-note" id="provLegend" style="color:var(--ink-faint);font-size:12.5px"></p>
+    <div id="disagree" class="disagree" hidden></div>
+  </section>
 </main>
 
 <footer>
@@ -282,575 +232,57 @@
 </div>
 
 <script src="notation.js"></script>
+<script src="notation-render.js"></script>
 <script>
 (function(){
   "use strict";
-  const N = window.Notation;
-  const D2R = Math.PI/180;
-
-  /* ---------- windows (data; a window is a fixture, not code) ----------
-     Only Window 3 (quality) is defined; Phase 3 fills its panel content.
-     Geometry is identical across variants — the whole point of this window. */
-  const WINDOWS = {
-    quality: {
-      v:1, id:"w3-quality", title:"Window 3 — quality",
-      axisLabel:"where the stress falls in time",
-      beats:2, segments:["rfarm"],
-      movement:{ keys:[
-        {beat:0,   bones:{rfarm:[0, 20]}},
-        {beat:1,   bones:{rfarm:[0,-30]}},
-        {beat:1.5, bones:{rfarm:[0,-60]}},
-      ]},
-      readings:{
-        laban:{ direction:"forward", level:"low", duration:{start:0,end:1.5}, dynamics:true },
-        benesh:{ plane:"sagittal", frame:0, dynamics:true },
-        ewmn:{ position:5, movement:"plane" },
-        motif:{ action:"lower", specificity:{state:"unspecified"}, dynamics:true },
-      },
-      variants:[
-        {id:"impulse", label:"Impulse", dynamics:"impulse"},
-        {id:"impact",  label:"Impact",  dynamics:"impact"},
-        {id:"even",    label:"Even",    dynamics:"even"},
-      ],
-      inertPanel:"ewmn",
-    },
-    frame: {
-      v:1, axis:"frame", id:"w1-frame", title:"Window 1 — reference frame",
-      axisLabel:"what “forward” is measured against",
-      beats:2, segments:["ruarm","rfarm"],
-      // The written gesture is held (it does not change over time); what changes
-      // is the FRAME it is read against, variant by variant.
-      movement:{ keys:[
-        {beat:0, bones:{ruarm:[0,10], rfarm:[0,10]}},
-        {beat:1, bones:{ruarm:[0,10], rfarm:[0,10]}},
-      ]},
-      readings:{
-        laban:{ direction:"forward", level:"middle", frame:true },
-        benesh:{ plane:"sagittal", frame:true },
-        ewmn:{ position:3, frame:true },
-        motif:{ action:"gesture", referenceFrame:{state:"unspecified"} },
-      },
-      variants:[
-        {id:"standard", label:"Standard", frame:"standard"},
-        {id:"body",     label:"Body",     frame:"body"},
-        {id:"stance",   label:"Stance",   frame:"stance"},
-      ],
-      inertPanel:"motif",
-    },
-  };
-
-  let curWin = "quality";
-  let fx = WINDOWS[curWin];
-  for (const k in WINDOWS) { try { N.validateFixture(WINDOWS[k]); } catch(e){ console.error("fixture "+k+" invalid:", e.message); } }
-
-  // Window 1 stage constants: a forward-leaning torso and a slightly angled
-  // supporting leg, so the three frames resolve the same written direction to
-  // three visibly different arm angles (all sagittal — hence the profile view).
-  const TORSO_TILT = 42, STANCE_TILT = 16;
-  const written = () => WINDOWS.frame.movement.keys[0].bones.ruarm; // [az, el]
 
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (reduced) document.body.classList.add("reduced");
 
-  const state = { beat:0, playing:false, loop:true, variant:fx.variants[0].id };
-  const LOOP_SECONDS = 4.5; // one pass of `beats` beats — inside the 3–8 s band
-
-  /* ---------- geometry: the single limb, seen from behind ---------- */
-  // Absolute-direction segments (EW abstraction). Upper arm is held; only the
-  // forearm moves, per the fixture. From behind: screen x = world x, y = -world y.
-  const UARM = [0,-70];          // held upper arm, pointing down & slightly forward
-  const LEN_U = 92, LEN_F = 86;  // px
-  function vec(az,el){ const a=az*D2R,e=el*D2R;
-    return {x:Math.sin(a)*Math.cos(e), y:Math.sin(e), z:Math.cos(a)*Math.cos(e)}; }
-  function lerpAngle(a,b,u){ let d=((b-a)%360+540)%360-180; return a+d*u; }
-  function smooth(u){ return u*u*(3-2*u); }
-
-  function forearmAt(beat){
-    const ks = fx.movement.keys;
-    if (beat<=ks[0].beat) return ks[0].bones.rfarm.slice();
-    if (beat>=ks[ks.length-1].beat) return ks[ks.length-1].bones.rfarm.slice();
-    let i=0; while(i<ks.length-1 && ks[i+1].beat<=beat) i++;
-    const A=ks[i], B=ks[i+1], u=smooth((beat-A.beat)/Math.max(1e-6,B.beat-A.beat));
-    return [ lerpAngle(A.bones.rfarm[0],B.bones.rfarm[0],u),
-             lerpAngle(A.bones.rfarm[1],B.bones.rfarm[1],u) ];
-  }
-
-  const canvas = document.getElementById("stageCanvas");
-  const g = canvas.getContext("2d");
-  function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
-  function isDark(){ const t=document.documentElement.getAttribute("data-theme");
-    return t==="dark" || (t!=="light" && matchMedia("(prefers-color-scheme: dark)").matches); }
-  function hueColor(h){ return `hsl(${h} 58% ${isDark()?62:42}%)`; }
-
-  function drawStageQuality(){
-    const W=canvas.width, H=canvas.height;
-    g.clearRect(0,0,W,H);
-    const ink=css("--ink"), soft=css("--ink-soft"), faint=css("--ink-faint"), accent=css("--accent");
-    const ox=W*0.42, oy=H*0.30;                 // shoulder anchor (screen px)
-    const proj=(o,d,len)=>({x:o.x+d.x*len, y:o.y-d.y*len});
-    const shoulder={x:ox,y:oy};
-    const ud=vec(UARM[0],UARM[1]);
-    const elbow=proj(shoulder,ud,LEN_U);
-
-    // ghost trail of the wrist; brightness = the dynamic envelope (§2.9), so
-    // impulse reads as a bright head with a fading tail, impact the reverse.
-    const kind=activeKind();
-    g.lineCap="round";
-    for(let k=1;k<=9;k++){
-      const t=state.beat-(k*0.09);
-      if(t<0) continue;
-      const fd=vec(...forearmAt(t)); const w=proj(elbow,fd,LEN_F);
-      const tn=Math.max(0,Math.min(1,t/fx.readings.laban.duration.end));
-      g.beginPath(); g.arc(w.x,w.y,3.2,0,7);
-      g.globalAlpha=(0.05+0.30*N.envelope(kind,tn))*(1-k/11);
-      g.fillStyle=accent; g.fill();
-    }
-    g.globalAlpha=1;
-
-    // current limb
-    const fd=vec(...forearmAt(state.beat)); const wrist=proj(elbow,fd,LEN_F);
-    g.strokeStyle=soft; g.lineWidth=2;
-    g.beginPath(); g.moveTo(shoulder.x,shoulder.y); g.lineTo(elbow.x,elbow.y); g.stroke();
-    g.strokeStyle=ink; g.lineWidth=3.5;
-    g.beginPath(); g.moveTo(elbow.x,elbow.y); g.lineTo(wrist.x,wrist.y); g.stroke();
-    for(const j of [shoulder,elbow]){ g.fillStyle=soft; g.beginPath(); g.arc(j.x,j.y,3.5,0,7); g.fill(); }
-    g.fillStyle=accent; g.beginPath(); g.arc(wrist.x,wrist.y,5,0,7); g.fill();
-
-    // ground + viewpoint tick
-    g.strokeStyle=faint; g.lineWidth=1;
-    g.beginPath(); g.moveTo(W*0.12,H*0.88); g.lineTo(W*0.88,H*0.88); g.stroke();
-  }
-
-  /* ---------- panel geometry ---------- */
-  const VIEW = { vert:{w:150,h:230}, horiz:{w:360,h:172} };
-  const PAD = 16;
-  const HX0 = PAD+18, staveTop = PAD+26; // benesh leaves a lane above the stave
-  function beatY(b){ const {h}=VIEW.vert, y0=PAD, y1=h-PAD; return y1-(b/fx.beats)*(y1-y0); }
-  function beatX(b){ const {w}=VIEW.horiz; return HX0+(b/fx.beats)*(w-PAD-HX0); }
-
-  /* ---------- faithful Labanotation direction/level symbol ----------
-     Reused from the Studio (danceforms.html): shape = direction, shading =
-     level (low filled, high hatched, middle hollow + centre dot). Not invented. */
-  function hatchDef(id){
-    return `<pattern id="${id}" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-      <line x1="0" y1="0" x2="0" y2="6" style="stroke:var(--ink);stroke-width:1.3"/></pattern>`;
-  }
-  function labanSymbol(dir, level, x, y, w, h, mirror){
-    const fill = level==="low" ? "var(--ink)" : level==="high" ? "url(#lhatch)" : "var(--card)";
-    const nw=w*0.5, nh=Math.min(h*0.35,12);
-    let d;
-    switch(dir){
-      case "place": d=`M${x},${y} h${w} v${h} h${-w} Z`; break;
-      case "forward": d = mirror
-        ? `M${x},${y+nh} h${nw} v${-nh} h${w-nw} v${h} h${-w} Z`
-        : `M${x},${y} h${nw} v${nh} h${w-nw} v${h-nh} h${-w} Z`; break;
-      case "back": d = mirror
-        ? `M${x},${y} h${w} v${h} h${-(w-nw)} v${-nh} h${-nw} Z`
-        : `M${x},${y} h${w} v${h-nh} h${-(w-nw)} v${nh} h${-nw} Z`; break;
-      case "right": d=`M${x},${y} h${w*0.55} L${x+w},${y+h/2} L${x+w*0.55},${y+h} h${-w*0.55} Z`; break;
-      case "left":  d=`M${x+w*0.45},${y} h${w*0.55} v${h} h${-w*0.55} L${x},${y+h/2} Z`; break;
-      default: d=`M${x},${y} h${w} v${h} h${-w} Z`;
-    }
-    const dot = level==="middle" ? `<circle cx="${x+w/2}" cy="${y+h/2}" r="2.2" fill="var(--ink)"/>` : "";
-    return `<path d="${d}" fill="${fill}" style="stroke:var(--ink);stroke-width:1.4" stroke-linejoin="miter"/>${dot}`;
-  }
-
-  /* ---------- provisional glyphs (invariant 6: dash = provenance) ----------
-     Unverified glyph geometry is drawn with a dashed outline + lighter fill and
-     recorded, so nothing from-memory poses as verified. See
-     docs/glyph-verification-todo.md. */
-  const usedProvisional = new Set();
-  function prov(id, inner){
-    if (!N.isProvisional(id)) console.warn("prov() called with unregistered glyph:", id);
-    usedProvisional.add(id);
-    return `<g data-prov="${id}" opacity="0.92" stroke-dasharray="3 2">${inner}</g>`;
-  }
-
-  function scaffold(system){
-    if (system==="laban" || system==="motif"){
-      const {w,h}=VIEW.vert, x0=PAD, x1=w-PAD, y0=PAD, y1=h-PAD;
-      const cx=w/2, gap=(x1-x0)/4;
-      const cols = system==="laban" ? [cx-gap,cx,cx+gap] : [cx];
-      let s=`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${system} staff"><defs>${hatchDef("lhatch")}</defs>`;
-      s+=`<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="var(--stave)" stroke-width="2"/>`;
-      s+=`<line x1="${x0}" y1="${y1-4}" x2="${x1}" y2="${y1-4}" stroke="var(--stave)" stroke-width="1"/>`;
-      for(const c of cols) s+=`<line x1="${c}" y1="${y0}" x2="${c}" y2="${y1}" stroke="var(--stave)" stroke-width="${c===cx?1.4:1}"/>`;
-      for(let b=1;b<=fx.beats;b++){ const y=beatY(b);
-        s+=`<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="var(--line)" stroke-width="1"/>`; }
-      s+=`<g class="content"></g>`;
-      s+=`<line class="ph" x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="var(--accent)" stroke-width="1.6"/>`;
-      s+=`</svg>`; return s;
-    }
-    const {w,h}=VIEW.horiz, x1=w-PAD, y0=PAD, y1=h-PAD;
-    let s=`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${system} manuscript">`;
-    if (system==="benesh"){
-      for(let i=0;i<5;i++){ const y=staveTop+i*(y1-staveTop)/4;
-        s+=`<line x1="${HX0}" y1="${y}" x2="${x1}" y2="${y}" stroke="var(--stave)" stroke-width="1"/>`; }
-    } else {
-      const ym=(y0+y1)/2;
-      s+=`<line x1="${HX0}" y1="${ym}" x2="${x1}" y2="${ym}" stroke="var(--stave)" stroke-width="1"/>`;
-      s+=`<text x="${PAD-4}" y="${ym+4}" font-size="9" fill="var(--ink-faint)" font-family="Menlo,monospace">SoR</text>`;
-    }
-    s+=`<line x1="${HX0}" y1="${y0}" x2="${HX0}" y2="${y1}" stroke="var(--stave)" stroke-width="1.6"/>`;
-    for(let b=1;b<=fx.beats;b++){ const x=beatX(b);
-      s+=`<line x1="${x}" y1="${y0}" x2="${x}" y2="${y1}" stroke="var(--line)" stroke-width="1"/>`; }
-    s+=`<g class="content"></g>`;
-    s+=`<line class="ph" x1="${HX0}" y1="${y0}" x2="${HX0}" y2="${y1}" stroke="var(--accent)" stroke-width="1.6"/>`;
-    s+=`</svg>`; return s;
-  }
-
-  const panes = {};
-  for(const sys of ["laban","motif","benesh","ewmn"]){
-    const pane = document.querySelector(`.pane[data-pane="${sys}"]`);
-    const body = pane.querySelector(".pane-body");
-    body.insertAdjacentHTML("afterbegin", scaffold(sys));
-    panes[sys] = { pane, body, svg:body.querySelector("svg"), ph:body.querySelector(".ph"),
-                   content:body.querySelector(".content"),
-                   held:pane.querySelector("[data-held]"), badge:pane.querySelector("[data-inert]") };
-  }
-
-  function placePlayheads(){
-    const f = N.beatFraction(state.beat, fx.beats);
-    for(const sys of ["laban","motif"]){
-      const {h}=VIEW.vert, y0=PAD, y1=h-PAD, y=y1-f*(y1-y0);
-      panes[sys].ph.setAttribute("y1",y); panes[sys].ph.setAttribute("y2",y);
-    }
-    for(const sys of ["benesh","ewmn"]){
-      const {w}=VIEW.horiz, x=HX0+f*(w-PAD-HX0);
-      panes[sys].ph.setAttribute("x1",x); panes[sys].ph.setAttribute("x2",x);
-    }
-  }
-
-  /* ---------- Window 3 panel content ----------
-     Space stays fixed across variants; only the dynamic quality changes. The
-     active dynamic is read from the model; EWMN carries none (§4.7). */
-  function activeKind(){ return N.variantOf(fx, state.variant).dynamics; }
-  function activeFrame(){ return N.variantOf(fx, state.variant).frame; }
-
-  function renderLaban(){
-    const R=fx.readings.laban, kind=activeKind();
-    const {w}=VIEW.vert, cx=w/2, gap=(w-2*PAD)/4, armX=cx+gap; // right-arm column
-    const symW=22, yTop=beatY(R.duration.end), yBot=beatY(R.duration.start), symH=yBot-yTop;
-    // Direction + level symbol, its length = duration. IDENTICAL across variants.
-    let s=labanSymbol(R.direction, R.level, armX-symW/2, yTop, symW, symH, false);
-    // Dynamics envelope wedge in a lane to the right; CHANGES across variants.
-    const bx=armX+symW/2+6, WMAX=13, id=kind==="impact"?"laban.dynamics.impact-wedge":"laban.dynamics.impulse-wedge";
-    let right="", left="";
-    const M=10;
-    for(let i=0;i<=M;i++){ const t=i/M, y=yBot+(yTop-yBot)*t, wv=WMAX*N.envelope(kind,t);
-      right+=`${bx+wv},${y} `; left=`${bx},${y} `+left; }
-    s+=prov(id, `<polygon points="${right}${left}" fill="var(--signal)" stroke="var(--signal)" stroke-width="1"/>`);
-    panes.laban.content.innerHTML=s;
-  }
-
-  function renderMotif(){
-    const kind=activeKind(), {w}=VIEW.vert;
-    const R=fx.readings.motif;
-    const yTop=beatY(1.5), yBot=beatY(0);
-    // Spatial content thins to a slim action stroke on the left...
-    const ax=w*0.30;
-    let s=prov("motif.action-stroke",
-      `<line x1="${ax}" y1="${yBot}" x2="${ax}" y2="${yTop}" stroke="var(--ink)" stroke-width="2.4"/>`+
-      `<line x1="${ax-4}" y1="${yBot}" x2="${ax+4}" y2="${yBot}" stroke="var(--ink)" stroke-width="1.6"/>`);
-    // ...and the effort graph takes over most of the score (§5.4).
-    const gx=w*0.52, GMAX=w*0.30-6, M=14;
-    let right="", left="";
-    for(let i=0;i<=M;i++){ const t=i/M, y=yBot+(yTop-yBot)*t, wv=GMAX*N.envelope(kind,t);
-      right+=`${gx+wv},${y} `; left=`${gx},${y} `+left; }
-    s+=prov("motif.effort.graph",
-      `<line x1="${gx}" y1="${yBot}" x2="${gx}" y2="${yTop}" stroke="var(--ink-faint)" stroke-width="1"/>`+
-      `<polygon points="${right}${left}" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.2"/>`);
-    panes.motif.content.innerHTML=s;
-  }
-
-  function renderBenesh(){
-    const kind=activeKind(), {h}=VIEW.horiz, y1=h-PAD;
-    const yA=staveTop+2, yB=y1-4; // movement descends across the stave
-    // Frames (start/end positions) + movement line: SPATIAL, identical across variants.
-    let s=prov("benesh.frame",
-      `<rect x="${beatX(0)-3}" y="${yA-3}" width="6" height="6" fill="var(--ink)"/>`+
-      `<rect x="${beatX(1.5)-3}" y="${yB-3}" width="6" height="6" fill="var(--ink)"/>`);
-    s+=prov("benesh.movement-line",
-      `<path d="M${beatX(0)},${yA} Q${beatX(0.9)},${(yA+yB)/2} ${beatX(1.5)},${yB}" fill="none" stroke="var(--ink)" stroke-width="1.6"/>`);
-    // Above-stave quality lane: CHANGES across variants.
-    const ly=PAD+6;
-    let lane;
-    if(kind==="even"){
-      lane=`<line x1="${beatX(0)}" y1="${ly}" x2="${beatX(1.5)}" y2="${ly}" stroke="var(--signal)" stroke-width="2"/>`;
-    } else {
-      const at=kind==="impact"?1.35:0.15, x=beatX(at), dir=kind==="impact"?1:-1;
-      lane=`<path d="M${x-5*dir},${ly-4} L${x+4*dir},${ly} L${x-5*dir},${ly+4}" fill="none" stroke="var(--signal)" stroke-width="2"/>`;
-    }
-    s+=prov("benesh.quality-lane.stress", lane);
-    panes.benesh.content.innerHTML=s;
-  }
-
-  function renderEWMN(){
-    // §4.7: EWMN carries no dynamics — this content is IDENTICAL across variants.
-    const {h}=VIEW.horiz, ym=(PAD+(h-PAD))/2;
-    const x0=beatX(0), x1=beatX(1.5);
-    let s=`<text x="${x0-3}" y="${ym-8}" font-size="13" font-family="Menlo,monospace" fill="var(--ink)">${fx.readings.ewmn.position}</text>`;
-    s+=prov("ewmn.movement.plane",
-      `<path d="M${x0},${ym} A${(x1-x0)/2} 9 0 0 1 ${x1},${ym}" fill="none" stroke="var(--ink)" stroke-width="1.6"/>`+
-      `<text x="${(x0+x1)/2-14}" y="${ym+18}" font-size="9" font-family="Menlo,monospace" fill="var(--ink-soft)">plane</text>`);
-    panes.ewmn.content.innerHTML=s;
-  }
-
-  /* ---------- Window 1 stage: profile view (the axis is sagittal) ----------
-     From behind (the default) a forward tilt and a forward gesture are
-     invisible, so this window uses a clearly-labelled PROFILE view — the honest
-     way to show a sagittal difference. The three frames re-resolve one written
-     direction; the other two are ghosted in their frame hue (§2.11 interaction). */
-  function drawStageFrame(){
-    const W=canvas.width, H=canvas.height;
-    g.clearRect(0,0,W,H);
-    const ink=css("--ink"), soft=css("--ink-soft"), faint=css("--ink-faint");
-    const body={torsoTilt:TORSO_TILT, stanceTilt:STANCE_TILT};
-    // profile: forward(+z) → screen right, up(+y) → screen up
-    const pp=(o,d,len)=>({x:o.x+d.z*len, y:o.y-d.y*len});
-    const pelvis={x:W*0.44, y:H*0.62};
-    const torsoDir=vec(0, 90-TORSO_TILT), shoulder=pp(pelvis,torsoDir,120);
-    const head=pp(shoulder,torsoDir,40);
-    const stanceDir=vec(0,-(90-STANCE_TILT)), foot=pp(pelvis,stanceDir,120);
-    const backLeg=pp(pelvis,vec(0,-90),118);
-    // torso, head, legs
-    g.lineCap="round";
-    g.strokeStyle=soft; g.lineWidth=2;
-    g.beginPath(); g.moveTo(pelvis.x,pelvis.y); g.lineTo(backLeg.x,backLeg.y); g.stroke();
-    g.strokeStyle=ink; g.lineWidth=3;
-    g.beginPath(); g.moveTo(pelvis.x,pelvis.y); g.lineTo(foot.x,foot.y); g.stroke();
-    g.beginPath(); g.moveTo(pelvis.x,pelvis.y); g.lineTo(shoulder.x,shoulder.y); g.stroke();
-    g.fillStyle=ink; g.beginPath(); g.arc(head.x,head.y,9,0,7); g.fill();
-    // gesturing arm, resolved per frame — active solid, the others ghosted
-    const act=activeFrame();
-    for(const fr of N.FRAMES){
-      const dir=vec(...N.resolveDirection(written(), fr, body));
-      const elbow=pp(shoulder,dir,52), hand=pp(elbow,dir,50);
-      const on=fr===act, col=hueColor(N.frameHue(fr));
-      g.globalAlpha=on?1:0.22; g.strokeStyle=col; g.lineWidth=on?4:2.5;
-      g.beginPath(); g.moveTo(shoulder.x,shoulder.y); g.lineTo(elbow.x,elbow.y); g.lineTo(hand.x,hand.y); g.stroke();
-      g.globalAlpha=on?1:0.3; g.fillStyle=col; g.beginPath(); g.arc(hand.x,hand.y,on?5:3.5,0,7); g.fill();
-    }
-    g.globalAlpha=1;
-    // gnomon: a two-axis cross at the active frame's anchor, in the frame hue
-    const anchor = act==="standard" ? {x:foot.x, y:foot.y} : act==="stance" ? {x:foot.x,y:foot.y} : {x:shoulder.x,y:shoulder.y};
-    const tilt = act==="standard" ? 0 : act==="body" ? TORSO_TILT : STANCE_TILT;
-    const up=vec(0,90-tilt), fwd=vec(0,-tilt); // "up" tilted, "forward" perpendicular
-    const gc=hueColor(N.frameHue(act));
-    g.strokeStyle=gc; g.lineWidth=2;
-    const a1=pp(anchor,up,34), a2=pp(anchor,fwd,34);
-    g.beginPath(); g.moveTo(anchor.x,anchor.y); g.lineTo(a1.x,a1.y); g.stroke();
-    g.beginPath(); g.moveTo(anchor.x,anchor.y); g.lineTo(a2.x,a2.y); g.stroke();
-    g.fillStyle=gc; g.beginPath(); g.arc(anchor.x,anchor.y,3,0,7); g.fill();
-    // ground + shoulder joint
-    g.strokeStyle=faint; g.lineWidth=1;
-    g.beginPath(); g.moveTo(W*0.12,H*0.86); g.lineTo(W*0.88,H*0.86); g.stroke();
-    g.fillStyle=soft; g.beginPath(); g.arc(shoulder.x,shoulder.y,3.5,0,7); g.fill();
-  }
-
-  /* ---------- Window 1 panel content ---------- */
-  function frameGutter(sysW, sysH){ // tinted band = active frame (invariant 6: hue = frame)
-    const col=hueColor(N.frameHue(activeFrame()));
-    return `<rect x="${sysW*0.5-16}" y="${PAD-2}" width="32" height="${sysH-2*PAD+4}" fill="${col}" opacity="0.14"/>`;
-  }
-  function renderFrameLaban(){
-    const R=fx.readings.laban, {w,h}=VIEW.vert, cx=w/2;
-    const symW=24, symH=40, y=beatY(1)-symH/2;
-    let s=frameGutter(w,h);
-    // Direction + level symbol: IDENTICAL across frames.
-    s+=labanSymbol(R.direction, R.level, cx-symW/2, y, symW, symH, false);
-    // Key signature: which Cross of Axes is in force. CHANGES per frame (hue = frame).
-    const col=hueColor(N.frameHue(activeFrame()));
-    s+=prov("laban.key-signature",
-      `<rect x="${cx-10}" y="${h-PAD-20}" width="20" height="16" fill="none" stroke="${col}" stroke-width="1.6"/>`+
-      `<line x1="${cx-10}" y1="${h-PAD-12}" x2="${cx+10}" y2="${h-PAD-12}" stroke="${col}" stroke-width="1.4"/>`+
-      `<line x1="${cx}" y1="${h-PAD-20}" x2="${cx}" y2="${h-PAD-4}" stroke="${col}" stroke-width="1.4"/>`);
-    s+=`<text x="${cx}" y="${h-PAD+2}" text-anchor="middle" font-size="8.5" font-family="Menlo,monospace" fill="${col}">${activeFrame()}</text>`;
-    panes.laban.content.innerHTML=s;
-  }
-  function renderFrameEWMN(){
-    // SoR reorients per frame (and nests on the torso for the body frame, §6.3).
-    const {h}=VIEW.horiz, ym=(PAD+(h-PAD))/2, x0=beatX(0.15);
-    const fr=activeFrame(), col=hueColor(N.frameHue(fr)), ang=fr==="standard"?0:fr==="body"?-TORSO_TILT:-STANCE_TILT;
-    const rad=ang*D2R, ax=Math.cos(rad)*16, ay=Math.sin(rad)*16;
-    let s=`<circle cx="${x0}" cy="${ym}" r="17" fill="none" stroke="${col}" stroke-width="1.4"/>`;
-    // the reoriented reference cross inside the sphere
-    s+=`<line x1="${x0-ax}" y1="${ym+ay}" x2="${x0+ax}" y2="${ym-ay}" stroke="${col}" stroke-width="1.5"/>`;
-    s+=`<line x1="${x0-ay}" y1="${ym-ax}" x2="${x0+ay}" y2="${ym+ax}" stroke="${col}" stroke-width="1.5"/>`;
-    // nesting indicator for the body frame: a child sphere carried on the torso
-    if(fr==="body") s+=`<circle cx="${x0+30}" cy="${ym-14}" r="8" fill="none" stroke="${col}" stroke-width="1.2" stroke-dasharray="2 2"/>`
-      +`<line x1="${x0+13}" y1="${ym-4}" x2="${x0+24}" y2="${ym-12}" stroke="${col}" stroke-width="1"/>`;
-    s+=`<text x="${x0+46}" y="${ym-6}" font-size="10" font-family="Menlo,monospace" fill="var(--ink)">pos ${fx.readings.ewmn.position}</text>`;
-    s+=`<text x="${x0+46}" y="${ym+8}" font-size="9" font-family="Menlo,monospace" fill="${col}">SoR: ${fr}</text>`;
-    panes.ewmn.content.innerHTML=s;
-  }
-  function renderFrameBenesh(){
-    // No key glyph — Benesh renders the RESOLVED position from behind, so the
-    // depth sign changes per frame (front/level/behind). NOT inert.
-    const {h}=VIEW.horiz, y1=h-PAD, ymid=(staveTop+y1)/2, x=beatX(1);
-    const resolved=N.resolveDirection(written(), activeFrame(), {torsoTilt:TORSO_TILT,stanceTilt:STANCE_TILT});
-    const el=resolved[1];                     // sagittal: + up, − down
-    const depth = el>12?"behind": el<-12?"front":"level"; // seen from behind
-    const yPos = ymid - (el/90)*(y1-staveTop)*0.42;
-    let s=prov("benesh.frame", `<rect x="${x-3}" y="${yPos-3}" width="6" height="6" fill="var(--ink)"/>`);
-    let sign;
-    if(depth==="front") sign=`<circle cx="${x}" cy="${yPos}" r="4.5" fill="var(--ink)"/>`;         // filled = in front
-    else if(depth==="behind") sign=`<circle cx="${x}" cy="${yPos}" r="4.5" fill="none" stroke="var(--ink)" stroke-width="1.5"/>`; // hollow = behind
-    else sign=`<line x1="${x-6}" y1="${yPos}" x2="${x+6}" y2="${yPos}" stroke="var(--ink)" stroke-width="2.4"/>`; // dash = level
-    s+=prov("benesh.movement-line", sign);
-    s+=`<text x="${x+9}" y="${yPos+3}" font-size="8.5" font-family="Menlo,monospace" fill="var(--ink-soft)">${depth}</text>`;
-    panes.benesh.content.innerHTML=s;
-  }
-  function renderFrameMotif(){
-    // INERT. The action is frame-agnostic; its reference frame is UNSPECIFIED
-    // (§5.3) — drawn as the hollow, confident outline, NOT as nothing (contrast
-    // Window 3's EWMN, which is NOT_APPLICABLE). Same for every frame.
-    const {w}=VIEW.vert, cx=w/2, yTop=beatY(1.5), yBot=beatY(0), ink=N.inkFor("unspecified");
-    let s=prov("motif.action-stroke",
-      `<line x1="${cx}" y1="${yBot}" x2="${cx}" y2="${yTop}" stroke="var(--ink)" stroke-width="2.4"/>`+
-      `<line x1="${cx-5}" y1="${yBot}" x2="${cx+5}" y2="${yBot}" stroke="var(--ink)" stroke-width="1.6"/>`);
-    // the unspecified reference-frame marker: hollow diamond (drawn confidently)
-    const my=beatY(1);
-    s+=`<path d="M${cx},${my-9} L${cx+9},${my} L${cx},${my+9} L${cx-9},${my} Z" fill="${ink.fill?"var(--ink)":"none"}" stroke="var(--ink-soft)" stroke-width="1.4"/>`;
-    s+=`<text x="${cx+14}" y="${my+3}" font-size="8.5" font-family="Menlo,monospace" fill="var(--ink-faint)">frame?</text>`;
-    panes.motif.content.innerHTML=s;
-  }
-
-  /* ---------- per-window dispatch ---------- */
-  const NOTE_Q = `This is <b>Window 3 — quality</b>: one lowering gesture, identical in space, given three dynamic
-    qualities. Laban keeps its direction/level symbol and only the envelope wedge changes; Benesh keeps its frames
-    and movement line and only the above-stave quality lane changes; Motif thins to an action stroke while the effort
-    graph takes over; Eshkol&#8209;Wachman is <b>inert</b> — it carries no dynamics (§4.7), so its reading is identical
-    across all three.`;
-  const NOTE_F = `This is <b>Window 1 — reference frame</b>: one written “forward” gesture, read against three
-    Crosses of Axes / Systems of Reference. Under the <b>standard</b> cross “forward” means forward in the room; under
-    the <b>body</b> cross, relative to the tilted torso; under the <b>stance</b> cross, relative to the supporting leg.
-    Laban keeps the same direction symbol and marks the active key (hue = frame); EWMN reorients its SoR and can nest it
-    on the torso; Benesh shows the resolved depth sign. <b>Motif is inert</b> — its reference frame is <i>unspecified</i>
-    (drawn hollow, not blank), so switching the frame changes nothing. The stage is shown in <b>profile</b> because the
-    difference is sagittal — invisible from behind.`;
-  const WIN = {
-    quality: { stage:drawStageQuality, axisLab:"Quality", note:NOTE_Q,
-               render:{ laban:renderLaban, motif:renderMotif, benesh:renderBenesh, ewmn:renderEWMN } },
-    frame:   { stage:drawStageFrame, axisLab:"Frame", note:NOTE_F,
-               render:{ laban:renderFrameLaban, motif:renderFrameMotif, benesh:renderFrameBenesh, ewmn:renderFrameEWMN } },
+  /* ---------- CMP: the focused-Studio comparison state ----------
+     Task 2 scope: the page shell + notation picker only. Panels are a
+     "renderer arrives in a later task" placeholder — Tasks 3-6 fill in
+     the real Laban/Benesh/EWMN renderers and the stage figure. */
+  const CMP = {
+    dancer: NotationRender.standDancer ? NotationRender.standDancer() : { beats: 2, keys: [{ beat: 0, pose: NotationRender.standPose() }] },
+    picks: { laban: true, benesh: true, ewmn: false },
+    focus: null,
+    render() { renderPanels(); },
   };
-  function W(){ return WIN[curWin]; }
-  function drawStage(){ W().stage(); }
-  function renderContent(){ for(const s of ["laban","benesh","ewmn","motif"]) if(s!==fx.inertPanel) W().render[s](); }
-  function renderInertOnce(){ W().render[fx.inertPanel](); }
+  window.CMP = CMP;
 
-  /* ---------- inert marking (invariant 8) ---------- */
-  function markInert(){
-    for(const sys of ["laban","motif","benesh","ewmn"]){
-      const isInert = sys===fx.inertPanel;
-      panes[sys].badge.hidden = !isInert;
-    }
+  const SYS_LABEL = { laban: "Labanotation", benesh: "Benesh", ewmn: "Eshkol-Wachman" };
+  function pickedList() { return ["laban", "benesh", "ewmn"].filter(s => CMP.picks[s]); }
+
+  function renderPanels() {
+    const host = document.getElementById("panels");
+    host.innerHTML = pickedList().map(sys =>
+      `<div class="pane" data-sys="${sys}"><div class="pane-cap">${SYS_LABEL[sys]}</div>` +
+      `<div class="pane-body"><p class="ph">renderer arrives in a later task</p></div></div>`
+    ).join("");
   }
 
-  /* ---------- variant switcher ---------- */
-  const qualsEl = document.getElementById("quals");
-  const windowRead = document.getElementById("windowRead");
-  function buildVariantButtons(){
-    qualsEl.innerHTML="";
-    fx.variants.forEach(v=>{
-      const b=document.createElement("button");
-      b.className="opt"; b.textContent=v.label; b.dataset.variant=v.id;
-      b.setAttribute("aria-pressed", String(v.id===state.variant));
-      b.addEventListener("click",()=>setVariant(v.id));
-      qualsEl.appendChild(b);
+  document.querySelectorAll(".pick").forEach(box => {
+    box.addEventListener("change", () => {
+      const sys = box.dataset.sys;
+      if (!box.checked && pickedList().length <= 2) { box.checked = true; return; } // min two
+      CMP.picks[sys] = box.checked;
+      CMP.render();
     });
-  }
+  });
+  renderPanels();
 
-  function setVariant(id){
-    if(id===state.variant) return;
-    state.variant=id;
-    for(const b of qualsEl.children) b.setAttribute("aria-pressed", String(b.dataset.variant===id));
-    // The non-inert panels re-render; the inert panel is NOT re-rendered, so its
-    // content stays byte-identical — the hold makes that visible.
-    renderContent(); drawStage();
-    const inert = panes[fx.inertPanel];
-    inert.held.classList.add("show");
-    setTimeout(()=>inert.held.classList.remove("show"), 900);
-    renderWindowReadout();
-  }
-
-  function renderWindowReadout(){
-    const v = fx.variants.find(x=>x.id===state.variant);
-    windowRead.textContent = `${fx.title} · ${W().axisLab.toLowerCase()}: ${v.label.toLowerCase()}`;
-  }
-
-  /* ---------- transport ---------- */
-  const playBtn=document.getElementById("playBtn");
-  const loopBtn=document.getElementById("loopBtn");
-  const scrub=document.getElementById("scrub");
-  const beatRead=document.getElementById("beatRead");
-
-  function setBeat(b){
-    state.beat = Math.max(0, Math.min(fx.beats, b));
-    scrub.value = String(state.beat/fx.beats);
-    beatRead.textContent = "beat "+state.beat.toFixed(2);
-    placePlayheads(); drawStage();
-  }
-  scrub.addEventListener("input", ()=>{ pause(); setBeat(parseFloat(scrub.value)*fx.beats); });
-
-  function play(){ if(reduced) return; state.playing=true; playBtn.textContent="Pause";
-    playBtn.setAttribute("aria-pressed","true"); last=performance.now(); requestAnimationFrame(tick); }
-  function pause(){ state.playing=false; playBtn.textContent="Play"; playBtn.setAttribute("aria-pressed","false"); }
-  playBtn.addEventListener("click", ()=> state.playing?pause():play());
-  loopBtn.addEventListener("click", ()=>{ state.loop=!state.loop;
-    loopBtn.setAttribute("aria-pressed", String(state.loop)); });
-  if(reduced){ playBtn.disabled=true; }
-
-  let last=0;
-  function tick(now){
-    if(!state.playing) return;
-    const dt=(now-last)/1000; last=now;
-    let b = state.beat + dt*(fx.beats/LOOP_SECONDS);
-    if(b>=fx.beats){ if(state.loop) b-=fx.beats; else { b=fx.beats; pause(); } }
-    setBeat(b);
-    if(state.playing) requestAnimationFrame(tick);
-  }
-
-  /* ---------- redraw on theme change (frame hues depend on the theme) ---------- */
-  function rerenderAll(){ renderInertOnce(); renderContent(); drawStage(); }
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rerenderAll);
-  new MutationObserver(rerenderAll).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
-
-  /* ---------- provisional legend ---------- */
-  function renderProvLegend(){
-    const el=document.getElementById("provLegend");
-    if(!usedProvisional.size){ el.textContent=""; return; }
-    el.innerHTML=`<b>Dashed marks are provisional glyphs</b> — their exact form is unverified against a
-      manual and is drawn schematically. Logged in <span class="mono">docs/glyph-verification-todo.md</span>
-      (${usedProvisional.size} in this window).`;
-  }
-
-  /* ---------- window switch + load ---------- */
-  const winSwitchEl = document.getElementById("winSwitch");
-  function buildWinSwitch(){
-    [["quality","Quality"],["frame","Reference frame"]].forEach(([id,label])=>{
-      const b=document.createElement("button"); b.className="opt"; b.textContent=label; b.dataset.win=id;
-      b.addEventListener("click",()=>loadWindow(id)); winSwitchEl.appendChild(b);
-    });
-  }
-  function loadWindow(id){
-    curWin=id; fx=WINDOWS[id]; state.variant=fx.variants[0].id;
-    usedProvisional.clear();
-    document.getElementById("axisLab").textContent=W().axisLab;
-    document.getElementById("windowNote").innerHTML=W().note;
-    document.getElementById("stageView").textContent = id==="frame" ? "profile — sagittal" : "figure from behind";
-    for(const b of winSwitchEl.children) b.setAttribute("aria-pressed", String(b.dataset.win===id));
-    for(const s of ["laban","motif","benesh","ewmn"]) panes[s].content.innerHTML="";
-    buildVariantButtons(); markInert();
-    renderInertOnce();  // the inert panel, rendered once; never re-rendered on a variant change
-    renderContent();    // the three non-inert panels
-    renderProvLegend(); renderWindowReadout();
-    setBeat(0);
-  }
-
-  /* ---------- guided tour (onboarding; every step is also a plain sentence) ---------- */
+  /* ---------- guided tour (onboarding scaffolding, preserved) ----------
+     Kept per spec: Task 9 retargets these steps at the new tool elements.
+     Some old selectors below (e.g. ".rig", "#winSwitch") point at markup
+     removed in this task; tourAt() degrades gracefully when a target is
+     missing (title/text still show, positioning is skipped). The former
+     final step read `fx.inertPanel`, a variable that no longer exists —
+     `fx` is stubbed here only so that step's selector still evaluates
+     without throwing; Task 9 replaces it. */
   const TOUR_KEY="ml_comparison_tour_v1";
+  const fx = { inertPanel: "ewmn" }; // stub for the tour step below; see comment above
   const TOUR=[
     {sel:()=>".cell-stage", title:"The movement", text:"One limb moves in the middle. Everything around it is a way of writing down this single movement."},
     {sel:()=>".rig", title:"Four readings", text:"Four notation systems surround the stage — Labanotation, Benesh, Eshkol-Wachman and Motif. Each writes the same gesture its own way."},
@@ -891,8 +323,6 @@
   addEventListener("resize", ()=>{ if(tourEl.classList.contains("on")){ const t=document.querySelector(TOUR[ti].sel()); if(t) positionTour(t); } });
 
   /* ---------- boot ---------- */
-  buildWinSwitch();
-  loadWindow("quality");
   let seenTour=false; try{ seenTour=!!localStorage.getItem(TOUR_KEY); }catch(e){}
   if(!seenTour) setTimeout(tourStart, 500);
 })();
