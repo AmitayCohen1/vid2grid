@@ -281,5 +281,52 @@
     return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:none" data-s="${S}">${g}</svg>`;
   }
 
-  return { BONES, BONE, LIMBSETS, standPose, clonePose, merge, skeleton, limbVec, setLimbVec, vec, rotY, dirToAzEl, renderLaban, renderBenesh };
+  /* ---- Eshkol-Wachman view: verbatim from danceforms.html:1062-1099 (ewCoord,
+     renderEWView), with the mechanical edits in comparison spec Task 6:
+     dancer/opts args replace score/state, holder.innerHTML becomes a returned
+     string, renderEWTools() is dropped, and each bone row is wrapped for
+     focus. No data-prov wrappers exist in this source range, so none are
+     ported. EWMN carries no dynamics text (§4.7 / invariant 8). ---- */
+  function ewCoord(pose,segId){
+    const [az,el]=pose.bones[segId];
+    return { v:(el+90)/45, h:(((az%360)+360)%360)/45 };
+  }
+  function renderEW(dancer, opts){
+    opts = opts || {};
+    const d = dancer, T = dancer.beats;
+    if (!d || !d.keys.length) return "";
+    const left=112, colW=Math.max(34, 640/T), rowH=34, top=26;
+    const W=left+T*colW+16, H=top+BONES.length*rowH+26;
+    let g="";
+    for(let b=0;b<=T;b++){
+      const x=left+b*colW, major=b%4===0;
+      g+=`<line x1="${x}" y1="${top}" x2="${x}" y2="${top+BONES.length*rowH}" style="stroke:var(--line);stroke-width:${major?1:0.4}"/>`;
+      if(major&&b<T) g+=`<text x="${x+2}" y="${top-8}" class="mono" font-size="9" fill="var(--ink-faint)">${b}</text>`;
+    }
+    BONES.forEach((bn,r)=>{
+      const y=top+r*rowH;
+      const focusCls = opts.focusSegment===bn.id ? "focus" : (opts.focusSegment ? "dim" : "");
+      g+=`<g class="${focusCls}" data-seg="${bn.id}">`;
+      g+=`<line x1="${left-100}" y1="${y}" x2="${left+T*colW}" y2="${y}" style="stroke:var(--line)"/>`;
+      g+=`<text x="${left-8}" y="${y+rowH/2+3}" text-anchor="end" font-size="9" fill="var(--ink-soft)" font-family="Futura,'Avenir Next',sans-serif" style="letter-spacing:.06em">${bn.label.toUpperCase()}</text>`;
+      d.keys.forEach((k,ki)=>{
+        const c=ewCoord(k.pose,bn.id);
+        const prev = ki>0? ewCoord(d.keys[ki-1].pose,bn.id): null;
+        const held = prev && Math.abs(prev.v-c.v)<0.05 && Math.abs(prev.h-c.h)<0.05;
+        const x=left+k.beat*colW;
+        const sel = false;
+        g+=`<g class="ewcell" data-k="${ki}" data-seg="${bn.id}" style="cursor:pointer">
+          <rect x="${x+1}" y="${y+2}" width="${colW-2}" height="${rowH-4}" fill="${sel?"var(--accent-soft)":"transparent"}" style="stroke:${sel?"var(--accent)":held?"var(--line)":"var(--ink-soft)"};stroke-width:${sel?1.4:0.8}"/>
+          <text x="${x+colW/2}" y="${y+rowH/2-2}" text-anchor="middle" class="mono" font-size="10" fill="${held?"var(--ink-faint)":"var(--ink)"}">${c.v.toFixed(1)}</text>
+          <line x1="${x+colW/2-8}" y1="${y+rowH/2+0.5}" x2="${x+colW/2+8}" y2="${y+rowH/2+0.5}" style="stroke:var(--ink-faint);stroke-width:0.8"/>
+          <text x="${x+colW/2}" y="${y+rowH/2+11}" text-anchor="middle" class="mono" font-size="10" fill="${held?"var(--ink-faint)":"var(--ink)"}">${c.h.toFixed(1)}</text></g>`;
+      });
+      g+=`</g>`;
+    });
+    g+=`<line x1="${left-100}" y1="${top+BONES.length*rowH}" x2="${left+T*colW}" y2="${top+BONES.length*rowH}" style="stroke:var(--line)"/>`;
+    g+=`<text x="${left}" y="${H-4}" class="mono" font-size="9" fill="var(--ink-faint)">cells: vertical / horizontal · 45° units, half units shown as .5 · vertical 0 = straight down · horizontal 0 = forward</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:none">${g}</svg>`;
+  }
+
+  return { BONES, BONE, LIMBSETS, standPose, clonePose, merge, skeleton, limbVec, setLimbVec, vec, rotY, dirToAzEl, renderLaban, renderBenesh, renderEW };
 });

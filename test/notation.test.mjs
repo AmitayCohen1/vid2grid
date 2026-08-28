@@ -262,3 +262,21 @@ test("renderBenesh focus dims non-focused extremity signs", () => {
   const svg = R.renderBenesh(w3dancer(), { focusSegment: "rfarm" });
   assert.match(svg, /class="[^"]*focus[^"]*" data-seg="rarm"/);
 });
+
+/* ======================= notation-render.js: Eshkol-Wachman renderer ======================= */
+test("renderEW returns a manuscript grid with a bone row and numerals", () => {
+  const svg = R.renderEW(w3dancer(), {});
+  assert.match(svg, /^<svg/);
+  assert.match(svg, /R FOREARM/i);             // a bone row label
+  assert.match(svg, /<text[^>]*>-?\d(\.5)?<\/text>/); // a 45-unit numeral cell
+});
+
+test("renderEW carries no dynamics text (invariant 8 / §4.7)", () => {
+  const svg = R.renderEW(w3dancer(), {});
+  assert.doesNotMatch(svg, /impulse|impact|dynamic/i);
+});
+
+test("renderEW focus emphasizes the focused bone row", () => {
+  const svg = R.renderEW(w3dancer(), { focusSegment: "rfarm" });
+  assert.match(svg, /class="[^"]*focus[^"]*" data-seg="rfarm"/);
+});

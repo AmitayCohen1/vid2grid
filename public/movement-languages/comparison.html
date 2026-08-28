@@ -255,7 +255,7 @@
   const SYS_LABEL = { laban: "Labanotation", benesh: "Benesh", ewmn: "Eshkol-Wachman" };
   function pickedList() { return ["laban", "benesh", "ewmn"].filter(s => CMP.picks[s]); }
 
-  const RENDERERS = { laban: NotationRender.renderLaban, benesh: NotationRender.renderBenesh }; // ewmn added in Task 6
+  const RENDERERS = { laban: NotationRender.renderLaban, benesh: NotationRender.renderBenesh, ewmn: NotationRender.renderEW };
 
   function renderPanels() {
     const host = document.getElementById("panels");
