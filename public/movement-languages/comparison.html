@@ -154,6 +154,8 @@
     font-size:11px;letter-spacing:.18em;text-transform:uppercase;font-weight:700}
   .panels .pane-body{min-height:220px}
   .panels .ph{color:var(--ink-faint);font-size:13px;font-style:italic;text-align:center;padding:0 12px}
+  .panels .pane svg .dim{opacity:.3}
+  .panels .pane svg .focus{opacity:1}
 
   .disagree{margin-top:16px;border:1px solid var(--line);background:var(--card);border-radius:3px;
     box-shadow:var(--shadow);padding:12px 14px;font-size:13px;color:var(--ink-soft)}
@@ -371,8 +373,11 @@
   function renderDisagree() {
     const el = document.getElementById("disagree");
     const gaps = Notation.structuralGaps(pickedList());
-    if (!gaps.length) { el.hidden = true; el.innerHTML = ""; return; }
     el.hidden = false;
+    if (!gaps.length) {
+      el.innerHTML = `<h4>Where they disagree</h4><p>The picked notations can each express what this movement carries.</p>`;
+      return;
+    }
     el.innerHTML = `<h4>Where they disagree</h4>` + gaps.map(g =>
       `<p data-sys="${g.system}"><span class="inert-dot">○</span> <strong>${SYS_LABEL[g.system]}</strong> ${g.gap}</p>`
     ).join("");

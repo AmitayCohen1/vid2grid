@@ -19,6 +19,13 @@ try {
   const panes0 = await page.$$eval(".pane", els => els.map(e => e.dataset.sys));
   if (panes0.length !== picks.filter(p => p.on).length) die("pane count != checked pickers");
 
+  // Disagreement strip on default picks (Laban + Benesh, both dynamics-carriers):
+  // no structural gap, so the strip stays visible with a plain "no gap" line
+  // rather than vanishing (spec: "says so plainly rather than vanishing").
+  const disagreeDefault = await page.$eval("#disagree", el => ({ hidden: el.hidden, txt: el.textContent }));
+  if (disagreeDefault.hidden) die("disagreement strip is hidden on default load (should show the no-gap line)");
+  if (/inert-dot|eshkol|ewmn/i.test(disagreeDefault.txt)) die("default-load disagreement strip names a system as inert");
+
   // Turning a third notation on adds its pane.
   await page.click('.pick[data-sys="ewmn"]');
   if ((await page.$$(".pane")).length !== 3) die("enabling EWMN did not add a third pane");
