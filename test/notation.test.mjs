@@ -226,3 +226,26 @@ test("limbVec returns a unit vector for the right arm", () => {
   const v = R.limbVec(R.standPose(), "rarm");
   assert.ok(Math.abs(Math.hypot(v.x, v.y, v.z) - 1) < 1e-9);
 });
+
+/* ======================= notation-render.js: Laban renderer ======================= */
+const w3dancer = () => ({
+  beats: 2,
+  keys: [
+    { beat: 0,   pose: R.merge(R.standPose(), { rfarm: [0, 20] }) },
+    { beat: 1,   pose: R.merge(R.standPose(), { rfarm: [0, -30] }) },
+    { beat: 1.5, pose: R.merge(R.standPose(), { rfarm: [0, -60] }) },
+  ],
+});
+
+test("renderLaban returns an SVG staff with at least one direction/level symbol", () => {
+  const svg = R.renderLaban(w3dancer(), {});
+  assert.match(svg, /^<svg/);
+  assert.match(svg, /path d="M/);              // a Laban symbol path (invariant: shape = direction)
+  assert.match(svg, /R ARM/);                  // a column label
+});
+
+test("renderLaban focus emphasizes the focused column and dims the rest", () => {
+  const svg = R.renderLaban(w3dancer(), { focusSegment: "rfarm" });
+  assert.match(svg, /class="[^"]*focus[^"]*" data-col="rarm"/);
+  assert.match(svg, /class="[^"]*dim[^"]*" data-col="larm"/);
+});
