@@ -206,3 +206,23 @@ test("dynamics wedges and Motif strokes are registered as provisional", () => {
   assert.ok(N.isProvisional("motif.action-stroke"));
   assert.ok(!N.isProvisional("laban.direction.forward"));
 });
+
+/* ======================= notation-render.js: pose model ======================= */
+const R = createRequire(import.meta.url)("../public/movement-languages/notation-render.js");
+
+test("standPose fills all ten bones as [az,el] pairs", () => {
+  const p = R.standPose();
+  for (const b of R.BONES) assert.ok(Array.isArray(p.bones[b.id]) && p.bones[b.id].length === 2, b.id);
+});
+
+test("skeleton of the upright pose puts the chest above the root and returns 11 segments", () => {
+  const sk = R.skeleton(R.standPose());
+  assert.equal(sk.seg.length, 11);                 // torso, clav, pelvis, + 8 limb bones
+  const torso = sk.seg.find(s => s[0] === "torso");
+  assert.ok(torso[2].y > torso[1].y, "chest is above the root");
+});
+
+test("limbVec returns a unit vector for the right arm", () => {
+  const v = R.limbVec(R.standPose(), "rarm");
+  assert.ok(Math.abs(Math.hypot(v.x, v.y, v.z) - 1) < 1e-9);
+});
