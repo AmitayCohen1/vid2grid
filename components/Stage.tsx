@@ -2,7 +2,9 @@
 
 import { Canvas } from "@react-three/fiber";
 import { Grid, OrbitControls } from "@react-three/drei";
+import { Suspense } from "react";
 import Figure, { GridSphere } from "./Figure";
+import Avatar from "./Avatar";
 import type { Body } from "@/lib/fk";
 import type { Pose } from "@/lib/pose";
 import type { BoneId } from "@/lib/skeleton";
@@ -14,11 +16,12 @@ interface Props {
   body: Body;
   grid: GridConfig;
   showRaw: boolean;
+  avatar: boolean;
   selected: BoneId | null;
   onSelect: (id: BoneId | null) => void;
 }
 
-export default function Stage({ pose, raw, body, grid, showRaw, selected, onSelect }: Props) {
+export default function Stage({ pose, raw, body, grid, showRaw, avatar, selected, onSelect }: Props) {
   return (
     <Canvas
       camera={{ position: [1.8, 1.4, 3.2], fov: 45, near: 0.05, far: 100 }}
@@ -48,7 +51,13 @@ export default function Stage({ pose, raw, body, grid, showRaw, selected, onSele
       </mesh>
       {pose && (
         <>
-          <Figure pose={pose} body={body} selected={selected} onSelect={onSelect} />
+          {avatar ? (
+            <Suspense fallback={null}>
+              <Avatar pose={pose} body={body} />
+            </Suspense>
+          ) : (
+            <Figure pose={pose} body={body} selected={selected} onSelect={onSelect} />
+          )}
           {showRaw && raw && <Figure pose={raw} body={body} ghost />}
           {selected && raw && <GridSphere pose={pose} raw={raw} body={body} bone={selected} grid={grid} />}
         </>

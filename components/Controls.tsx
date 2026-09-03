@@ -10,6 +10,8 @@ interface Props {
   onSmooth: (s: SmoothConfig) => void;
   showRaw: boolean;
   onShowRaw: (b: boolean) => void;
+  avatar: boolean;
+  onAvatar: (b: boolean) => void;
   showOverlay: boolean;
   onShowOverlay: (b: boolean) => void;
   lift: LiftMode;
@@ -21,7 +23,7 @@ const AZ_STEPS = [11.25, 22.5, 45];
 const EL_STEPS = [11.25, 22.5, 45];
 
 /** The grid is a setting: change it and the whole score re-snaps instantly. */
-export default function Controls({ grid, smooth, onGrid, onSmooth, showRaw, onShowRaw, showOverlay, onShowOverlay, lift, onLift, canLift }: Props) {
+export default function Controls({ grid, smooth, onGrid, onSmooth, showRaw, onShowRaw, avatar, onAvatar, showOverlay, onShowOverlay, lift, onLift, canLift }: Props) {
   return (
     <div className="text-xs flex flex-col gap-3 p-3">
       <Row label="3D from">
@@ -51,6 +53,7 @@ export default function Controls({ grid, smooth, onGrid, onSmooth, showRaw, onSh
         <input type="range" min={0} max={3} step={0.05} value={smooth.beta} onChange={(e) => onSmooth({ ...smooth, beta: +e.target.value })} className="w-full" />
       </Row>
       <div className="flex gap-4 pt-1">
+        <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={avatar} onChange={(e) => onAvatar(e.target.checked)} /> avatar</label>
         <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={showRaw} onChange={(e) => onShowRaw(e.target.checked)} /> raw ghost</label>
         <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={showOverlay} onChange={(e) => onShowOverlay(e.target.checked)} /> landmarks</label>
       </div>

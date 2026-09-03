@@ -44,6 +44,7 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [selected, setSelected] = useState<BoneId | null>(null);
   const [showRaw, setShowRaw] = useState(true);
+  const [avatar, setAvatar] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
   const [view, setView] = useState<"score" | "objects">("score");
   const [objects, setObjects] = useState<ObjectsOptions>(DEFAULT_OBJECTS);
@@ -281,7 +282,7 @@ export default function App() {
         <section className="bg-bg min-h-[320px] lg:min-h-0 relative">
           {score && body ? (
             view === "score" ? (
-              <Stage pose={snappedPose} raw={rawPose} body={body} grid={grid} showRaw={showRaw} selected={selected} onSelect={setSelected} />
+              <Stage pose={snappedPose} raw={rawPose} body={body} grid={grid} showRaw={showRaw} avatar={avatar} selected={selected} onSelect={setSelected} />
             ) : (
               <Objects score={score} overlays={analysis ? analysis.tracked.map((t) => t.image) : null} video={analysis ? videoEl : null} frame={fi} options={objects} />
             )
@@ -313,7 +314,7 @@ export default function App() {
             </>
           ) : (<>
           <div className="px-3 pt-3 text-xs text-muted">the grid</div>
-          <Controls grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis} showRaw={showRaw} onShowRaw={setShowRaw} showOverlay={showOverlay} onShowOverlay={setShowOverlay} />
+          <Controls grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} showOverlay={showOverlay} onShowOverlay={setShowOverlay} />
           {score && (
             <div className="px-3 pb-3 text-[11px] text-muted leading-relaxed">
               <div className="mono">{score.source.name}</div>
