@@ -5,6 +5,9 @@ import { useTheme } from "next-themes";
 import { FileDown, FileUp, Film, Moon, Sun } from "lucide-react";
 import Source from "./Source";
 import { AVATAR_PRESETS, DEFAULT_AVATAR_URL } from "./Avatar";
+import CastPanel, { type CastMember } from "./Cast";
+import type { StageCastMember } from "./Stage";
+import { idbGet, idbSet } from "@/lib/store";
 import VideoPane from "./VideoPane";
 import Stage from "./Stage";
 import Timeline from "./Timeline";
@@ -21,6 +24,7 @@ import type { Pose } from "@/lib/pose";
 type Phase = "idle" | "loading" | "tracking" | "ready" | "error";
 const SAMPLE_FPS = 30;
 const LS_KEY = "vid2grid:last-score";
+const CAST_KEY = "vid2grid:cast";
 
 interface Analysis {
   tracked: TrackedFrame[];
@@ -53,6 +57,7 @@ export default function App() {
   const [showOverlay, setShowOverlay] = useState(true);
   const [view, setView] = useState<"score" | "duet" | "objects">("score");
   const [objects, setObjects] = useState<ObjectsOptions>(DEFAULT_OBJECTS);
+  const [cast, setCast] = useState<CastMember[]>([]);
 
   // Warm the model while the user picks a clip.
   useEffect(() => { getLandmarker().catch(() => {}); }, []);
@@ -95,6 +100,73 @@ export default function App() {
   const snappedPose = score?.frames[fi] ?? null;
   const rawPose = score?.raw[fi] ?? null;
   const overlay = analysis?.tracked[fi]?.image ?? null;
+
+  /* ---------- the cast: dancers pinned onto the shared stage ---------- */
+
+  // Restore, like the score: deferred, best-effort. Scores are megabytes,
+  // so the cast lives in IndexedDB, not localStorage.
+  const castLoaded = useRef(false);
+  useEffect(() => {
+    let alive = true;
+    idbGet<CastMember[]>(CAST_KEY).then((members) => {
+      if (!alive) return;
+      castLoaded.current = true;
+      const ok = (members ?? []).filter((m) => m.score?.version === 1 && Array.isArray(m.score.frames));
+      if (ok.length) setCast(ok);
+    }).catch(() => { castLoaded.current = true; });
+    return () => { alive = false; };
+  }, []);
+  useEffect(() => {
+    if (!castLoaded.current) return; // don't clobber the stored cast before it's read
+    const id = setTimeout(() => {
+      idbSet(CAST_KEY, cast.map((m) => ({
+        ...m,
+        // A session-only blob avatar can't be restored; fall back to the sample.
+        avatarUrl: m.avatarUrl?.startsWith("blob:") ? DEFAULT_AVATAR_URL : m.avatarUrl,
+      }))).catch(() => { /* the stage still works, it just won't survive reload */ });
+    }, 500); // debounce slider drags
+    return () => clearTimeout(id);
+  }, [cast]);
+
+  const addToCast = useCallback(() => {
+    if (!score) return;
+    setCast((c) => {
+      // Alternate new dancers left/right of centre so they don't stack.
+      const slot = c.length + 1;
+      const x = Math.ceil(slot / 2) * 0.9 * (slot % 2 ? 1 : -1);
+      return [...c, {
+        id: crypto.randomUUID(),
+        name: score.source.name.replace(/\.[^.]+$/, ""),
+        score,
+        avatarUrl: avatar ? avatarUrl : null,
+        x, z: 0, rot: 0,
+      }];
+    });
+  }, [score, avatar, avatarUrl]);
+  const duplicateCast = useCallback((id: string) => {
+    setCast((c) => {
+      const m = c.find((d) => d.id === id);
+      return m ? [...c, { ...m, id: crypto.randomUUID(), x: m.x + 0.9 }] : c;
+    });
+  }, []);
+  const removeCast = useCallback((id: string) => setCast((c) => c.filter((d) => d.id !== id)), []);
+  const updateCast = useCallback((id: string, patch: Partial<Pick<CastMember, "x" | "z" | "rot">>) => {
+    setCast((c) => c.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+  }, []);
+
+  // The stage clock runs to the longest dancer; shorter ones hold their last pose.
+  const stageDuration = useMemo(
+    () => Math.max(score?.source.duration ?? 0, ...cast.map((m) => m.score.source.duration)),
+    [score, cast],
+  );
+  const stageCast: StageCastMember[] = useMemo(() => cast.map((m) => {
+    const p = m.score.frames[frameAt(m.score, time)];
+    // Bake the floor placement into the pose: yaw the facing, turn+shift the root.
+    const rad = (m.rot * Math.PI) / 180;
+    const cos = Math.cos(rad), sin = Math.sin(rad);
+    const pose = { ...p, facing: p.facing + m.rot, x: p.x * cos + p.z * sin + m.x, z: p.z * cos - p.x * sin + m.z };
+    return { id: m.id, pose, body: m.score.body, avatarUrl: m.avatarUrl };
+  }), [cast, time]);
 
   /* ---------- getting a clip in ---------- */
 
@@ -160,35 +232,40 @@ export default function App() {
 
   const seek = useCallback((t: number) => {
     const v = videoRef.current;
-    const d = score?.source.duration ?? v?.duration ?? 0;
+    const d = stageDuration || v?.duration || 0;
     const tt = Math.max(0, Math.min(d, t));
     setTime(tt);
-    if (v && analysis) v.currentTime = tt;
-  }, [score, analysis]);
+    if (v && analysis) v.currentTime = Math.min(tt, v.duration);
+  }, [stageDuration, analysis]);
 
   const togglePlay = useCallback(() => setPlaying((p) => !p), []);
 
+  // A clock drives the stage (the cast may outlast the current clip); the
+  // video plays alongside while it has frames left, then pauses.
   useEffect(() => {
     if (!playing || !score) return;
     const v = videoRef.current;
     const hasVideo = !!(v && analysis);
     let raf = 0;
     const t0 = performance.now();
-    const start = time;
-    if (hasVideo) { if (v.ended || v.currentTime >= v.duration - 0.02) v.currentTime = 0; v.play().catch(() => {}); }
+    const start = time >= stageDuration - 1e-3 ? 0 : time;
+    if (hasVideo) {
+      v.currentTime = Math.min(start, Math.max(0, v.duration - 0.01));
+      if (start < v.duration - 0.02) v.play().catch(() => {});
+    }
     let lastFrame = -1;
     const tick = () => {
-      const t = hasVideo ? v.currentTime : start + (performance.now() - t0) / 1000;
-      const d = score.source.duration;
-      if (t >= d - 1e-3 || (hasVideo && v.ended)) { setTime(d); setPlaying(false); return; }
-      const f = frameAt(score, t);
+      const t = start + (performance.now() - t0) / 1000;
+      if (t >= stageDuration - 1e-3) { setTime(stageDuration); setPlaying(false); return; }
+      if (hasVideo && !v.paused && (v.ended || v.currentTime >= v.duration - 0.02)) v.pause();
+      const f = Math.floor(t * SAMPLE_FPS);
       if (f !== lastFrame) { lastFrame = f; setTime(t); }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => { cancelAnimationFrame(raf); if (hasVideo) v.pause(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, score, analysis]);
+  }, [playing, score, analysis, stageDuration]);
 
   const step = useCallback((n: number) => {
     if (!score) return;
@@ -311,12 +388,14 @@ export default function App() {
 
         {/* centre: the stage, or the annotated video */}
         <section className="bg-background min-h-[320px] lg:min-h-0 relative">
-          {score && body ? (
-            view === "objects" ? (
+          {view === "objects" ? (
+            score ? (
               <Objects score={score} overlays={analysis ? analysis.tracked.map((t) => t.image) : null} video={analysis ? videoEl : null} frame={fi} options={objects} />
             ) : (
-              <Stage pose={snappedPose} raw={rawPose} body={body} grid={grid} showRaw={showRaw} avatar={avatar} avatarUrl={avatarUrl} selected={selected} onSelect={setSelected} />
+              <div className="w-full h-full grid place-items-center font-serif italic text-muted-foreground">the stage</div>
             )
+          ) : (score && body) || stageCast.length ? (
+            <Stage pose={snappedPose} raw={rawPose} body={body} grid={grid} showRaw={showRaw} avatar={avatar} avatarUrl={avatarUrl} cast={stageCast} selected={selected} onSelect={setSelected} />
           ) : (
             <div className="w-full h-full grid place-items-center font-serif italic text-muted-foreground">the stage</div>
           )}
@@ -372,6 +451,7 @@ export default function App() {
             </>
           ) : (<>
           <Controls grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} />
+          <CastPanel cast={cast} canAdd={!!score} onAdd={addToCast} onDuplicate={duplicateCast} onRemove={removeCast} onUpdate={updateCast} />
           {score && (
             <div className="px-4 pb-4 text-[11px] text-muted-foreground leading-relaxed">
               <div className="mono">{score.source.name}</div>
@@ -385,7 +465,7 @@ export default function App() {
 
       {score && (
         <footer className="border-t bg-card px-4 py-2.5 shrink-0">
-          <Timeline score={score} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} onStep={step} selected={selected} onSelect={setSelected} />
+          <Timeline score={score} total={stageDuration} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} onStep={step} selected={selected} onSelect={setSelected} />
         </footer>
       )}
     </div>

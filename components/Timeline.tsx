@@ -7,6 +7,9 @@ import { BONES, type BoneId } from "@/lib/skeleton";
 
 interface Props {
   score: Score;
+  /** The stage clock's full length — ≥ the score's duration when cast
+   *  members outlast the current clip. */
+  total: number;
   time: number;
   playing: boolean;
   onSeek: (t: number) => void;
@@ -24,9 +27,11 @@ function cellColor(az: number, el: number): string {
 
 const ROLL_LS_KEY = "vid2grid:roll-open";
 
-export default function Timeline({ score, time, playing, onSeek, onTogglePlay, onStep, selected, onSelect }: Props) {
+export default function Timeline({ score, total, time, playing, onSeek, onTogglePlay, onStep, selected, onSelect }: Props) {
   const rollRef = useRef<HTMLCanvasElement>(null);
   const duration = score.source.duration;
+  const stageTotal = Math.max(total, duration);
+  const frac = duration / stageTotal; // the current score's share of the stage clock
   const rows = useMemo(() => BONES.filter((b) => b.core), []);
   const [rollOpen, setRollOpen] = useState(() => {
     try { return localStorage.getItem(ROLL_LS_KEY) !== "0"; } catch { return true; }
@@ -76,7 +81,7 @@ export default function Timeline({ score, time, playing, onSeek, onTogglePlay, o
   const seekFromEvent = (e: React.PointerEvent<HTMLElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     const u = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-    onSeek(u * duration);
+    onSeek(u * stageTotal);
   };
 
   return (
@@ -86,7 +91,7 @@ export default function Timeline({ score, time, playing, onSeek, onTogglePlay, o
         <button className="btn primary w-20 justify-center" onClick={onTogglePlay} title="space">{playing ? <Pause size={13} /> : <Play size={13} />}{playing ? "pause" : "play"}</button>
         <button className="btn px-2" onClick={() => onStep(1)} title="next frame (→)"><ChevronRight size={14} /></button>
         <span className="mono text-muted-foreground ml-2">
-          {time.toFixed(2)}s / {duration.toFixed(2)}s · frame {Math.round(time * score.source.fps)} · {score.keyframes.length} keyframes
+          {time.toFixed(2)}s / {stageTotal.toFixed(2)}s · frame {Math.round(time * score.source.fps)} · {score.keyframes.length} keyframes
         </span>
         <button className="btn px-2 ml-auto" onClick={toggleRoll} title={rollOpen ? "hide the grid roll" : "show the grid roll"}>
           {rollOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
@@ -100,9 +105,9 @@ export default function Timeline({ score, time, playing, onSeek, onTogglePlay, o
           onPointerMove={(e) => { if (e.buttons & 1) seekFromEvent(e); }}
         >
           {score.keyframes.map((k) => (
-            <div key={k} className="absolute top-0 bottom-0 w-px bg-brand/60" style={{ left: `${(k / score.frames.length) * 100}%` }} />
+            <div key={k} className="absolute top-0 bottom-0 w-px bg-brand/60" style={{ left: `${(k / score.frames.length) * frac * 100}%` }} />
           ))}
-          <div className="absolute top-0 bottom-0 w-0.5 bg-foreground" style={{ left: `${(time / duration) * 100}%` }} />
+          <div className="absolute top-0 bottom-0 w-0.5 bg-foreground" style={{ left: `${(time / stageTotal) * 100}%` }} />
         </div>
       </div>
       {rollOpen && (
@@ -123,8 +128,10 @@ export default function Timeline({ score, time, playing, onSeek, onTogglePlay, o
           onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); seekFromEvent(e); }}
           onPointerMove={(e) => { if (e.buttons & 1) seekFromEvent(e); }}
         >
-          <canvas ref={rollRef} className="absolute inset-0 w-full h-full rounded-md" />
-          <div className="absolute top-0 bottom-0 w-0.5 bg-foreground pointer-events-none" style={{ left: `${(time / duration) * 100}%` }} />
+          <div className="absolute inset-y-0 left-0" style={{ width: `${frac * 100}%` }}>
+            <canvas ref={rollRef} className="absolute inset-0 w-full h-full rounded-md" />
+          </div>
+          <div className="absolute top-0 bottom-0 w-0.5 bg-foreground pointer-events-none" style={{ left: `${(time / stageTotal) * 100}%` }} />
         </div>
       </div>
       )}

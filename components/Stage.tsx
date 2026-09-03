@@ -10,19 +10,31 @@ import type { Pose } from "@/lib/pose";
 import type { BoneId } from "@/lib/skeleton";
 import type { GridConfig } from "@/lib/grid";
 
+/** A cast dancer ready to draw: pose already sampled at the stage clock,
+ *  with its floor placement baked in (facing/x/z transformed) — the
+ *  avatar retargeter works in absolute stage directions, so placement
+ *  must live in the pose, not in a parent transform. */
+export interface StageCastMember {
+  id: string;
+  pose: Pose;
+  body: Body;
+  avatarUrl: string | null;
+}
+
 interface Props {
   pose: Pose | null;
   raw: Pose | null;
-  body: Body;
+  body: Body | null;
   grid: GridConfig;
   showRaw: boolean;
   avatar: boolean;
   avatarUrl: string;
+  cast: StageCastMember[];
   selected: BoneId | null;
   onSelect: (id: BoneId | null) => void;
 }
 
-export default function Stage({ pose, raw, body, grid, showRaw, avatar, avatarUrl, selected, onSelect }: Props) {
+export default function Stage({ pose, raw, body, grid, showRaw, avatar, avatarUrl, cast, selected, onSelect }: Props) {
   return (
     <Canvas
       camera={{ position: [1.8, 1.4, 3.2], fov: 45, near: 0.05, far: 100 }}
@@ -50,7 +62,7 @@ export default function Stage({ pose, raw, body, grid, showRaw, avatar, avatarUr
         <ringGeometry args={[0.08, 0.11, 24]} />
         <meshBasicMaterial color="#f0b429" transparent opacity={0.6} />
       </mesh>
-      {pose && (
+      {pose && body && (
         <>
           {avatar ? (
             <Suspense fallback={null}>
@@ -62,6 +74,15 @@ export default function Stage({ pose, raw, body, grid, showRaw, avatar, avatarUr
           {showRaw && raw && <Figure pose={raw} body={body} ghost />}
           {selected && raw && <GridSphere pose={pose} raw={raw} body={body} bone={selected} grid={grid} />}
         </>
+      )}
+      {cast.map((m) =>
+        m.avatarUrl ? (
+          <Suspense key={m.id} fallback={null}>
+            <Avatar pose={m.pose} body={m.body} url={m.avatarUrl} instanceKey={m.id} />
+          </Suspense>
+        ) : (
+          <Figure key={m.id} pose={m.pose} body={m.body} />
+        ),
       )}
       <OrbitControls target={[0, 0.9, 0]} enableDamping dampingFactor={0.12} maxPolarAngle={Math.PI * 0.52} />
     </Canvas>
