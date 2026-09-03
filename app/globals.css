@@ -37,6 +37,11 @@
   --n-brand: #2b3ec4;
   --n-brand-soft: rgba(43, 62, 196, 0.12);
   --n-signal: #c43a24;
+
+  /* limb sides — person's left/right/centre, matching the 3D figure */
+  --n-limb-l: #177fa6;
+  --n-limb-r: #c22079;
+  --n-limb-c: #6f747c;
 }
 
 .dark {
@@ -66,6 +71,10 @@
   --n-brand: #5fe3d1;
   --n-brand-soft: rgba(95, 227, 209, 0.14);
   --n-signal: #f0604a;
+
+  --n-limb-l: #4cc9f0;
+  --n-limb-r: #f72585;
+  --n-limb-c: #b8c0d0;
 }
 
 @theme inline {
@@ -92,6 +101,9 @@
 
   --color-brand: var(--n-brand);
   --color-signal: var(--n-signal);
+  --color-limb-l: var(--n-limb-l);
+  --color-limb-r: var(--n-limb-r);
+  --color-limb-c: var(--n-limb-c);
   --color-ink: var(--n-ink);
   --color-soft: var(--n-soft);
   --color-faint: var(--n-faint);
@@ -125,7 +137,8 @@
   ::selection {
     background: var(--n-brand-soft);
   }
-  input[type="range"] {
+  input[type="range"],
+  input[type="checkbox"] {
     accent-color: var(--n-brand);
   }
 }

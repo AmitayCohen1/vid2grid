@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 import type { Score } from "@/lib/score";
 import { BONES, type BoneId } from "@/lib/skeleton";
 
@@ -70,32 +71,32 @@ export default function Timeline({ score, time, playing, onSeek, onTogglePlay, o
   return (
     <div className="flex flex-col gap-1.5 select-none">
       <div className="flex items-center gap-2 text-xs">
-        <button className="btn" onClick={() => onStep(-1)} title="previous frame (←)">◀︎</button>
-        <button className="btn w-16" onClick={onTogglePlay} title="space">{playing ? "pause" : "play"}</button>
-        <button className="btn" onClick={() => onStep(1)} title="next frame (→)">▶︎</button>
-        <span className="mono text-muted ml-2">
+        <button className="btn px-2" onClick={() => onStep(-1)} title="previous frame (←)"><ChevronLeft size={14} /></button>
+        <button className="btn primary w-20 justify-center" onClick={onTogglePlay} title="space">{playing ? <Pause size={13} /> : <Play size={13} />}{playing ? "pause" : "play"}</button>
+        <button className="btn px-2" onClick={() => onStep(1)} title="next frame (→)"><ChevronRight size={14} /></button>
+        <span className="mono text-muted-foreground ml-2">
           {time.toFixed(2)}s / {duration.toFixed(2)}s · frame {Math.round(time * score.source.fps)} · {score.keyframes.length} keyframes
         </span>
       </div>
       <div className="flex gap-2">
         <div className="w-10 shrink-0" />
         <div
-          className="relative flex-1 h-4 rounded bg-panel-2 cursor-pointer"
+          className="relative flex-1 h-4 rounded-full bg-muted border cursor-pointer overflow-hidden"
           onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); seekFromEvent(e); }}
           onPointerMove={(e) => { if (e.buttons & 1) seekFromEvent(e); }}
         >
           {score.keyframes.map((k) => (
-            <div key={k} className="absolute top-0 bottom-0 w-px bg-accent/60" style={{ left: `${(k / score.frames.length) * 100}%` }} />
+            <div key={k} className="absolute top-0 bottom-0 w-px bg-brand/60" style={{ left: `${(k / score.frames.length) * 100}%` }} />
           ))}
-          <div className="absolute top-0 bottom-0 w-0.5 bg-fg" style={{ left: `${(time / duration) * 100}%` }} />
+          <div className="absolute top-0 bottom-0 w-0.5 bg-foreground" style={{ left: `${(time / duration) * 100}%` }} />
         </div>
       </div>
       <div className="flex gap-2">
-        <div className="w-10 shrink-0 flex flex-col text-[10px] leading-none text-muted mono">
+        <div className="w-10 shrink-0 flex flex-col text-[10px] leading-none text-muted-foreground mono">
           {rows.map((b) => (
             <button
               key={b.id}
-              className={`flex-1 text-left hover:text-fg ${selected === b.id ? "text-accent" : ""}`}
+              className={`flex-1 text-left hover:text-foreground ${selected === b.id ? "text-brand font-semibold" : ""}`}
               onClick={() => onSelect(selected === b.id ? null : b.id)}
             >
               {b.short}
@@ -107,8 +108,8 @@ export default function Timeline({ score, time, playing, onSeek, onTogglePlay, o
           onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); seekFromEvent(e); }}
           onPointerMove={(e) => { if (e.buttons & 1) seekFromEvent(e); }}
         >
-          <canvas ref={rollRef} className="absolute inset-0 w-full h-full rounded" />
-          <div className="absolute top-0 bottom-0 w-0.5 bg-fg pointer-events-none" style={{ left: `${(time / duration) * 100}%` }} />
+          <canvas ref={rollRef} className="absolute inset-0 w-full h-full rounded-md" />
+          <div className="absolute top-0 bottom-0 w-0.5 bg-foreground pointer-events-none" style={{ left: `${(time / duration) * 100}%` }} />
         </div>
       </div>
     </div>

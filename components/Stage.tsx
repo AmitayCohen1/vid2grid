@@ -17,11 +17,12 @@ interface Props {
   grid: GridConfig;
   showRaw: boolean;
   avatar: boolean;
+  avatarUrl: string;
   selected: BoneId | null;
   onSelect: (id: BoneId | null) => void;
 }
 
-export default function Stage({ pose, raw, body, grid, showRaw, avatar, selected, onSelect }: Props) {
+export default function Stage({ pose, raw, body, grid, showRaw, avatar, avatarUrl, selected, onSelect }: Props) {
   return (
     <Canvas
       camera={{ position: [1.8, 1.4, 3.2], fov: 45, near: 0.05, far: 100 }}
@@ -53,7 +54,7 @@ export default function Stage({ pose, raw, body, grid, showRaw, avatar, selected
         <>
           {avatar ? (
             <Suspense fallback={null}>
-              <Avatar pose={pose} body={body} />
+              <Avatar pose={pose} body={body} url={avatarUrl} />
             </Suspense>
           ) : (
             <Figure pose={pose} body={body} selected={selected} onSelect={onSelect} />

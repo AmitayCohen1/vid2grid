@@ -15,7 +15,7 @@ interface Props {
 export default function BoneTable({ snapped, raw, selected, onSelect }: Props) {
   return (
     <div className="text-xs">
-      <div className="grid grid-cols-[1.4fr_1fr_1.3fr_1fr_1fr] gap-x-2 px-2 py-1 text-muted border-b border-line">
+      <div className="label grid grid-cols-[1.4fr_1fr_1.3fr_1fr_1fr] gap-x-2 px-3 py-1.5 border-b bg-card sticky top-0">
         <span>segment</span><span>grid az/el</span><span>Laban</span><span>E-W</span><span className="text-right">raw</span>
       </div>
       {BONES.map((b) => {
@@ -28,20 +28,20 @@ export default function BoneTable({ snapped, raw, selected, onSelect }: Props) {
           <button
             key={b.id}
             onClick={() => onSelect(sel ? null : b.id)}
-            className={`w-full grid grid-cols-[1.4fr_1fr_1.3fr_1fr_1fr] gap-x-2 px-2 py-[3px] text-left border-b border-line/50 hover:bg-panel-2 ${sel ? "bg-panel-2 text-accent" : ""} ${b.core ? "" : "text-muted"}`}
+            className={`w-full grid grid-cols-[1.4fr_1fr_1.3fr_1fr_1fr] gap-x-2 px-3 py-[3px] text-left border-b border-border/50 transition-colors hover:bg-accent ${sel ? "bg-accent text-brand" : ""} ${b.core ? "" : "text-muted-foreground"}`}
           >
             <span className="truncate">
-              <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${b.side === "L" ? "bg-left" : b.side === "R" ? "bg-right" : "bg-centre"}`} />
+              <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${b.side === "L" ? "bg-limb-l" : b.side === "R" ? "bg-limb-r" : "bg-limb-c"}`} />
               {b.label}
             </span>
             <span className="mono">{fmt(s[0])}° {fmtS(s[1])}°</span>
             <span className="mono">{LABAN_ARROW[lb.dir]} {lb.dir === "place" ? (s[1] > 0 ? "up" : "down") : `${lb.dir.replace("-", "‑")} ${lb.level}`}</span>
             <span className="mono">{ew.text}</span>
-            <span className="mono text-right text-muted">{fmt(r[0])}° {fmtS(r[1])}°</span>
+            <span className="mono text-right text-muted-foreground">{fmt(r[0])}° {fmtS(r[1])}°</span>
           </button>
         );
       })}
-      <div className="grid grid-cols-3 gap-2 px-2 py-2 text-muted mono">
+      <div className="grid grid-cols-3 gap-2 px-3 py-2 text-muted-foreground mono">
         <span>facing {fmt(snapped.facing)}° <span className="opacity-60">({fmt(raw.facing)}°)</span></span>
         <span>hips {snapped.hipY.toFixed(2)} m</span>
         <span>conf {(raw.conf * 100).toFixed(0)}%</span>

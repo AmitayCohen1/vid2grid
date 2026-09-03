@@ -21,7 +21,8 @@ import { forwardKinematics, type Body } from "@/lib/fk";
 import type { Pose } from "@/lib/pose";
 import type { JointId } from "@/lib/skeleton";
 
-const VRM_URL = "/models/avatar.vrm";
+/** The bundled sample character; any VRoid/VRM 0.x or 1.0 file can replace it. */
+export const DEFAULT_AVATAR_URL = "/models/avatar.vrm";
 const UP = new THREE.Vector3(0, 1, 0);
 
 /** Segment → humanoid bone, parents before children. `tip` defines the
@@ -55,13 +56,15 @@ interface Rig {
   restForward: THREE.Vector3;
 }
 
-let rigPromise: Promise<Rig> | null = null;
+const rigCache = new Map<string, Promise<Rig>>();
 
-function loadRig(): Promise<Rig> {
-  rigPromise ??= (async () => {
+function loadRig(url: string): Promise<Rig> {
+  const cached = rigCache.get(url);
+  if (cached) return cached;
+  const p = (async () => {
     const loader = new GLTFLoader();
     loader.register((parser) => new VRMLoaderPlugin(parser));
-    const gltf = await loader.loadAsync(VRM_URL);
+    const gltf = await loader.loadAsync(url);
     const vrm = gltf.userData.vrm as VRM;
     VRMUtils.removeUnnecessaryVertices(gltf.scene);
     VRMUtils.combineSkeletons(gltf.scene);
@@ -95,7 +98,9 @@ function loadRig(): Promise<Rig> {
     }
     return { vrm, chains, hips, hipsRest, restForward };
   })();
-  return rigPromise;
+  rigCache.set(url, p);
+  p.catch(() => rigCache.delete(url)); // let a failed load be retried
+  return p;
 }
 
 const _qp = new THREE.Quaternion();
@@ -138,13 +143,15 @@ function retarget(rig: Rig, pose: Pose, body: Body) {
   }
 }
 
-export default function Avatar({ pose, body }: { pose: Pose; body: Body }) {
-  const [rig, setRig] = useState<Rig | null>(null);
+export default function Avatar({ pose, body, url = DEFAULT_AVATAR_URL }: { pose: Pose; body: Body; url?: string }) {
+  const [loaded, setLoaded] = useState<{ url: string; rig: Rig } | null>(null);
   useEffect(() => {
     let alive = true;
-    loadRig().then((r) => { if (alive) setRig(r); }).catch((e) => console.error("avatar load failed", e));
+    loadRig(url).then((rig) => { if (alive) setLoaded({ url, rig }); }).catch((e) => console.error("avatar load failed", e));
     return () => { alive = false; };
-  }, []);
+  }, [url]);
+  // Only show the rig for the current url; a stale one just disappears while the new one loads.
+  const rig = loaded?.url === url ? loaded.rig : null;
 
   useFrame((_, delta) => {
     if (!rig) return;

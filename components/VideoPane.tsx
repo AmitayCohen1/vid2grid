@@ -64,7 +64,7 @@ const VideoPane = forwardRef<HTMLVideoElement, Props>(function VideoPane({ src, 
           onLoadedMetadata={(e) => onLoaded?.(e.currentTarget)}
         />
       ) : (
-        <div className="w-full h-full grid place-items-center text-muted text-sm">no video</div>
+        <div className="w-full h-full grid place-items-center font-serif italic text-sm text-white/40">no video</div>
       )}
       <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none" />
     </div>

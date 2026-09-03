@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useTheme } from "next-themes";
+import { FileDown, FileUp, Film, Moon, Sun } from "lucide-react";
 import Source from "./Source";
+import { DEFAULT_AVATAR_URL } from "./Avatar";
 import VideoPane from "./VideoPane";
 import Stage from "./Stage";
 import Timeline from "./Timeline";
@@ -45,6 +48,8 @@ export default function App() {
   const [selected, setSelected] = useState<BoneId | null>(null);
   const [showRaw, setShowRaw] = useState(true);
   const [avatar, setAvatar] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(DEFAULT_AVATAR_URL);
+  const [avatarName, setAvatarName] = useState<string | null>(null);
   const [showOverlay, setShowOverlay] = useState(true);
   const [view, setView] = useState<"score" | "objects">("score");
   const [objects, setObjects] = useState<ObjectsOptions>(DEFAULT_OBJECTS);
@@ -225,45 +230,68 @@ export default function App() {
 
   const busy = phase === "loading" || phase === "tracking";
 
+  /* ---------- the character ---------- */
+
+  const onAvatarFile = useCallback((file: File) => {
+    setAvatarUrl((old) => {
+      if (old.startsWith("blob:")) URL.revokeObjectURL(old);
+      return URL.createObjectURL(file);
+    });
+    setAvatarName(file.name.replace(/\.vrm$/i, ""));
+    setAvatar(true);
+  }, []);
+  const onAvatarReset = useCallback(() => {
+    setAvatarUrl((old) => {
+      if (old.startsWith("blob:")) URL.revokeObjectURL(old);
+      return DEFAULT_AVATAR_URL;
+    });
+    setAvatarName(null);
+  }, []);
+
   /* ---------- layout ---------- */
 
   return (
     <div className="flex flex-col h-dvh">
-      <header className="flex items-center gap-3 px-4 h-11 border-b border-line text-sm shrink-0">
-        <span className="font-semibold tracking-tight">vid2grid</span>
-        <span className="text-muted text-xs hidden sm:inline">video → grid-snapped 3D score</span>
-        <div className="ml-4 inline-flex rounded border border-line overflow-hidden text-xs">
-          <button className={`px-3 py-0.5 ${view === "score" ? "bg-accent text-black" : "hover:bg-panel-2"}`} onClick={() => setView("score")}>score</button>
-          <button className={`px-3 py-0.5 ${view === "objects" ? "bg-accent text-black" : "hover:bg-panel-2"}`} onClick={() => setView("objects")}>objects</button>
+      <header className="flex items-center gap-3 px-4 h-13 border-b bg-card text-sm shrink-0">
+        <div className="flex items-baseline gap-2">
+          <span className="font-semibold tracking-tight text-[15px]">vid2grid</span>
+          <span className="font-serif italic text-muted-foreground text-[13px] hidden sm:inline">a movement language</span>
         </div>
-        <div className="ml-auto flex items-center gap-2 text-xs">
-          <button className="btn" onClick={() => setShowSource((s) => !s)}>{showSource ? "hide source" : "new clip"}</button>
-          <label className="btn cursor-pointer">import JSON<input type="file" accept="application/json,.json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) importJson(f); e.currentTarget.value = ""; }} /></label>
-          <button className="btn" onClick={exportJson} disabled={!score}>export JSON</button>
+        <div className="seg ml-3 text-xs">
+          <button aria-pressed={view === "score"} onClick={() => setView("score")}>score</button>
+          <button aria-pressed={view === "objects"} onClick={() => setView("objects")}>objects</button>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <button className="btn" onClick={() => setShowSource((s) => !s)}><Film size={14} />{showSource ? "hide source" : "new clip"}</button>
+          <label className="btn cursor-pointer"><FileUp size={14} />import<input type="file" accept="application/json,.json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) importJson(f); e.currentTarget.value = ""; }} /></label>
+          <button className="btn" onClick={exportJson} disabled={!score}><FileDown size={14} />export</button>
+          <ThemeToggle />
         </div>
       </header>
 
       {showSource && (
-        <div className="px-4 py-3 border-b border-line max-w-3xl w-full mx-auto">
-          <Source onFile={onFile} busy={busy} />
+        <div className="px-4 py-4 border-b bg-card/50 shrink-0">
+          <div className="max-w-3xl w-full mx-auto">
+            <Source onFile={onFile} busy={busy} />
+          </div>
         </div>
       )}
 
       {phase === "error" && (
-        <div className="mx-4 mt-3 rounded border border-right/50 bg-right/10 px-3 py-2 text-xs">{error}</div>
+        <div className="mx-4 mt-3 rounded-md border border-destructive/40 bg-destructive/10 text-destructive px-3 py-2 text-xs">{error}</div>
       )}
 
-      <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(280px,1fr)_2fr_minmax(260px,0.9fr)] grid-rows-[auto_1fr] lg:grid-rows-1 gap-px bg-line">
+      <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(280px,1fr)_2fr_minmax(260px,0.9fr)] grid-rows-[auto_1fr] lg:grid-rows-1 gap-px bg-border">
         {/* left: video + readouts */}
-        <section className="bg-bg flex flex-col min-h-0">
+        <section className="bg-background flex flex-col min-h-0">
           <div className="relative aspect-video lg:aspect-auto lg:h-[38%] shrink-0 bg-black">
             <VideoPane ref={videoRef} src={src} overlay={overlay} showOverlay={showOverlay} onLoaded={onLoaded} />
             {busy && (
               <div className="absolute inset-0 grid place-items-center bg-black/60">
-                <div className="text-center text-xs">
-                  <div className="mb-2">{phase === "loading" ? "loading clip…" : `tracking ${progress.done}/${progress.total}`}</div>
-                  <div className="w-48 h-1.5 bg-panel-2 rounded overflow-hidden">
-                    <div className="h-full bg-accent transition-[width]" style={{ width: `${(progress.done / Math.max(1, progress.total)) * 100}%` }} />
+                <div className="text-center text-xs text-white">
+                  <div className="mb-2 mono">{phase === "loading" ? "loading clip…" : `tracking ${progress.done}/${progress.total}`}</div>
+                  <div className="w-48 h-1.5 bg-white/20 rounded-full overflow-hidden">
+                    <div className="h-full bg-white transition-[width]" style={{ width: `${(progress.done / Math.max(1, progress.total)) * 100}%` }} />
                   </div>
                 </div>
               </div>
@@ -279,44 +307,43 @@ export default function App() {
         </section>
 
         {/* centre: the stage, or the annotated video */}
-        <section className="bg-bg min-h-[320px] lg:min-h-0 relative">
+        <section className="bg-background min-h-[320px] lg:min-h-0 relative">
           {score && body ? (
             view === "score" ? (
-              <Stage pose={snappedPose} raw={rawPose} body={body} grid={grid} showRaw={showRaw} avatar={avatar} selected={selected} onSelect={setSelected} />
+              <Stage pose={snappedPose} raw={rawPose} body={body} grid={grid} showRaw={showRaw} avatar={avatar} avatarUrl={avatarUrl} selected={selected} onSelect={setSelected} />
             ) : (
               <Objects score={score} overlays={analysis ? analysis.tracked.map((t) => t.image) : null} video={analysis ? videoEl : null} frame={fi} options={objects} />
             )
           ) : (
-            <div className="w-full h-full grid place-items-center text-muted text-sm">the stage</div>
+            <div className="w-full h-full grid place-items-center font-serif italic text-muted-foreground">the stage</div>
           )}
           {selected && view === "score" && (
-            <div className="absolute top-2 left-2 text-[11px] text-accent bg-black/50 rounded px-2 py-1 mono">
+            <div className="absolute top-2 left-2 text-[11px] text-[#f0b429] bg-black/60 rounded px-2 py-1 mono">
               {selected} · yellow = snapped cell · white = raw
             </div>
           )}
         </section>
 
         {/* right: controls */}
-        <section className="bg-bg flex flex-col min-h-0 overflow-auto">
+        <section className="bg-background flex flex-col min-h-0 overflow-auto">
           {view === "objects" && score ? (
             <>
-              <div className="px-3 pt-3 text-xs text-muted">synchronous objects</div>
-              <div className="text-xs flex flex-col gap-2 p-3">
+              <div className="label px-4 pt-4">synchronous objects</div>
+              <div className="text-[13px] flex flex-col gap-2.5 p-4">
                 <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={objects.traces} onChange={(e) => setObjects({ ...objects, traces: e.target.checked })} /> traces of hands, feet, head</label>
-                <label className="grid grid-cols-[7.5rem_1fr] items-center gap-2"><span className="text-muted mono">trail {objects.trailSeconds.toFixed(1)} s</span><input type="range" min={0.2} max={6} step={0.1} value={objects.trailSeconds} onChange={(e) => setObjects({ ...objects, trailSeconds: +e.target.value })} /></label>
+                <label className="grid grid-cols-[7.5rem_1fr] items-center gap-2"><span className="text-muted-foreground mono text-xs">trail {objects.trailSeconds.toFixed(1)} s</span><input type="range" min={0.2} max={6} step={0.1} value={objects.trailSeconds} onChange={(e) => setObjects({ ...objects, trailSeconds: +e.target.value })} /></label>
                 <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={objects.alignments} onChange={(e) => setObjects({ ...objects, alignments: e.target.checked })} /> alignments (∥ parallel · ═ collinear)</label>
                 <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={objects.density} onChange={(e) => setObjects({ ...objects, density: e.target.checked })} /> movement density</label>
                 <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={objects.video} onChange={(e) => setObjects({ ...objects, video: e.target.checked })} /> show video plate</label>
               </div>
-              <div className="px-3 text-xs text-muted">generative drawing — the whole clip&apos;s traces, weight by speed</div>
-              <div className="m-3 aspect-video rounded overflow-hidden border border-line"><Drawing score={score} overlays={analysis ? analysis.tracked.map((t) => t.image) : null} /></div>
-              <div className="px-3 pb-3 text-[11px] text-muted leading-relaxed">After Forsythe/OSU&apos;s <em>Synchronous Objects</em> (2009): the dance as data — traces, alignments, density, drawing.</div>
+              <div className="px-4 text-xs text-muted-foreground">generative drawing — the whole clip&apos;s traces, weight by speed</div>
+              <div className="m-4 mt-2 aspect-video card overflow-hidden"><Drawing score={score} overlays={analysis ? analysis.tracked.map((t) => t.image) : null} /></div>
+              <div className="px-4 pb-4 text-[11px] text-muted-foreground leading-relaxed">After Forsythe/OSU&apos;s <em className="font-serif">Synchronous Objects</em> (2009): the dance as data — traces, alignments, density, drawing.</div>
             </>
           ) : (<>
-          <div className="px-3 pt-3 text-xs text-muted">the grid</div>
-          <Controls grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} showOverlay={showOverlay} onShowOverlay={setShowOverlay} />
+          <Controls grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarReset={onAvatarReset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} />
           {score && (
-            <div className="px-3 pb-3 text-[11px] text-muted leading-relaxed">
+            <div className="px-4 pb-4 text-[11px] text-muted-foreground leading-relaxed">
               <div className="mono">{score.source.name}</div>
               <div>{score.frames.length} frames @ {score.source.fps} fps · {score.keyframes.length} keyframes · body {(score.body.lengths.torso + score.body.lengths.rthigh + score.body.lengths.rshin).toFixed(2)} m torso+leg</div>
               <div className="mt-2">Click a limb (or a row) to see its grid sphere. Space plays; ←/→ step frames.</div>
@@ -327,7 +354,7 @@ export default function App() {
       </main>
 
       {score && (
-        <footer className="border-t border-line px-4 py-2 shrink-0">
+        <footer className="border-t bg-card px-4 py-2.5 shrink-0">
           <Timeline score={score} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} onStep={step} selected={selected} onSelect={setSelected} />
         </footer>
       )}
@@ -337,8 +364,23 @@ export default function App() {
 
 function Empty() {
   return (
-    <div className="p-4 text-xs text-muted leading-relaxed">
+    <div className="p-5 text-[13px] text-muted-foreground leading-relaxed">
+      <p className="font-serif italic text-foreground text-[15px] mb-2">Film a phrase, read it back.</p>
       <p>Upload or record a short clip of one dancer. The tracker runs in your browser (nothing is uploaded), spells every limb as a direction on the sphere, and snaps it to the grid. The snapped score is the truth; the raw track is the evidence.</p>
     </div>
+  );
+}
+
+const emptySubscribe = () => () => {};
+
+function ThemeToggle() {
+  const { resolvedTheme, setTheme } = useTheme();
+  // Render the icon only after hydration; the server doesn't know the theme.
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
+  const dark = mounted && resolvedTheme === "dark";
+  return (
+    <button className="btn px-2" aria-label="toggle light/dark" title="light / dark" onClick={() => setTheme(dark ? "light" : "dark")}>
+      {dark ? <Sun size={14} /> : <Moon size={14} />}
+    </button>
   );
 }
