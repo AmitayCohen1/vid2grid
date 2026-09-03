@@ -37,21 +37,41 @@ const UP = new THREE.Vector3(0, 1, 0);
 
 /** Segment → humanoid bone, parents before children. `tip` defines the
  *  bone's rest direction (bone joint → tip joint); optional tips fall
- *  back per chain below. */
-const CHAINS: { bone: VRMHumanBoneName; tip: VRMHumanBoneName; from: JointId; to: JointId }[] = [
-  { bone: "spine",         tip: "neck",              from: "hipMid",      to: "shoulderMid" },
+ *  back per chain below.
+ *
+ *  `twist` fixes the rotation about the bone's own axis, which a pure
+ *  aim leaves arbitrary: after aiming, the bone is twisted so that a
+ *  reference direction rigid with it (`rest`, measured at rest between
+ *  two humanoid bones) lines up with a tracked target (`from`→`to`).
+ *  Limbs use their child segment (so elbows/knees bend in the tracked
+ *  plane and hands land where the wrist actually points); the spine
+ *  uses the tracked shoulder line (so the torso twists with the dancer). */
+const CHAINS: {
+  bone: VRMHumanBoneName; tip: VRMHumanBoneName; from: JointId; to: JointId;
+  twist?: { rest: [VRMHumanBoneName, VRMHumanBoneName]; from: JointId; to: JointId };
+}[] = [
+  { bone: "spine",         tip: "neck",              from: "hipMid",      to: "shoulderMid",
+    twist: { rest: ["leftUpperArm", "rightUpperArm"], from: "lshoulder", to: "rshoulder" } },
   { bone: "neck",          tip: "head",              from: "shoulderMid", to: "headTop" },
-  { bone: "leftUpperArm",  tip: "leftLowerArm",      from: "lshoulder",   to: "lelbow" },
-  { bone: "leftLowerArm",  tip: "leftHand",          from: "lelbow",      to: "lwrist" },
+  { bone: "leftUpperArm",  tip: "leftLowerArm",      from: "lshoulder",   to: "lelbow",
+    twist: { rest: ["leftLowerArm", "leftHand"], from: "lelbow", to: "lwrist" } },
+  { bone: "leftLowerArm",  tip: "leftHand",          from: "lelbow",      to: "lwrist",
+    twist: { rest: ["leftHand", "leftMiddleProximal"], from: "lwrist", to: "lhandTip" } },
   { bone: "leftHand",      tip: "leftMiddleProximal", from: "lwrist",     to: "lhandTip" },
-  { bone: "rightUpperArm", tip: "rightLowerArm",     from: "rshoulder",   to: "relbow" },
-  { bone: "rightLowerArm", tip: "rightHand",         from: "relbow",      to: "rwrist" },
+  { bone: "rightUpperArm", tip: "rightLowerArm",     from: "rshoulder",   to: "relbow",
+    twist: { rest: ["rightLowerArm", "rightHand"], from: "relbow", to: "rwrist" } },
+  { bone: "rightLowerArm", tip: "rightHand",         from: "relbow",      to: "rwrist",
+    twist: { rest: ["rightHand", "rightMiddleProximal"], from: "rwrist", to: "rhandTip" } },
   { bone: "rightHand",     tip: "rightMiddleProximal", from: "rwrist",    to: "rhandTip" },
-  { bone: "leftUpperLeg",  tip: "leftLowerLeg",      from: "lhip",        to: "lknee" },
-  { bone: "leftLowerLeg",  tip: "leftFoot",          from: "lknee",       to: "lankle" },
+  { bone: "leftUpperLeg",  tip: "leftLowerLeg",      from: "lhip",        to: "lknee",
+    twist: { rest: ["leftLowerLeg", "leftFoot"], from: "lknee", to: "lankle" } },
+  { bone: "leftLowerLeg",  tip: "leftFoot",          from: "lknee",       to: "lankle",
+    twist: { rest: ["leftFoot", "leftToes"], from: "lankle", to: "ltoe" } },
   { bone: "leftFoot",      tip: "leftToes",          from: "lankle",      to: "ltoe" },
-  { bone: "rightUpperLeg", tip: "rightLowerLeg",     from: "rhip",        to: "rknee" },
-  { bone: "rightLowerLeg", tip: "rightFoot",         from: "rknee",       to: "rankle" },
+  { bone: "rightUpperLeg", tip: "rightLowerLeg",     from: "rhip",        to: "rknee",
+    twist: { rest: ["rightLowerLeg", "rightFoot"], from: "rknee", to: "rankle" } },
+  { bone: "rightLowerLeg", tip: "rightFoot",         from: "rknee",       to: "rankle",
+    twist: { rest: ["rightFoot", "rightToes"], from: "rankle", to: "rtoe" } },
   { bone: "rightFoot",     tip: "rightToes",         from: "rankle",      to: "rtoe" },
 ];
 
@@ -59,7 +79,10 @@ interface Rig {
   vrm: VRM;
   /** Per chain: the normalized bone node and its rest direction (world,
    *  which equals model space — the scene itself is never rotated). */
-  chains: { node: THREE.Object3D; rest: THREE.Vector3; from: JointId; to: JointId }[];
+  chains: {
+    node: THREE.Object3D; rest: THREE.Vector3; from: JointId; to: JointId;
+    twist?: { rest: THREE.Vector3; from: JointId; to: JointId };
+  }[];
   hips: THREE.Object3D;
   hipsRest: THREE.Vector3;
   /** Which way the model faces at rest (unit, horizontal). */
@@ -104,7 +127,18 @@ function loadRig(url: string): Promise<Rig> {
       const rest = tip ? tip.sub(origin).normalize()
         : c.bone.endsWith("Foot") ? restForward.clone()
         : null;
-      if (rest) chains.push({ node, rest, from: c.from, to: c.to });
+      if (!rest) continue;
+      let twist: Rig["chains"][number]["twist"];
+      if (c.twist) {
+        const a = pos(c.twist.rest[0]);
+        const b = pos(c.twist.rest[1]);
+        const ref = a && b ? b.sub(a).normalize()
+          // A lower leg whose foot has no toes: the foot points forward at rest.
+          : c.bone.endsWith("LowerLeg") && a ? restForward.clone()
+          : null;
+        if (ref) twist = { rest: ref, from: c.twist.from, to: c.twist.to };
+      }
+      chains.push({ node, rest, from: c.from, to: c.to, twist });
     }
     return { vrm, chains, hips, hipsRest, restForward };
   })();
@@ -115,9 +149,13 @@ function loadRig(url: string): Promise<Rig> {
 
 const _qp = new THREE.Quaternion();
 const _dq = new THREE.Quaternion();
+const _qw = new THREE.Quaternion();
+const _q2 = new THREE.Quaternion();
 const _cur = new THREE.Vector3();
 const _tgt = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
+const _pred = new THREE.Vector3();
+const _tw = new THREE.Vector3();
 
 function retarget(rig: Rig, pose: Pose, body: Body) {
   const { vrm, hips, hipsRest, restForward, chains } = rig;
@@ -150,6 +188,29 @@ function retarget(rig: Rig, pose: Pose, body: Body) {
     _cur.copy(c.rest).applyQuaternion(_qp);
     _dq.setFromUnitVectors(_cur, d);
     c.node.quaternion.copy(_qp).invert().multiply(_dq).multiply(_qp);
+
+    // Aim leaves rotation about the bone axis free; pin it with the twist
+    // reference. Compare the reference's post-aim world direction with its
+    // tracked target, both projected onto the plane ⊥ d, and rotate the
+    // difference away about d. Descendants are still at rest here, so the
+    // reference moves rigidly with this bone's world rotation.
+    if (c.twist) {
+      _qw.copy(_qp).multiply(c.node.quaternion); // bone world rotation after aim
+      _pred.copy(c.twist.rest).applyQuaternion(_qw);
+      _pred.addScaledVector(d, -_pred.dot(d));
+      _tw.set(J[c.twist.to].x - J[c.twist.from].x, J[c.twist.to].y - J[c.twist.from].y, J[c.twist.to].z - J[c.twist.from].z);
+      _tw.addScaledVector(d, -_tw.dot(d));
+      // Skip when either is nearly along the bone (straight limb): the twist
+      // is unobservable there and the projection just amplifies noise.
+      if (_pred.lengthSq() > 1e-3 && _tw.lengthSq() > 1e-3) {
+        _pred.normalize();
+        _tw.normalize();
+        if (_pred.dot(_tw) < -0.9999) _dq.setFromAxisAngle(d, Math.PI);
+        else _dq.setFromUnitVectors(_pred, _tw); // axis is ±d since both ⊥ d
+        _q2.copy(_qp).invert().multiply(_dq).multiply(_qp);
+        c.node.quaternion.premultiply(_q2);
+      }
+    }
   }
 }
 
