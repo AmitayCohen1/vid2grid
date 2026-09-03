@@ -77,15 +77,19 @@ const CHAINS: {
 
 interface Rig {
   vrm: VRM;
-  /** Per chain: the normalized bone node and its rest direction (world,
-   *  which equals model space — the scene itself is never rotated). */
+  /** Per chain: the normalized bone node and its rest direction in the
+   *  rig frame (measured world direction with the shared rest world
+   *  rotation — e.g. rotateVRM0's π yaw — undone). */
   chains: {
     node: THREE.Object3D; rest: THREE.Vector3; from: JointId; to: JointId;
     twist?: { rest: THREE.Vector3; from: JointId; to: JointId };
+    /** The tip's node when it exists — only used for debug error measurement. */
+    tipNode: THREE.Object3D | null;
   }[];
   hips: THREE.Object3D;
   hipsRest: THREE.Vector3;
-  /** Which way the model faces at rest (unit, horizontal). */
+  /** Which way the model faces at rest (unit, horizontal, measured world).
+   *  Used only for the hips yaw, where the rest yaw commutes and cancels. */
   restForward: THREE.Vector3;
 }
 
@@ -117,6 +121,13 @@ function loadRig(url: string): Promise<Rig> {
     const right = pos("rightUpperLeg")!.sub(pos("leftUpperLeg")!).setY(0).normalize();
     const restForward = new THREE.Vector3().crossVectors(UP, right).normalize();
 
+    // Rest directions must live in the rig's own frame: normalized bones have
+    // identity local rotations at rest, but their rest WORLD rotation is not
+    // identity when the scene is rotated (rotateVRM0 yaws VRM 0.x by π), and
+    // it is shared by every node. Undo it once here; the retarget then turns
+    // these by the parent's live world rotation, which re-includes it.
+    const q0i = hips.getWorldQuaternion(new THREE.Quaternion()).invert();
+
     const chains: Rig["chains"] = [];
     for (const c of CHAINS) {
       const node = humanoid.getNormalizedBoneNode(c.bone);
@@ -124,21 +135,21 @@ function loadRig(url: string): Promise<Rig> {
       const tip = pos(c.tip);
       const origin = node.getWorldPosition(new THREE.Vector3());
       // Feet without toe bones point forward at rest; other missing tips skip the chain.
-      const rest = tip ? tip.sub(origin).normalize()
-        : c.bone.endsWith("Foot") ? restForward.clone()
+      const rest = tip ? tip.sub(origin).normalize().applyQuaternion(q0i)
+        : c.bone.endsWith("Foot") ? restForward.clone().applyQuaternion(q0i)
         : null;
       if (!rest) continue;
       let twist: Rig["chains"][number]["twist"];
       if (c.twist) {
         const a = pos(c.twist.rest[0]);
         const b = pos(c.twist.rest[1]);
-        const ref = a && b ? b.sub(a).normalize()
+        const ref = a && b ? b.sub(a).normalize().applyQuaternion(q0i)
           // A lower leg whose foot has no toes: the foot points forward at rest.
-          : c.bone.endsWith("LowerLeg") && a ? restForward.clone()
+          : c.bone.endsWith("LowerLeg") && a ? restForward.clone().applyQuaternion(q0i)
           : null;
         if (ref) twist = { rest: ref, from: c.twist.from, to: c.twist.to };
       }
-      chains.push({ node, rest, from: c.from, to: c.to, twist });
+      chains.push({ node, rest, from: c.from, to: c.to, twist, tipNode: humanoid.getNormalizedBoneNode(c.tip) });
     }
     return { vrm, chains, hips, hipsRest, restForward };
   })();
@@ -211,6 +222,22 @@ function retarget(rig: Rig, pose: Pose, body: Body) {
         c.node.quaternion.premultiply(_q2);
       }
     }
+  }
+
+  // Debug: per-segment angle between where the bone actually points (its
+  // tip's world position) and the tracked direction. window.__vid2gridDebug
+  // turns it on; results land in window.__avatarErr as [bone, degrees].
+  if (typeof window !== "undefined" && (window as { __vid2gridDebug?: boolean }).__vid2gridDebug) {
+    const errs: [string, number][] = [];
+    for (const c of chains) {
+      if (!c.tipNode) continue;
+      const a = c.node.getWorldPosition(new THREE.Vector3());
+      const b = c.tipNode.getWorldPosition(new THREE.Vector3());
+      const actual = b.sub(a).normalize();
+      const want = new THREE.Vector3(J[c.to].x - J[c.from].x, J[c.to].y - J[c.from].y, J[c.to].z - J[c.from].z).normalize();
+      errs.push([`${c.from}->${c.to}`, Math.acos(THREE.MathUtils.clamp(actual.dot(want), -1, 1)) * (180 / Math.PI)]);
+    }
+    (window as { __avatarErr?: [string, number][] }).__avatarErr = errs;
   }
 }
 
