@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useTheme } from "next-themes";
 import { FileDown, FileUp, Film, Moon, Sun } from "lucide-react";
 import Source from "./Source";
-import { DEFAULT_AVATAR_URL } from "./Avatar";
+import { AVATAR_PRESETS, DEFAULT_AVATAR_URL } from "./Avatar";
 import VideoPane from "./VideoPane";
 import Stage from "./Stage";
 import Timeline from "./Timeline";
@@ -326,9 +326,30 @@ export default function App() {
             </div>
           )}
           {view === "duet" && score && (
-            <div className="seg absolute top-2 right-2 text-xs shadow-sm">
-              <button aria-pressed={!avatar} onClick={() => setAvatar(false)}>stick figure</button>
-              <button aria-pressed={avatar} onClick={() => setAvatar(true)}>character</button>
+            <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5">
+              <div className="seg text-xs shadow-sm">
+                <button aria-pressed={!avatar} onClick={() => setAvatar(false)}>stick figure</button>
+                <button aria-pressed={avatar} onClick={() => setAvatar(true)}>character</button>
+              </div>
+              {avatar && (
+                <div className="flex flex-wrap justify-end gap-1 max-w-72">
+                  {AVATAR_PRESETS.map((p) => {
+                    const active = !avatarName && avatarUrl === p.url;
+                    return (
+                      <button
+                        key={p.url}
+                        onClick={() => onAvatarPreset(p.url)}
+                        className={`rounded-md border px-1.5 py-0.5 text-[11px] shadow-sm transition-colors ${active ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-accent"}`}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                  {avatarName && (
+                    <span className="rounded-md border border-primary bg-primary text-primary-foreground px-1.5 py-0.5 text-[11px] truncate max-w-36">{avatarName}</span>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </section>

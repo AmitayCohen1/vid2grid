@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
-import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Pause, Play } from "lucide-react";
 import type { Score } from "@/lib/score";
 import { BONES, type BoneId } from "@/lib/skeleton";
 
@@ -22,15 +22,26 @@ function cellColor(az: number, el: number): string {
   return `hsl(${Math.round(az)} 70% ${Math.round(l)}%)`;
 }
 
+const ROLL_LS_KEY = "vid2grid:roll-open";
+
 export default function Timeline({ score, time, playing, onSeek, onTogglePlay, onStep, selected, onSelect }: Props) {
   const rollRef = useRef<HTMLCanvasElement>(null);
   const duration = score.source.duration;
   const rows = useMemo(() => BONES.filter((b) => b.core), []);
+  const [rollOpen, setRollOpen] = useState(() => {
+    try { return localStorage.getItem(ROLL_LS_KEY) !== "0"; } catch { return true; }
+  });
+  const toggleRoll = () => {
+    setRollOpen((o) => {
+      try { localStorage.setItem(ROLL_LS_KEY, o ? "0" : "1"); } catch { /* quota */ }
+      return !o;
+    });
+  };
 
   // The grid roll: one row per core segment, colour = its cell over time.
   useEffect(() => {
     const cv = rollRef.current;
-    if (!cv) return;
+    if (!cv || !rollOpen) return;
     const w = cv.clientWidth, h = cv.clientHeight;
     const dpr = window.devicePixelRatio || 1;
     cv.width = w * dpr; cv.height = h * dpr;
@@ -60,7 +71,7 @@ export default function Timeline({ score, time, playing, onSeek, onTogglePlay, o
     // low-confidence shading
     ctx.fillStyle = "rgba(0,0,0,.55)";
     for (let i = 0; i < n; i++) if (score.raw[i].conf < 0.4) ctx.fillRect(i * px, 0, px, h);
-  }, [score, rows, selected]);
+  }, [score, rows, selected, rollOpen]);
 
   const seekFromEvent = (e: React.PointerEvent<HTMLElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -77,6 +88,9 @@ export default function Timeline({ score, time, playing, onSeek, onTogglePlay, o
         <span className="mono text-muted-foreground ml-2">
           {time.toFixed(2)}s / {duration.toFixed(2)}s · frame {Math.round(time * score.source.fps)} · {score.keyframes.length} keyframes
         </span>
+        <button className="btn px-2 ml-auto" onClick={toggleRoll} title={rollOpen ? "hide the grid roll" : "show the grid roll"}>
+          {rollOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+        </button>
       </div>
       <div className="flex gap-2">
         <div className="w-10 shrink-0" />
@@ -91,6 +105,7 @@ export default function Timeline({ score, time, playing, onSeek, onTogglePlay, o
           <div className="absolute top-0 bottom-0 w-0.5 bg-foreground" style={{ left: `${(time / duration) * 100}%` }} />
         </div>
       </div>
+      {rollOpen && (
       <div className="flex gap-2">
         <div className="w-10 shrink-0 flex flex-col text-[10px] leading-none text-muted-foreground mono">
           {rows.map((b) => (
@@ -112,6 +127,7 @@ export default function Timeline({ score, time, playing, onSeek, onTogglePlay, o
           <div className="absolute top-0 bottom-0 w-0.5 bg-foreground pointer-events-none" style={{ left: `${(time / duration) * 100}%` }} />
         </div>
       </div>
+      )}
     </div>
   );
 }
