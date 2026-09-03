@@ -1,6 +1,7 @@
 "use client";
 
-import { PersonStanding, RotateCcw } from "lucide-react";
+import { PersonStanding } from "lucide-react";
+import { AVATAR_PRESETS } from "./Avatar";
 import type { GridConfig } from "@/lib/grid";
 import type { LiftMode, SmoothConfig } from "@/lib/score";
 
@@ -13,9 +14,10 @@ interface Props {
   onShowRaw: (b: boolean) => void;
   avatar: boolean;
   onAvatar: (b: boolean) => void;
+  avatarUrl: string;
   avatarName: string | null;
   onAvatarFile: (f: File) => void;
-  onAvatarReset: () => void;
+  onAvatarPreset: (url: string) => void;
   showOverlay: boolean;
   onShowOverlay: (b: boolean) => void;
   lift: LiftMode;
@@ -27,7 +29,7 @@ const AZ_STEPS = [11.25, 22.5, 45];
 const EL_STEPS = [11.25, 22.5, 45];
 
 /** The grid is a setting: change it and the whole score re-snaps instantly. */
-export default function Controls({ grid, smooth, onGrid, onSmooth, showRaw, onShowRaw, avatar, onAvatar, avatarName, onAvatarFile, onAvatarReset, showOverlay, onShowOverlay, lift, onLift, canLift }: Props) {
+export default function Controls({ grid, smooth, onGrid, onSmooth, showRaw, onShowRaw, avatar, onAvatar, avatarUrl, avatarName, onAvatarFile, onAvatarPreset, showOverlay, onShowOverlay, lift, onLift, canLift }: Props) {
   return (
     <div className="text-[13px] flex flex-col gap-5 p-4">
       <section className="flex flex-col gap-2.5">
@@ -40,9 +42,24 @@ export default function Controls({ grid, smooth, onGrid, onSmooth, showRaw, onSh
         />
         {avatar && (
           <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <label className="btn cursor-pointer">
-                <PersonStanding size={14} /> load .vrm
+            <div className="flex flex-wrap items-center gap-1.5">
+              {AVATAR_PRESETS.map((p) => {
+                const active = !avatarName && avatarUrl === p.url;
+                return (
+                  <button
+                    key={p.url}
+                    onClick={() => onAvatarPreset(p.url)}
+                    className={`rounded-md border px-2 py-1 text-xs transition-colors ${active ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-accent"}`}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+              {avatarName && (
+                <span className="rounded-md border border-primary bg-primary text-primary-foreground px-2 py-1 text-xs truncate max-w-40">{avatarName}</span>
+              )}
+              <label className="btn cursor-pointer h-7 px-2 text-xs">
+                <PersonStanding size={13} /> load .vrm
                 <input
                   type="file"
                   accept=".vrm,model/vrm"
@@ -50,12 +67,6 @@ export default function Controls({ grid, smooth, onGrid, onSmooth, showRaw, onSh
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) onAvatarFile(f); e.currentTarget.value = ""; }}
                 />
               </label>
-              <span className="text-muted-foreground text-xs truncate">{avatarName ?? "sample character"}</span>
-              {avatarName && (
-                <button className="text-muted-foreground hover:text-foreground" title="back to the sample character" onClick={onAvatarReset}>
-                  <RotateCcw size={13} />
-                </button>
-              )}
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
               Any VRM avatar works: design a face, outfit and shoes in{" "}

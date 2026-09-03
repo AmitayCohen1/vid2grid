@@ -10,10 +10,18 @@ const wasmDst = join(root, "public/mediapipe/wasm");
 const modelDst = join(root, "public/models/pose_landmarker_full.task");
 const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task";
-// Sample avatar: the three-vrm example character (pixiv/three-vrm, MIT-licensed repo).
-const avatarDst = join(root, "public/models/avatar.vrm");
-const AVATAR_URL =
-  "https://raw.githubusercontent.com/pixiv/three-vrm/dev/packages/three-vrm/examples/models/VRM1_Constraint_Twist_Sample.vrm";
+// Preset characters. Sources and licenses:
+// - avatar.vrm: three-vrm example character (pixiv/three-vrm, MIT-licensed repo).
+// - seed-san.vrm: official VRM specification sample model (vrm-c/vrm-specification).
+// - vroid-{a,b,c}.vrm: VRoid Studio sample models (pixiv) — freely usable/alterable
+//   under their conditions of use: https://vroid.pixiv.help/hc/en-us/articles/4402394424089
+const AVATARS = [
+  ["avatar.vrm", "https://raw.githubusercontent.com/pixiv/three-vrm/dev/packages/three-vrm/examples/models/VRM1_Constraint_Twist_Sample.vrm"],
+  ["seed-san.vrm", "https://raw.githubusercontent.com/vrm-c/vrm-specification/master/samples/Seed-san/vrm/Seed-san.vrm"],
+  ["vroid-a.vrm", "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/stable/AvatarSample_A.vrm"],
+  ["vroid-b.vrm", "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/stable/AvatarSample_B.vrm"],
+  ["vroid-c.vrm", "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/stable/AvatarSample_C.vrm"],
+];
 
 mkdirSync(wasmDst, { recursive: true });
 cpSync(wasmSrc, wasmDst, { recursive: true });
@@ -29,12 +37,15 @@ if (!existsSync(modelDst) || statSync(modelDst).size < 1_000_000) {
   console.log("[assets] pose model present");
 }
 
-if (!existsSync(avatarDst) || statSync(avatarDst).size < 1_000_000) {
-  mkdirSync(dirname(avatarDst), { recursive: true });
-  const res = await fetch(AVATAR_URL);
-  if (!res.ok) throw new Error(`avatar download failed: ${res.status}`);
-  writeFileSync(avatarDst, Buffer.from(await res.arrayBuffer()));
-  console.log("[assets] sample avatar →", avatarDst);
-} else {
-  console.log("[assets] sample avatar present");
+for (const [file, url] of AVATARS) {
+  const dst = join(root, "public/models", file);
+  if (!existsSync(dst) || statSync(dst).size < 1_000_000) {
+    mkdirSync(dirname(dst), { recursive: true });
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`avatar download failed (${file}): ${res.status}`);
+    writeFileSync(dst, Buffer.from(await res.arrayBuffer()));
+    console.log("[assets] avatar →", dst);
+  } else {
+    console.log("[assets] avatar present:", file);
+  }
 }

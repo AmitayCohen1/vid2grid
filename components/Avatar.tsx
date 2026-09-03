@@ -23,6 +23,16 @@ import type { JointId } from "@/lib/skeleton";
 
 /** The bundled sample character; any VRoid/VRM 0.x or 1.0 file can replace it. */
 export const DEFAULT_AVATAR_URL = "/models/avatar.vrm";
+
+/** Bundled roster (fetched by scripts/setup-assets.mjs; see it for sources/licenses). */
+export const AVATAR_PRESETS: { label: string; url: string }[] = [
+  { label: "three-vrm", url: DEFAULT_AVATAR_URL },
+  { label: "Seed-san", url: "/models/seed-san.vrm" },
+  { label: "VRoid A", url: "/models/vroid-a.vrm" },
+  { label: "VRoid B", url: "/models/vroid-b.vrm" },
+  { label: "VRoid C", url: "/models/vroid-c.vrm" },
+];
+
 const UP = new THREE.Vector3(0, 1, 0);
 
 /** Segment → humanoid bone, parents before children. `tip` defines the

@@ -51,7 +51,7 @@ export default function App() {
   const [avatarUrl, setAvatarUrl] = useState(DEFAULT_AVATAR_URL);
   const [avatarName, setAvatarName] = useState<string | null>(null);
   const [showOverlay, setShowOverlay] = useState(true);
-  const [view, setView] = useState<"score" | "objects">("score");
+  const [view, setView] = useState<"score" | "duet" | "objects">("score");
   const [objects, setObjects] = useState<ObjectsOptions>(DEFAULT_OBJECTS);
 
   // Warm the model while the user picks a clip.
@@ -225,6 +225,7 @@ export default function App() {
       if (src) URL.revokeObjectURL(src);
       setSrc(null); setAnalysis(null); setImported(sc); setGrid(sc.grid); setSmooth(sc.smooth);
       setTime(0); setPlaying(false); setShowSource(false); setPhase("ready"); setError(null);
+      setView((v) => (v === "duet" ? "score" : v)); // duet needs a video
     }).catch((e) => { setError(String(e)); setPhase("error"); });
   };
 
@@ -240,12 +241,13 @@ export default function App() {
     setAvatarName(file.name.replace(/\.vrm$/i, ""));
     setAvatar(true);
   }, []);
-  const onAvatarReset = useCallback(() => {
+  const onAvatarPreset = useCallback((url: string) => {
     setAvatarUrl((old) => {
       if (old.startsWith("blob:")) URL.revokeObjectURL(old);
-      return DEFAULT_AVATAR_URL;
+      return url;
     });
     setAvatarName(null);
+    setAvatar(true);
   }, []);
 
   /* ---------- layout ---------- */
@@ -259,6 +261,7 @@ export default function App() {
         </div>
         <div className="seg ml-3 text-xs">
           <button aria-pressed={view === "score"} onClick={() => setView("score")}>score</button>
+          <button aria-pressed={view === "duet"} disabled={!src} className="disabled:opacity-40 disabled:cursor-not-allowed" title={src ? "video and 3D dancer side by side" : "needs a video clip"} onClick={() => setView("duet")}>duet</button>
           <button aria-pressed={view === "objects"} onClick={() => setView("objects")}>objects</button>
         </div>
         <div className="ml-auto flex items-center gap-2">
@@ -281,10 +284,10 @@ export default function App() {
         <div className="mx-4 mt-3 rounded-md border border-destructive/40 bg-destructive/10 text-destructive px-3 py-2 text-xs">{error}</div>
       )}
 
-      <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(280px,1fr)_2fr_minmax(260px,0.9fr)] grid-rows-[auto_1fr] lg:grid-rows-1 gap-px bg-border">
-        {/* left: video + readouts */}
+      <main className={`flex-1 min-h-0 grid grid-cols-1 grid-rows-[auto_1fr] lg:grid-rows-1 gap-px bg-border ${view === "duet" ? "lg:grid-cols-2" : "lg:grid-cols-[minmax(280px,1fr)_2fr_minmax(260px,0.9fr)]"}`}>
+        {/* left: video + readouts (in duet the video takes the whole column) */}
         <section className="bg-background flex flex-col min-h-0">
-          <div className="relative aspect-video lg:aspect-auto lg:h-[38%] shrink-0 bg-black">
+          <div className={`relative bg-black ${view === "duet" ? "flex-1 min-h-[320px] lg:min-h-0" : "aspect-video lg:aspect-auto lg:h-[38%] shrink-0"}`}>
             <VideoPane ref={videoRef} src={src} overlay={overlay} showOverlay={showOverlay} onLoaded={onLoaded} />
             {busy && (
               <div className="absolute inset-0 grid place-items-center bg-black/60">
@@ -297,7 +300,7 @@ export default function App() {
               </div>
             )}
           </div>
-          <div className="flex-1 min-h-0 overflow-auto">
+          <div className={`flex-1 min-h-0 overflow-auto ${view === "duet" ? "hidden" : ""}`}>
             {snappedPose && rawPose ? (
               <BoneTable snapped={snappedPose} raw={rawPose} selected={selected} onSelect={setSelected} />
             ) : (
@@ -309,10 +312,10 @@ export default function App() {
         {/* centre: the stage, or the annotated video */}
         <section className="bg-background min-h-[320px] lg:min-h-0 relative">
           {score && body ? (
-            view === "score" ? (
-              <Stage pose={snappedPose} raw={rawPose} body={body} grid={grid} showRaw={showRaw} avatar={avatar} avatarUrl={avatarUrl} selected={selected} onSelect={setSelected} />
-            ) : (
+            view === "objects" ? (
               <Objects score={score} overlays={analysis ? analysis.tracked.map((t) => t.image) : null} video={analysis ? videoEl : null} frame={fi} options={objects} />
+            ) : (
+              <Stage pose={snappedPose} raw={rawPose} body={body} grid={grid} showRaw={showRaw} avatar={avatar} avatarUrl={avatarUrl} selected={selected} onSelect={setSelected} />
             )
           ) : (
             <div className="w-full h-full grid place-items-center font-serif italic text-muted-foreground">the stage</div>
@@ -322,10 +325,16 @@ export default function App() {
               {selected} · yellow = snapped cell · white = raw
             </div>
           )}
+          {view === "duet" && score && (
+            <div className="seg absolute top-2 right-2 text-xs shadow-sm">
+              <button aria-pressed={!avatar} onClick={() => setAvatar(false)}>stick figure</button>
+              <button aria-pressed={avatar} onClick={() => setAvatar(true)}>character</button>
+            </div>
+          )}
         </section>
 
-        {/* right: controls */}
-        <section className="bg-background flex flex-col min-h-0 overflow-auto">
+        {/* right: controls (hidden in duet — the split takes the full width) */}
+        <section className={`bg-background flex-col min-h-0 overflow-auto ${view === "duet" ? "hidden" : "flex"}`}>
           {view === "objects" && score ? (
             <>
               <div className="label px-4 pt-4">synchronous objects</div>
@@ -341,7 +350,7 @@ export default function App() {
               <div className="px-4 pb-4 text-[11px] text-muted-foreground leading-relaxed">After Forsythe/OSU&apos;s <em className="font-serif">Synchronous Objects</em> (2009): the dance as data — traces, alignments, density, drawing.</div>
             </>
           ) : (<>
-          <Controls grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarReset={onAvatarReset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} />
+          <Controls grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} />
           {score && (
             <div className="px-4 pb-4 text-[11px] text-muted-foreground leading-relaxed">
               <div className="mono">{score.source.name}</div>
