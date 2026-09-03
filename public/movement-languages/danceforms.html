@@ -98,6 +98,16 @@
   @media (max-width:920px){.studio{grid-template-columns:minmax(0,1fr)}}
   #stageCanvas{touch-action:none;cursor:grab;display:block;width:100%}
   #stageCanvas.dragging{cursor:grabbing}
+  #planCanvas{touch-action:none;cursor:default;display:block;width:100%}
+  #planCanvas.dragging{cursor:grabbing}
+  .numf{width:58px;border:1px solid var(--line);border-radius:2px;background:var(--paper-2);color:var(--ink);
+    font-family:"Menlo","SF Mono",Consolas,monospace;font-size:11px;padding:4px 6px}
+  .chk{display:flex;align-items:center;gap:5px;cursor:pointer;
+    font-family:"Futura","Avenir Next","Century Gothic",sans-serif;
+    font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint)}
+  .chk input{accent-color:var(--accent)}
+  .rangeHandle{cursor:ew-resize}
+  .hint{font-family:"Menlo","SF Mono",Consolas,monospace;font-size:11px;color:var(--ink-soft)}
 
   .toolrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-top:1px solid var(--line)}
   .toolrow .lab{font-family:"Futura","Avenir Next","Century Gothic",sans-serif;
@@ -188,6 +198,7 @@
     <p class="sec-sub">drag the stage to orbit · scroll on it to zoom · click a keyframe to edit it · everything autosaves in this browser</p>
 
     <div class="studio">
+      <div>
       <div class="panel">
         <div class="panel-cap"><span class="dotk"></span><span>Stage</span><span class="capsp"></span>
           <span class="mono" id="camReadout"></span></div>
@@ -213,6 +224,20 @@
           <input type="range" id="tempoSlider" min="30" max="200" value="100" style="width:120px" aria-label="Tempo in beats per minute">
           <span class="mono" id="tempoReadout" style="font-size:11px">100 bpm</span>
         </div>
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <div class="panel-cap"><span class="dotk"></span><span>Plan — the stage from above, at the playhead</span>
+          <span class="capsp"></span><span class="mono" id="planReadout" style="font-size:11px"></span></div>
+        <canvas id="planCanvas" height="300"></canvas>
+        <div class="toolrow">
+          <span class="hint">drag a dancer to move them · alt-drag to turn them</span>
+          <span class="grow"></span>
+          <span class="lab">Ripple</span>
+          <input type="range" id="rippleSlider" min="1" max="64" value="8" style="width:110px" aria-label="Ripple window in beats">
+          <span class="mono" id="rippleReadout" style="font-size:11px">±8 beats</span>
+        </div>
+      </div>
       </div>
 
       <div>
@@ -256,6 +281,26 @@
         <button class="btn sm chance disp" id="btnChancePhrase">Phrase</button>
         <button class="btn sm chance disp" id="btnChanceSpace">Space</button>
         <button class="btn sm disp" id="btnReset">Reset score</button>
+      </div>
+      <div class="toolrow">
+        <span class="lab">Range</span>
+        <input type="number" class="numf" id="rangeFrom" min="0" step="1" value="0" aria-label="Range start beat">
+        <span class="hint">to</span>
+        <input type="number" class="numf" id="rangeTo" min="0" step="1" value="8" aria-label="Range end beat">
+        <button class="btn sm disp" id="btnRangeAll">Whole score</button>
+        <label class="chk"><input type="checkbox" id="rangeAllDancers"> all dancers</label>
+        <span class="grow"></span>
+        <button class="btn sm disp" id="btnCopyRange">Copy</button>
+        <button class="btn sm disp" id="btnPasteRange">Paste at playhead</button>
+        <span class="mono" id="clipReadout" style="font-size:11px">clipboard empty</span>
+      </div>
+      <div class="toolrow">
+        <span class="lab">Shift</span>
+        <input type="number" class="numf" id="shiftBeats" step="1" value="4" aria-label="Shift in beats">
+        <span class="hint">beats</span>
+        <button class="btn sm disp" id="btnShiftRange">Shift range</button>
+        <button class="btn sm disp" id="btnShiftDancer">Offset dancer</button>
+        <button class="btn sm disp" id="btnStagger">Stagger all — canon</button>
       </div>
     </div>
 
@@ -505,6 +550,10 @@
     t:0, playing:false, loop:true,
     ghosts:true, paths:true,
     cam:{yaw:28, pitch:24, dist:7.0},
+    ripple:8,                 // beats over which a plan-view drag falls off
+    range:{from:0, to:8},     // beat range the copy / shift tools act on
+    rangeAll:false,           // range covers every dancer, not just the selected one
+    clip:null,                // in-session clipboard; deliberately not persisted
   };
 
   // Per-dancer identity colour. Hue = identity (so selection is shown through
@@ -731,6 +780,13 @@
       g+=`<line x1="${x}" y1="${top-6}" x2="${x}" y2="${top+score.dancers.length*rowH}" style="stroke:var(--line);stroke-width:${major?1.2:0.5}"/>`;
       if(major) g+=`<text x="${x}" y="${top-11}" text-anchor="middle" class="mono" font-size="9.5" fill="var(--ink-faint)">${b}</text>`;
     }
+    const [ra,rb]=rangeBounds(), rowsH=score.dancers.length*rowH;
+    if(rb>ra){
+      const rx=left+ra*colW, rw=(rb-ra)*colW;
+      g+=`<rect x="${rx}" y="${top-6}" width="${rw}" height="${rowsH+6}" fill="var(--accent-soft)"/>`;
+      g+=`<line x1="${rx}" y1="${top-6}" x2="${rx}" y2="${top+rowsH}" style="stroke:var(--accent);stroke-width:1.2"/>`;
+      g+=`<line x1="${rx+rw}" y1="${top-6}" x2="${rx+rw}" y2="${top+rowsH}" style="stroke:var(--accent);stroke-width:1.2"/>`;
+    }
     score.dancers.forEach((d,di)=>{
       const y=top+di*rowH+rowH/2;
       const hue=dancerColor(di);
@@ -751,8 +807,10 @@
     const px=left+Math.min(state.t,T)*colW;
     g+=`<line id="tlPlayhead" x1="${px}" y1="${top-6}" x2="${px}" y2="${top+score.dancers.length*rowH}" style="stroke:var(--signal);stroke-width:1.6"/>`;
     g+=`<rect id="tlScrub" x="${left}" y="0" width="${T*colW}" height="${H}" fill="transparent" style="cursor:crosshair"/>`;
-    // re-draw keyframes above scrub layer for clickability
+    // range handles, then keyframes, above the scrub layer for clickability
     let g2="";
+    g2+=`<rect class="rangeHandle" data-edge="from" x="${left+ra*colW-5}" y="${top-6}" width="10" height="${rowsH+6}" fill="transparent"/>`;
+    g2+=`<rect class="rangeHandle" data-edge="to"   x="${left+rb*colW-5}" y="${top-6}" width="10" height="${rowsH+6}" fill="transparent"/>`;
     score.dancers.forEach((d,di)=>{
       const y=top+di*rowH+rowH/2;
       d.keys.forEach((k,ki)=>{
@@ -1150,6 +1208,177 @@
     if(ex){ exportNotationPDF(ex.dataset.export); }
   });
 
+
+  /* ================= plan view (top-down, at the playhead) ================= */
+  const FLOOR = 3;                                  // matches the stage's floor grid
+  function planXform(w,h){
+    const S = Math.min(w,h)/7.0;                    // 3.5 units visible either side
+    return { S,
+      to:  (x,z)=>({x: w/2 + x*S, y: h/2 + z*S}),   // audience (+z) at the bottom
+      from:(sx,sy)=>({x:(sx-w/2)/S, z:(sy-h/2)/S}) };
+  }
+
+  /* Share of a drag that a keyframe `dBeat` beats away takes: full strength out
+     to half the window, then easing to nothing at the window's edge. The plateau
+     is what makes the top of the slider (2x the score) a rigid shift of the whole
+     path, and the bottom (1 beat) reach only the dragged key. */
+  function rippleWeight(dBeat, win){
+    const u = Math.abs(dBeat)/Math.max(1e-6, win);
+    return smooth(Math.max(0, Math.min(1, 2*(1-u))));
+  }
+  function rippleMax(){ return Math.max(2, score.length*2); }
+
+  /* Offset a dancer's floor position / facing, falling off over `win` beats.
+     `base` snapshots x/z/facing from when the drag began, so a slow drag doesn't
+     compound its own offsets. Only x / z / facing move: the pose itself — the
+     frozen body-local (az, el) per segment — is never touched. */
+  function rippleMove(d, beat, dx, dz, dFacing, base, win){
+    d.keys.forEach((k,i)=>{
+      const b=base[i]; if(!b) return;
+      const wgt=rippleWeight(k.beat-beat, win);
+      if(!wgt) return;
+      k.pose.x = Math.max(-FLOOR, Math.min(FLOOR, b.x + dx*wgt));
+      k.pose.z = Math.max(-FLOOR, Math.min(FLOOR, b.z + dz*wgt));
+      k.pose.facing = b.facing + dFacing*wgt;
+    });
+  }
+
+  /* Hue is identity here as everywhere else on the stage: a dancer keeps their
+     colour and selection is carried by weight and opacity, never by hue. */
+  function drawPlan(){
+    const cv=$("#planCanvas"); if(!cv) return;
+    const {ctx,w,h}=sizeCanvas(cv);
+    const soft=css("--ink-soft"), faint=css("--ink-faint"), paper=css("--paper");
+    ctx.clearRect(0,0,w,h);
+    const X=planXform(w,h);
+    const seg=(a,b)=>{ const pa=X.to(a.x,a.z), pb=X.to(b.x,b.z);
+      ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.stroke(); };
+
+    // the stage itself, so the square reads as the floor and not as dead space
+    const c0=X.to(-FLOOR,-FLOOR), c1=X.to(FLOOR,FLOOR);
+    ctx.fillStyle=css("--paper-2");
+    ctx.fillRect(c0.x, c0.y, c1.x-c0.x, c1.y-c0.y);
+    ctx.lineWidth=1; ctx.strokeStyle=faint; ctx.globalAlpha=.55;
+    for(let i=-FLOOR;i<=FLOOR;i++){
+      seg({x:i,z:-FLOOR},{x:i,z:FLOOR});
+      seg({x:-FLOOR,z:i},{x:FLOOR,z:i});
+    }
+    ctx.globalAlpha=1;
+    ctx.strokeStyle=soft; ctx.lineWidth=1.4; seg({x:-FLOOR,z:FLOOR},{x:FLOOR,z:FLOOR});
+    ctx.fillStyle=faint; ctx.font="10px Menlo, monospace"; ctx.textAlign="center";
+    const au=X.to(0,FLOOR+0.3); ctx.fillText("audience", au.x, au.y+4);
+    ctx.textAlign="left";
+
+    const sel=score.dancers[state.selD];
+    const selHue=dancerColor(state.selD);
+    const beat=Math.round(state.t);
+    // the selected dancer's floor path, and its keys held at the opacity of the
+    // share each would take from a drag at the playhead
+    if(sel && sel.keys.length>1){
+      ctx.strokeStyle=selHue; ctx.lineWidth=1.2; ctx.globalAlpha=.75; ctx.setLineDash([5,4]);
+      ctx.beginPath();
+      for(let i=0;i<=80;i++){
+        const q=poseAt(sel, i/80*score.length), pt=X.to(q.x,q.z);
+        i? ctx.lineTo(pt.x,pt.y) : ctx.moveTo(pt.x,pt.y);
+      }
+      ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1;
+    }
+    if(sel) sel.keys.forEach(k=>{
+      const pt=X.to(k.pose.x,k.pose.z);
+      ctx.globalAlpha = 0.2 + 0.8*rippleWeight(k.beat-beat, state.ripple);
+      ctx.fillStyle=paper; ctx.strokeStyle=selHue; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.rect(pt.x-3.2, pt.y-3.2, 6.4, 6.4); ctx.fill(); ctx.stroke();
+      ctx.globalAlpha=1;
+    });
+
+    score.dancers.forEach((d,di)=>{
+      const q=poseAt(d,state.t), pt=X.to(q.x,q.z), on=di===state.selD, hue=dancerColor(di);
+      ctx.globalAlpha = on? 1 : .55;
+      const f=q.facing*D2R;                          // forward = (sin F, cos F)
+      ctx.strokeStyle=hue; ctx.lineWidth= on?1.8:1.2;
+      ctx.beginPath(); ctx.moveTo(pt.x,pt.y);
+      ctx.lineTo(pt.x+Math.sin(f)*16, pt.y+Math.cos(f)*16); ctx.stroke();
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, on?7:5.5, 0, Math.PI*2);
+      ctx.fillStyle= on? hue : paper; ctx.fill();
+      ctx.strokeStyle=hue; ctx.lineWidth=1.4; ctx.stroke();
+      ctx.fillStyle=hue; ctx.font="9px Futura, 'Avenir Next', sans-serif"; ctx.textAlign="center";
+      ctx.fillText(d.name.toUpperCase(), pt.x, pt.y-13);
+      ctx.textAlign="left"; ctx.globalAlpha=1;
+    });
+
+    const out=$("#planReadout");
+    if(out){
+      const q = sel? poseAt(sel,state.t) : null;
+      out.textContent = q? `${sel.name} · x ${q.x.toFixed(2)} · z ${q.z.toFixed(2)} · facing ${Math.round(q.facing)}°` : "";
+    }
+  }
+
+  /* ================= range, clipboard, time shift ================= */
+  function rangeBounds(){
+    const a=Math.min(state.range.from, state.range.to),
+          b=Math.max(state.range.from, state.range.to);
+    return [Math.max(0,a), Math.min(score.length,b)];
+  }
+  function rangeDancers(){
+    return state.rangeAll? score.dancers.slice()
+                         : [score.dancers[state.selD]].filter(Boolean);
+  }
+  /* keys are stored relative to the range start, so a paste lands anywhere */
+  function copyRange(){
+    const [a,b]=rangeBounds();
+    const tracks=rangeDancers().map(d=>({
+      di: score.dancers.indexOf(d),
+      keys: d.keys.filter(k=>k.beat>=a && k.beat<=b)
+                  .map(k=>({rel:k.beat-a, pose:clonePose(k.pose)}))
+    }));
+    if(!tracks.some(t=>t.keys.length)) return false;
+    state.clip={span:b-a, all:state.rangeAll, tracks};
+    return true;
+  }
+  function pasteAt(beat){
+    if(!state.clip) return false;
+    let wrote=false;
+    for(const tr of state.clip.tracks){
+      const d = state.clip.all? score.dancers[tr.di] : score.dancers[state.selD];
+      if(!d) continue;
+      for(const src of tr.keys){
+        const nb = beat + src.rel;
+        if(nb<0 || nb>score.length) continue;       // clipped at the score's ends
+        const at = d.keys.findIndex(k=>k.beat===nb);
+        if(at>=0) d.keys[at].pose = clonePose(src.pose);
+        else d.keys.push({beat:nb, pose:clonePose(src.pose)});
+        wrote=true;
+      }
+      d.keys.sort((p,q)=>p.beat-q.beat);
+    }
+    return wrote;
+  }
+  /* Move `moving` (a subset of d.keys) by n beats. Keys pushed past either end
+     clamp rather than vanish; where two land on the same beat the one that
+     travelled least far from its intended landing wins, so a clamped pile-up
+     collapses to the key nearest that edge in time. */
+  function shiftKeys(d, moving, n){
+    if(!n || !moving.length) return;
+    const set=new Set(moving);
+    const plan=d.keys.map(k=>{
+      const raw = set.has(k)? k.beat+n : k.beat;
+      const beat = Math.max(0, Math.min(score.length, raw));
+      return {k, beat, slip:Math.abs(raw-beat)};
+    });
+    plan.sort((a,b)=> a.beat-b.beat || a.slip-b.slip);
+    const out=[];
+    for(const e of plan){
+      if(out.length && out[out.length-1].beat===e.beat) continue;
+      e.k.beat=e.beat; out.push(e);
+    }
+    d.keys = out.map(e=>e.k);                        // never empty: out has >= 1
+  }
+  function clampSel(){
+    state.selD=Math.max(0, Math.min(state.selD, score.dancers.length-1));
+    const d=score.dancers[state.selD];
+    if(d) state.selK=Math.max(0, Math.min(state.selK, d.keys.length-1));
+  }
+
   /* ================= render all ================= */
   function renderAll(){
     renderTimeline();
@@ -1157,12 +1386,39 @@
     renderNotation();
     renderNotationViews();
     drawStage();
+    drawPlan();
     movePlayheadOnly();
+    syncToolUI();
     $("#tempoReadout").textContent = score.tempo+" bpm";
     $("#tempoSlider").value = score.tempo;
     $("#btnRemoveDancer").disabled = score.dancers.length<=1;
     $("#btnAddDancer").disabled = score.dancers.length>=4;
     save();
+  }
+
+  function rippleLabel(){
+    if(state.ripple>=rippleMax()) return "whole path";
+    if(state.ripple<=1) return "this key only";
+    return "\u00b1"+state.ripple+" beats";
+  }
+  function syncToolUI(){
+    state.range.from = Math.max(0, Math.min(score.length, state.range.from));
+    state.range.to   = Math.max(0, Math.min(score.length, state.range.to));
+    const rf=$("#rangeFrom"), rt=$("#rangeTo");
+    rf.max=score.length; rt.max=score.length;
+    if(document.activeElement!==rf) rf.value=state.range.from;
+    if(document.activeElement!==rt) rt.value=state.range.to;
+    $("#rangeAllDancers").checked = state.rangeAll;
+    const rmax=rippleMax();
+    state.ripple=Math.max(1, Math.min(rmax, state.ripple));
+    $("#rippleSlider").max = rmax;
+    $("#rippleSlider").value = state.ripple;
+    $("#rippleReadout").textContent = rippleLabel();
+    const c=state.clip;
+    $("#clipReadout").textContent = c
+      ? `${c.tracks.reduce((n,t)=>n+t.keys.length,0)} keys · ${c.span} beats${c.all?" · ensemble":""}`
+      : "clipboard empty";
+    $("#btnPasteRange").disabled = !c;
   }
 
   /* ================= interactions ================= */
@@ -1570,7 +1826,7 @@
         if(captureRec){ try{ captureRec.stop(); }catch(err){} }
       }
     }
-    movePlayheadOnly(); drawStage(); renderNotation();
+    movePlayheadOnly(); drawStage(); drawPlan(); renderNotation();
     if(state.playing) requestAnimationFrame(tickPlay);
   }
   $("#btnPlay").addEventListener("click", ()=>{
@@ -1591,17 +1847,28 @@
       const sx=(e.clientX-r.left)*(svg.viewBox.baseVal.width/r.width);
       return Math.max(0, Math.min(score.length, (sx-left)/colW));
     }
+    let edge=null;
     wrap.addEventListener("pointerdown", e=>{
+      if(e.target.classList.contains("rangeHandle")){
+        edge=e.target.dataset.edge;
+        try{ wrap.setPointerCapture&&wrap.setPointerCapture(e.pointerId); }catch(_){}
+        return;
+      }
       if(e.target.id!=="tlScrub") return;
       scrubbing=true; wrap.setPointerCapture&&wrap.setPointerCapture(e.pointerId);
-      const b=beatFromEvent(e); if(b!==null){ state.t=b; movePlayheadOnly(); drawStage(); renderNotation(); }
+      const b=beatFromEvent(e); if(b!==null){ state.t=b; movePlayheadOnly(); drawStage(); drawPlan(); renderNotation(); }
     });
     wrap.addEventListener("pointermove", e=>{
+      if(edge){
+        const b=beatFromEvent(e);
+        if(b!==null){ state.range[edge]=Math.round(b); renderTimeline(); syncToolUI(); drawPlan(); }
+        return;
+      }
       if(!scrubbing) return;
-      const b=beatFromEvent(e); if(b!==null){ state.t=b; movePlayheadOnly(); drawStage(); renderNotation(); }
+      const b=beatFromEvent(e); if(b!==null){ state.t=b; movePlayheadOnly(); drawStage(); drawPlan(); renderNotation(); }
     });
-    wrap.addEventListener("pointerup", ()=>{ scrubbing=false; });
-    wrap.addEventListener("pointercancel", ()=>{ scrubbing=false; });
+    wrap.addEventListener("pointerup", ()=>{ scrubbing=false; edge=null; });
+    wrap.addEventListener("pointercancel", ()=>{ scrubbing=false; edge=null; });
   })();
 
   /* Benesh sign drag: reposition a wrist/ankle inside its frame */
@@ -1680,9 +1947,107 @@
     }, {passive:false});
   })();
 
-  window.addEventListener("resize", drawStage);
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", ()=>{ drawStage(); });
-  new MutationObserver(()=>{ drawStage(); }).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+  window.addEventListener("resize", ()=>{ drawStage(); drawPlan(); });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", ()=>{ drawStage(); drawPlan(); });
+  new MutationObserver(()=>{ drawStage(); drawPlan(); }).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+
+
+  /* plan view: drag a dancer, ripple the offset along their path */
+  (function(){
+    const cv=$("#planCanvas");
+    let drag=null;
+    const local=e=>{ const r=cv.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; };
+    function frame(){ return planXform(cv.clientWidth||600, +cv.dataset.designH||300); }
+
+    cv.addEventListener("pointerdown", e=>{
+      const X=frame(), p=local(e);
+      let best=-1, bd=1e9;
+      score.dancers.forEach((d,di)=>{
+        const q=poseAt(d,state.t), sp=X.to(q.x,q.z);
+        const dist=Math.hypot(sp.x-p.x, sp.y-p.y);
+        if(dist<bd){ bd=dist; best=di; }
+      });
+      if(best<0 || bd>18) return;                    // clicked empty floor
+      e.preventDefault();
+      state.selD=best;
+      const d=score.dancers[best];
+      // a drag always edits a real keyframe: make one at the playhead if needed
+      const beat=Math.max(0, Math.min(score.length, Math.round(state.t)));
+      let idx=d.keys.findIndex(k=>k.beat===beat);
+      if(idx<0){
+        d.keys.push({beat, pose:poseAt(d,beat)});
+        d.keys.sort((a,b)=>a.beat-b.beat);
+        idx=d.keys.findIndex(k=>k.beat===beat);
+      }
+      state.selK=idx; state.t=beat;
+      drag={ di:best, idx, beat, turn:e.altKey, X, start:p,
+             base:d.keys.map(k=>({x:k.pose.x, z:k.pose.z, facing:k.pose.facing})) };
+      try{ cv.setPointerCapture&&cv.setPointerCapture(e.pointerId); }catch(_){}
+      cv.classList.add("dragging");
+      renderAll();
+    });
+
+    cv.addEventListener("pointermove", e=>{
+      if(!drag) return;
+      const d=score.dancers[drag.di]; if(!d) return;
+      const p=local(e), b=drag.base[drag.idx];
+      if(drag.turn){
+        const c=drag.X.to(b.x, b.z);
+        const aim=Math.atan2(p.x-c.x, p.y-c.y)/D2R;  // screen dx/dy read as sin/cos F
+        const dF=((aim-b.facing)%360+540)%360-180;   // shortest arc from where it was
+        rippleMove(d, drag.beat, 0, 0, dF, drag.base, state.ripple);
+      } else {
+        const dx=(p.x-drag.start.x)/drag.X.S, dz=(p.y-drag.start.y)/drag.X.S;
+        rippleMove(d, drag.beat, dx, dz, 0, drag.base, state.ripple);
+      }
+      drawPlan(); drawStage(); renderNotation();
+    });
+
+    const end=()=>{ if(!drag) return; drag=null; cv.classList.remove("dragging"); renderAll(); };
+    cv.addEventListener("pointerup", end);
+    cv.addEventListener("pointercancel", end);
+  })();
+
+  $("#rippleSlider").addEventListener("input", e=>{
+    state.ripple=+e.target.value;
+    $("#rippleReadout").textContent=rippleLabel();
+    drawPlan();
+  });
+
+  /* range, clipboard, canon */
+  $("#rangeFrom").addEventListener("input", e=>{ state.range.from=+e.target.value||0; renderTimeline(); drawPlan(); });
+  $("#rangeTo").addEventListener("input",   e=>{ state.range.to  =+e.target.value||0; renderTimeline(); drawPlan(); });
+  $("#btnRangeAll").addEventListener("click", ()=>{
+    state.range.from=0; state.range.to=score.length; renderAll();
+  });
+  $("#rangeAllDancers").addEventListener("change", e=>{ state.rangeAll=e.target.checked; });
+  $("#btnCopyRange").addEventListener("click", ()=>{
+    const ok=copyRange();
+    syncToolUI();
+    if(!ok) $("#clipReadout").textContent="nothing in that range";
+  });
+  $("#btnPasteRange").addEventListener("click", ()=>{
+    if(!pasteAt(Math.round(state.t))) return;
+    clampSel(); renderAll();
+  });
+  $("#btnShiftRange").addEventListener("click", ()=>{
+    const n=Math.round(+$("#shiftBeats").value||0); if(!n) return;
+    const [a,b]=rangeBounds();
+    for(const d of rangeDancers()) shiftKeys(d, d.keys.filter(k=>k.beat>=a && k.beat<=b), n);
+    clampSel(); snapSel(); renderAll();
+  });
+  $("#btnShiftDancer").addEventListener("click", ()=>{
+    const n=Math.round(+$("#shiftBeats").value||0); if(!n) return;
+    const d=score.dancers[state.selD]; if(!d) return;
+    shiftKeys(d, d.keys.slice(), n);
+    clampSel(); snapSel(); renderAll();
+  });
+  $("#btnStagger").addEventListener("click", ()=>{
+    const n=Math.round(+$("#shiftBeats").value||0); if(!n) return;
+    // dancer i lands i*n beats late — unison becomes a canon in one press
+    score.dancers.forEach((d,i)=>{ if(i) shiftKeys(d, d.keys.slice(), i*n); });
+    clampSel(); snapSel(); renderAll();
+  });
 
   renderPalette();
   renderAll();
