@@ -8,7 +8,7 @@
    it wraps one movement with the four notations' readings of it, a dynamics
    overlay that varies per variant, and the per-window marker of which panel is
    inert. See ../../CLAUDE.md for the eight invariants and the two reference
-   docs (movement-notation-parameters.md, movement-notation-visualization2.md). */
+   docs (docs/movement-notation-parameters.md, docs/movement-notation-visualization2.md). */
 (function (root, factory) {
   if (typeof module !== "undefined" && module.exports) module.exports = factory();
   else root.Notation = factory();
