@@ -300,7 +300,8 @@
         <span class="hint">beats</span>
         <button class="btn sm disp" id="btnShiftRange">Shift range</button>
         <button class="btn sm disp" id="btnShiftDancer">Offset dancer</button>
-        <button class="btn sm disp" id="btnStagger">Stagger all — canon</button>
+        <button class="btn sm disp" id="btnStagger"
+          title="Delays each dancer one more count (¼ beat) than the one above — press again to open the canon further">Stagger all — canon</button>
       </div>
     </div>
 
@@ -1392,7 +1393,7 @@
     $("#tempoReadout").textContent = score.tempo+" bpm";
     $("#tempoSlider").value = score.tempo;
     $("#btnRemoveDancer").disabled = score.dancers.length<=1;
-    $("#btnAddDancer").disabled = score.dancers.length>=4;
+    $("#btnAddDancer").disabled = false;          // no ceiling on the cast
     save();
   }
 
@@ -1558,7 +1559,6 @@
 
   /* dancers / length */
   $("#btnAddDancer").addEventListener("click", ()=>{
-    if(score.dancers.length>=4) return;
     const n=score.dancers.length+1;
     score.dancers.push({name:"Dancer "+n, keys:[
       {beat:0, pose:Object.assign(clonePose(STAND), {x:(Math.random()*3-1.5), z:(Math.random()*3-1.5), facing:Math.round(Math.random()*360-180)})}
@@ -2042,10 +2042,13 @@
     shiftKeys(d, d.keys.slice(), n);
     clampSel(); snapSel(); renderAll();
   });
+  /* One count — a quarter beat, the same unit the nudge buttons use — per
+     dancer per press. Dancer i lands i counts late, so the canon opens
+     gradually under repeated presses instead of in one jump. Deliberately
+     independent of the Shift field, which stays a whole-beat tool. */
+  const STAGGER_STEP = 0.25;
   $("#btnStagger").addEventListener("click", ()=>{
-    const n=Math.round(+$("#shiftBeats").value||0); if(!n) return;
-    // dancer i lands i*n beats late — unison becomes a canon in one press
-    score.dancers.forEach((d,i)=>{ if(i) shiftKeys(d, d.keys.slice(), i*n); });
+    score.dancers.forEach((d,i)=>{ if(i) shiftKeys(d, d.keys.slice(), i*STAGGER_STEP); });
     clampSel(); snapSel(); renderAll();
   });
 
