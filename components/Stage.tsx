@@ -26,6 +26,10 @@ interface Props {
   raw: Pose | null;
   body: Body | null;
   grid: GridConfig;
+  /** Which track drives the figure: the grid-snapped score, or the smooth
+   *  tracked motion. The notation is always the snapped one — this is only
+   *  what the stage shows. */
+  motion: "stepped" | "smooth";
   showRaw: boolean;
   avatar: boolean;
   avatarUrl: string;
@@ -34,7 +38,10 @@ interface Props {
   onSelect: (id: BoneId | null) => void;
 }
 
-export default function Stage({ pose, raw, body, grid, showRaw, avatar, avatarUrl, cast, selected, onSelect }: Props) {
+export default function Stage({ pose, raw, body, grid, motion, showRaw, avatar, avatarUrl, cast, selected, onSelect }: Props) {
+  const smooth = motion === "smooth" && !!raw;
+  const shown = smooth ? raw : pose;      // the figure people watch
+  const ghost = smooth ? pose : raw;      // the other one, behind it
   return (
     <Canvas
       camera={{ position: [1.8, 1.4, 3.2], fov: 45, near: 0.05, far: 100 }}
@@ -62,17 +69,18 @@ export default function Stage({ pose, raw, body, grid, showRaw, avatar, avatarUr
         <ringGeometry args={[0.08, 0.11, 24]} />
         <meshBasicMaterial color="#f0b429" transparent opacity={0.6} />
       </mesh>
-      {pose && body && (
+      {shown && body && (
         <>
           {avatar ? (
             <Suspense fallback={null}>
-              <Avatar pose={pose} body={body} url={avatarUrl} />
+              <Avatar pose={shown} body={body} url={avatarUrl} />
             </Suspense>
           ) : (
-            <Figure pose={pose} body={body} selected={selected} onSelect={onSelect} />
+            <Figure pose={shown} body={body} selected={selected} onSelect={onSelect} />
           )}
-          {showRaw && raw && <Figure pose={raw} body={body} ghost />}
-          {selected && raw && <GridSphere pose={pose} raw={raw} body={body} bone={selected} grid={grid} />}
+          {showRaw && ghost && <Figure pose={ghost} body={body} ghost />}
+          {/* The sphere always compares the true snapped/raw pair, whichever is on stage. */}
+          {selected && pose && raw && <GridSphere pose={pose} raw={raw} body={body} bone={selected} grid={grid} />}
         </>
       )}
       {cast.map((m) =>

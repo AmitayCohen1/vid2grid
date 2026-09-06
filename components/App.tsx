@@ -21,6 +21,8 @@ import Objects, { DEFAULT_OBJECTS, Drawing, type ObjectsOptions } from "./Object
 import { DEFAULT_GRID, type GridConfig } from "@/lib/grid";
 import { DEFAULT_SMOOTH, type LiftMode, type Score, type SmoothConfig, type SourceInfo, frameAt, measureBody, parseScore, rawPoses, serializeScore, smoothPoses, snapPoses } from "@/lib/score";
 import { fillGaps, trackVideo, type TrackedFrame } from "@/lib/tracker";
+import { describeError } from "@/lib/errors";
+import { estimateTempo } from "@/lib/tempo";
 import type { BoneId } from "@/lib/skeleton";
 import type { Body } from "@/lib/fk";
 import type { Pose } from "@/lib/pose";
@@ -46,9 +48,11 @@ export default function App() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState({ done: 0, total: 1 });
   const [error, setError] = useState<string | null>(null);
-  const [modal, setModal] = useState<"new" | "settings" | "save" | "details" | "help" | "compare" | null>(null);
+  const [modal, setModal] = useState<"new" | "save" | "details" | "help" | "compare" | null>(null);
   const [newMode, setNewMode] = useState<"upload" | "import">("upload");
   const [settingsTab, setSettingsTab] = useState<"dancer" | "grid" | "cast" | "traces">("dancer");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [motion, setMotion] = useState<"stepped" | "smooth">("stepped");
   const [toast, setToast] = useState<string | null>(null);
 
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
@@ -108,6 +112,17 @@ export default function App() {
     const { frames, keyframes } = snapPoses(raw, grid);
     return { version: 1, source, grid, smooth, lift, body, raw, frames, keyframes };
   }, [raw, body, source, grid, smooth, lift]);
+
+  /* The pulse is derived like everything else: a new grid re-snaps the
+     keyframes, which re-aligns the beat phase, with no re-tracking. */
+  const tempo = useMemo(
+    () => (score ? estimateTempo(score.raw, score.keyframes.map((i) => score.raw[i].t), score.source.fps) : null),
+    [score],
+  );
+  // A hand-set tempo is tied to the clip it was set for, so a new clip re-estimates.
+  const [bpmOverride, setBpmOverride] = useState<{ source: SourceInfo; bpm: number } | null>(null);
+  const bpm = (bpmOverride?.source === source ? bpmOverride.bpm : null) ?? tempo?.bpm ?? 100;
+  const onBpm = useCallback((n: number) => { if (source) setBpmOverride({ source, bpm: n }); }, [source]);
 
   useEffect(() => {
     if (!score) return;
@@ -184,13 +199,13 @@ export default function App() {
     [score, cast],
   );
   const stageCast: StageCastMember[] = useMemo(() => cast.map((m) => {
-    const p = m.score.frames[frameAt(m.score, time)];
+    const p = (motion === "smooth" ? m.score.raw : m.score.frames)[frameAt(m.score, time)];
     // Bake the floor placement into the pose: yaw the facing, turn+shift the root.
     const rad = (m.rot * Math.PI) / 180;
     const cos = Math.cos(rad), sin = Math.sin(rad);
     const pose = { ...p, facing: p.facing + m.rot, x: p.x * cos + p.z * sin + m.x, z: p.z * cos - p.x * sin + m.z };
     return { id: m.id, pose, body: m.score.body, avatarUrl: m.avatarUrl };
-  }), [cast, time]);
+  }), [cast, time, motion]);
 
   /* ---------- getting a clip in ---------- */
 
@@ -270,7 +285,7 @@ export default function App() {
       setModal(null); setView("score"); setToast("Your score is ready. Press Play to explore the movement.");
     } catch (e) {
       if (ac.signal.aborted) return; // superseded by a newer clip
-      setError(e instanceof Error ? e.message : String(e));
+      setError(describeError(e));
       setPhase("error");
     }
   }, [analysis]);
@@ -328,15 +343,17 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (home || modal || (e.target as HTMLElement)?.closest("input, select, textarea, button, a, [contenteditable=true], [role=slider]")) return;
+      if (home || modal) return;
+      // Escape still reaches us from inside the settings sidebar, where focus sits on a control.
+      if (e.code === "Escape") { if (selected) setSelected(null); else setSettingsOpen(false); return; }
+      if ((e.target as HTMLElement)?.closest("input, select, textarea, button, a, [contenteditable=true], [role=slider]")) return;
       if (e.code === "Space") { e.preventDefault(); togglePlay(); }
       else if (e.code === "ArrowLeft") { e.preventDefault(); step(e.shiftKey ? -10 : -1); }
       else if (e.code === "ArrowRight") { e.preventDefault(); step(e.shiftKey ? 10 : 1); }
-      else if (e.code === "Escape") setSelected(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [togglePlay, step, home, modal]);
+  }, [togglePlay, step, home, modal, selected]);
 
   /* ---------- export / import ---------- */
 
@@ -410,6 +427,7 @@ export default function App() {
   /* ---------- layout ---------- */
 
   const welcome = home || (!score && !busy && !src);
+  const tab = settingsTab === "traces" && view !== "objects" ? "dancer" : settingsTab;
   const closeNew = () => { if (previousRef.current) cancelTracking(); else { setModal(null); setError(null); } };
   return (
     <div className={`app-shell flow-shell ${welcome ? "is-welcome" : "is-studio"}`}>
@@ -437,23 +455,47 @@ export default function App() {
             <button aria-pressed={view === "duet"} onClick={() => src ? setView("duet") : openModal("compare")}><Film size={18} />Compare</button>
             <button aria-pressed={view === "objects"} onClick={() => setView("objects")}><ScanLine size={18} />Traces</button>
           </nav>
-          <div className="studio-tools"><button className="btn" disabled={!score} onClick={() => openModal("details")}><List size={17} />Notation</button><button className="btn" disabled={!score} onClick={() => { setSettingsTab(view === "objects" ? "traces" : "dancer"); openModal("settings"); }}><SlidersHorizontal size={17} />Settings</button></div>
+          <div className="studio-tools"><button className="btn" disabled={!score} onClick={() => openModal("details")}><List size={17} />Notation</button><button className="btn" aria-expanded={settingsOpen} disabled={!score} onClick={() => { if (!settingsOpen && view === "objects") setSettingsTab("traces"); setSettingsOpen((o) => !o); }}><SlidersHorizontal size={17} />Settings</button></div>
         </div>
-        <main className={`studio-workspace focused-workspace ${view === "duet" ? "compare-workspace" : ""}`}>
+        <main className={`studio-workspace focused-workspace ${view === "duet" ? "compare-workspace" : ""} ${settingsOpen ? "with-settings" : ""}`}>
           <section className={`source-panel ${view === "duet" ? "" : "source-hidden"}`} aria-label="Original video">
             <div className="panel-heading"><span><Film size={16} />Original video</span></div>
             <div className="source-video"><VideoPane ref={videoRef} src={src} overlay={overlay} showOverlay={showOverlay} onLoaded={onLoaded} onError={() => { abortRef.current?.abort(); setError("This video could not be decoded. Try an MP4 or WebM clip."); setPhase("error"); setModal("new"); }} /></div>
           </section>
           <section className="stage-panel" aria-label={view === "objects" ? "Movement traces" : "3D movement stage"}>
-            <div className="stage-heading"><span><span className="status-dot" />{view === "objects" ? "The path of your movement" : "Your movement, in 3D"}</span><span className="mono">{grid.azStep}° GRID</span></div>
+            <div className="stage-heading"><span><span className="status-dot" />{view === "objects" ? "The path of your movement" : "Your movement, in 3D"}</span><span className="mono">{motion === "smooth" ? "SMOOTH" : `${grid.azStep}° GRID`}</span></div>
             {view === "objects" && score ? <Objects score={score} overlays={overlays} video={analysis ? videoEl : null} frame={fi} options={objects} /> :
-              (score && body) || stageCast.length ? <Stage pose={snappedPose} raw={rawPose} body={body} grid={grid} showRaw={showRaw} avatar={avatar} avatarUrl={avatarUrl} cast={stageCast} selected={selected} onSelect={setSelected} /> :
+              (score && body) || stageCast.length ? <Stage pose={snappedPose} raw={rawPose} body={body} grid={grid} motion={motion} showRaw={showRaw} avatar={avatar} avatarUrl={avatarUrl} cast={stageCast} selected={selected} onSelect={setSelected} /> :
               <div className="stage-empty"><Activity size={35} /><span>Your movement will appear here.</span></div>}
             {view !== "objects" && <div className="stage-legend"><span><i className="bg-limb-l" />Left side</span><span><i className="bg-limb-r" />Right side</span><span className="stage-help">Drag to rotate · Pinch or scroll to zoom</span></div>}
             {selected && view !== "objects" && <button className="selected-limb" onClick={() => setSelected(null)}>{selected} · selected <X size={15} /></button>}
           </section>
+          {settingsOpen && <aside className="settings-sidebar" aria-label="Studio settings">
+            <div className="sidebar-heading">
+              <div><span className="eyebrow">STUDIO SETTINGS</span><p>Every change lands on the stage as you make it.</p></div>
+              <button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Close settings"><X size={20} /></button>
+            </div>
+            <div className="sidebar-content">
+              <div className="dialog-tabs settings-tabs" aria-label="Settings section">
+              <button aria-pressed={tab === "dancer"} onClick={() => setSettingsTab("dancer")}><PersonStanding size={19} />Dancer</button>
+              <button aria-pressed={tab === "grid"} onClick={() => setSettingsTab("grid")}><Grid2X2 size={19} />Movement grid</button>
+              <button aria-pressed={tab === "cast"} onClick={() => setSettingsTab("cast")}><Users size={19} />Cast{cast.length ? ` (${cast.length})` : ""}</button>
+              {view === "objects" && <button aria-pressed={tab === "traces"} onClick={() => setSettingsTab("traces")}><ScanLine size={19} />Traces</button>}
+            </div>
+            {(tab === "dancer" || tab === "grid") && <Controls panel={tab} grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} motion={motion} onMotion={setMotion} />}
+            {tab === "cast" && <div className="settings-content"><div className="setting-heading"><Users size={23} /><div><h3>Build a group piece</h3><p>Add a copy of this dancer, then place it on the stage. Each cast member keeps its own movement.</p></div></div><CastPanel cast={cast} canAdd={!!score} onAdd={() => { addToCast(); setToast("Dancer added to your cast."); }} onDuplicate={duplicateCast} onRemove={removeCast} onUpdate={updateCast} /></div>}
+            {tab === "traces" && score && <div className="settings-content">
+              <Toggle icon={<Activity size={21} />} title="Movement trails" detail="Follow the hands, feet, and head through space." checked={objects.traces} onChange={(traces) => setObjects({ ...objects, traces })} />
+              <label className="setting-slider"><span><strong>Trail length</strong><output>{objects.trailSeconds.toFixed(1)} seconds</output></span><input type="range" min={0.2} max={6} step={0.1} value={objects.trailSeconds} onChange={(e) => setObjects({ ...objects, trailSeconds: +e.target.value })} /></label>
+              <Toggle icon={<Layers size={21} />} title="Body alignments" detail="Highlight parallel and aligned limbs." checked={objects.alignments} onChange={(alignments) => setObjects({ ...objects, alignments })} />
+              <Toggle icon={<ScanLine size={21} />} title="Movement density" detail="Reveal the areas where movement gathers." checked={objects.density} onChange={(density) => setObjects({ ...objects, density })} />
+              <Toggle icon={<Eye size={21} />} title="Original video" detail={analysis ? "Show the recording behind the traces." : "Available when you add a video."} checked={objects.video} disabled={!analysis} onChange={(video) => setObjects({ ...objects, video })} />
+              <div className="setting-heading"><ScanLine size={22} /><div><h3>The whole phrase, drawn</h3><p>Every trace from the clip in a single drawing.</p></div></div><div className="aspect-video card overflow-hidden"><Drawing score={score} overlays={overlays} /></div>
+            </div>}
+            </div>
+          </aside>}
         </main>
-        {score && <footer className="studio-timeline"><Timeline score={score} total={stageDuration} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} onStep={step} selected={selected} onSelect={setSelected} speed={speed} onSpeed={setSpeed} loop={loop} onLoop={() => setLoop((l) => !l)} /></footer>}
+        {score && <footer className="studio-timeline"><Timeline score={score} total={stageDuration} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} onStep={step} selected={selected} onSelect={setSelected} speed={speed} onSpeed={setSpeed} loop={loop} onLoop={() => setLoop((l) => !l)} tempo={tempo} bpm={bpm} onBpm={onBpm} /></footer>}
       </>}
 
       <Dialog open={modal === "new"} title={busy ? "Creating your score" : "Start a new score"} description={busy ? "Your video is being processed on this device." : "A video, a recording, or a saved score. Choose where to begin."} onClose={closeNew} locked={busy}>
@@ -462,25 +504,6 @@ export default function App() {
       </Dialog>
       <Dialog open={modal === "save"} title="Save your movement" description="Download a reusable copy of the current dancer’s score." onClose={() => setModal(null)}>
         {score && <SaveScore key={score.source.name} score={score} onSave={exportJson} />}
-      </Dialog>
-      <Dialog open={modal === "settings"} title="Studio settings" description="Changes apply immediately. Close this panel to see them on the stage." onClose={() => setModal(null)}>
-        <div className="dialog-tabs settings-tabs" aria-label="Settings section">
-          <button aria-pressed={settingsTab === "dancer"} onClick={() => setSettingsTab("dancer")}><PersonStanding size={19} />Dancer</button>
-          <button aria-pressed={settingsTab === "grid"} onClick={() => setSettingsTab("grid")}><Grid2X2 size={19} />Movement grid</button>
-          <button aria-pressed={settingsTab === "cast"} onClick={() => setSettingsTab("cast")}><Users size={19} />Cast{cast.length ? ` (${cast.length})` : ""}</button>
-          {view === "objects" && <button aria-pressed={settingsTab === "traces"} onClick={() => setSettingsTab("traces")}><ScanLine size={19} />Traces</button>}
-        </div>
-        {(settingsTab === "dancer" || settingsTab === "grid") && <Controls panel={settingsTab} grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} />}
-        {settingsTab === "cast" && <div className="settings-content"><div className="setting-heading"><Users size={23} /><div><h3>Build a group piece</h3><p>Add a copy of this dancer, then place it on the stage. Each cast member keeps its own movement.</p></div></div><CastPanel cast={cast} canAdd={!!score} onAdd={() => { addToCast(); setToast("Dancer added to your cast."); }} onDuplicate={duplicateCast} onRemove={removeCast} onUpdate={updateCast} /></div>}
-        {settingsTab === "traces" && score && <div className="settings-content">
-          <Toggle icon={<Activity size={21} />} title="Movement trails" detail="Follow the hands, feet, and head through space." checked={objects.traces} onChange={(traces) => setObjects({ ...objects, traces })} />
-          <label className="setting-slider"><span><strong>Trail length</strong><output>{objects.trailSeconds.toFixed(1)} seconds</output></span><input type="range" min={0.2} max={6} step={0.1} value={objects.trailSeconds} onChange={(e) => setObjects({ ...objects, trailSeconds: +e.target.value })} /></label>
-          <Toggle icon={<Layers size={21} />} title="Body alignments" detail="Highlight parallel and aligned limbs." checked={objects.alignments} onChange={(alignments) => setObjects({ ...objects, alignments })} />
-          <Toggle icon={<ScanLine size={21} />} title="Movement density" detail="Reveal the areas where movement gathers." checked={objects.density} onChange={(density) => setObjects({ ...objects, density })} />
-          <Toggle icon={<Eye size={21} />} title="Original video" detail={analysis ? "Show the recording behind the traces." : "Available when you add a video."} checked={objects.video} disabled={!analysis} onChange={(video) => setObjects({ ...objects, video })} />
-          <div className="setting-heading"><ScanLine size={22} /><div><h3>The whole phrase, drawn</h3><p>Every trace from the clip in a single drawing.</p></div></div><div className="aspect-video card overflow-hidden"><Drawing score={score} overlays={overlays} /></div>
-        </div>}
-        <div className="dialog-footer"><span><Check size={15} /> Changes applied</span><button className="btn primary" onClick={() => setModal(null)}>Done</button></div>
       </Dialog>
       <Dialog open={modal === "details"} title="Read the movement" description="Directions for the current frame. Select a limb to highlight it on the stage." onClose={() => setModal(null)} wide>
         {snappedPose && rawPose && <><div className="notation-scroll"><BoneTable snapped={snappedPose} raw={rawPose} selected={selected} onSelect={(id) => { setSelected(id); setModal(null); setView("score"); }} /></div><p className="dialog-note">Grid: snapped angles. Laban: direction and level. E-W: Eshkol–Wachman units. Raw: the tracked angles before snapping.</p></>}

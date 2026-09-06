@@ -14,7 +14,14 @@ let clock = 0;
 export function getLandmarker(): Promise<PoseLandmarker> {
   if (!landmarkerPromise) {
     landmarkerPromise = (async () => {
-      const vision = await FilesetResolver.forVisionTasks("/mediapipe/wasm");
+      let vision;
+      try {
+        vision = await FilesetResolver.forVisionTasks("/mediapipe/wasm");
+      } catch (e) {
+        // MediaPipe rejects with a DOM Event here, which stringifies to the
+        // useless "[object Event]"; surface the likely cause instead.
+        throw new Error("Couldn't load the tracking runtime from /mediapipe/wasm. Reload the page; if it persists the tracking assets are missing — run `npm install` (its postinstall restores them).", { cause: e });
+      }
       try {
         return await PoseLandmarker.createFromOptions(vision, {
           baseOptions: { modelAssetPath: "/models/pose_landmarker_full.task", delegate: "GPU" },
@@ -25,11 +32,16 @@ export function getLandmarker(): Promise<PoseLandmarker> {
           minTrackingConfidence: 0.5,
         });
       } catch {
+        // GPU delegate unavailable — fall back to CPU.
+      }
+      try {
         return await PoseLandmarker.createFromOptions(vision, {
           baseOptions: { modelAssetPath: "/models/pose_landmarker_full.task", delegate: "CPU" },
           runningMode: "VIDEO",
           numPoses: 1,
         });
+      } catch (e) {
+        throw new Error("Couldn't load the pose model from /models/pose_landmarker_full.task. Reload the page; if it persists the model file is missing — run `npm install` (its postinstall downloads it).", { cause: e });
       }
     })();
     landmarkerPromise.catch(() => (landmarkerPromise = null));

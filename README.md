@@ -27,10 +27,22 @@ the stage without supplying a video. Studies are synthetic poses, not captured
 performances. Playback supports 0.25×–2× speed, looping, frame stepping, and a
 keyboard-accessible playhead. The home screen offers a resume card for the last
 score. New score opens a dialog to upload, record, import, or choose an example.
+The Dancer tab chooses how the movement reads: **Smooth** drives the figure from
+the tracked motion (true to the video — best for watching and sharing), **Stepped**
+from the grid-snapped score (what the notation reads). It is display only: the
+score, the notation, and every export stay snapped either way. The translucent
+ghost shows whichever track is not on stage.
+**Beats** overlays the clip's pulse on the playhead and the notation roll —
+`lib/tempo.ts` derives it from the movement itself (no audio), and it is always
+overridable, including ÷2 / ×2 for the usual half-time confusion. Clips with no
+clear pulse say so rather than guessing.
 Videos and recordings are previewed before analysis begins; canceling analysis
-restores the previous score. Settings uses Dancer, Movement grid, and Cast tabs,
-with Simple / Balanced / Detailed grid presets and optional advanced tuning.
-Notation and Save use focused dialogs; on phones, dialogs become bottom sheets.
+restores the previous score. Settings opens a live sidebar beside the stage —
+Dancer, Movement grid, and Cast tabs, with Simple / Balanced / Detailed grid
+presets and optional advanced tuning — so every change is visible on the stage
+while playback keeps running; Escape or the toolbar button closes it, and below
+1100px it slides in as an overlay drawer. Notation and Save use focused dialogs;
+on phones, dialogs become bottom sheets.
 
 Video imports accept clips up to 120 seconds / 250 MB; 5–30 seconds remains ideal.
 Score imports validate the full pose sequence before opening it. Tracking gaps

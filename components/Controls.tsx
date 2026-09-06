@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Box, ChevronDown, Compass, Eye, Ghost, Grid2X2, Layers, PersonStanding, RotateCcw, ScanLine, SlidersHorizontal, Upload } from "lucide-react";
+import { Activity, Box, ChevronDown, Compass, Eye, Ghost, Grid2X2, Layers, PersonStanding, RotateCcw, ScanLine, SlidersHorizontal, Upload, Waves } from "lucide-react";
 import { AVATAR_PRESETS } from "@/lib/avatars";
 import { DEFAULT_GRID, type GridConfig } from "@/lib/grid";
 import { DEFAULT_SMOOTH, type LiftMode, type SmoothConfig } from "@/lib/score";
@@ -14,6 +14,7 @@ interface Props {
   onAvatarFile: (f: File) => void; onAvatarPreset: (url: string) => void;
   showOverlay: boolean; onShowOverlay: (b: boolean) => void;
   lift: LiftMode; onLift: (m: LiftMode) => void; canLift: boolean;
+  motion: "stepped" | "smooth"; onMotion: (m: "stepped" | "smooth") => void;
 }
 const PRESETS = [
   { name: "Simple", step: 45, icon: Box, detail: "Big gestures. Fewer changes." },
@@ -23,6 +24,11 @@ const PRESETS = [
 
 export default function Controls(p: Props) {
   if (p.panel === "dancer") return <div className="settings-content">
+    <div className="setting-heading"><Waves size={22} /><div><h3>How should the movement read?</h3><p>The same tracking, shown two ways. The score underneath is always the snapped one.</p></div></div>
+    <div className="choice-cards two">
+      <button aria-pressed={p.motion === "smooth"} onClick={() => p.onMotion("smooth")}><Waves size={27} /><strong>Smooth</strong><span>True to the video. Best for watching and sharing.</span></button>
+      <button aria-pressed={p.motion === "stepped"} onClick={() => p.onMotion("stepped")}><Grid2X2 size={27} /><strong>Stepped</strong><span>Snapped to the grid. This is what the notation reads.</span></button>
+    </div>
     <div className="setting-heading"><PersonStanding size={22} /><div><h3>How should your dancer look?</h3><p>Switch the appearance without changing the movement.</p></div></div>
     <div className="choice-cards two">
       <button aria-pressed={!p.avatar} onClick={() => p.onAvatar(false)}><Activity size={27} /><strong>Skeleton</strong><span>See every joint and limb clearly.</span></button>
@@ -30,7 +36,7 @@ export default function Controls(p: Props) {
     </div>
     {p.avatar && <div className="avatar-picker"><label className="form-field"><span>Choose a character</span><select value={p.avatarName ? "custom" : p.avatarUrl} onChange={(e) => p.onAvatarPreset(e.target.value)}>{AVATAR_PRESETS.map((a) => <option key={a.url} value={a.url}>{a.label}</option>)}{p.avatarName && <option value="custom">{p.avatarName}</option>}</select></label><label className="btn"><Upload size={17} /> Use your own avatar<input aria-label="Choose a VRM avatar" type="file" accept=".vrm" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) p.onAvatarFile(f); e.currentTarget.value = ""; }} /></label><p className="dialog-note">Have a character from VRoid? Open its .vrm file here.</p></div>}
     <div className="setting-heading"><Eye size={22} /><div><h3>Helpful overlays</h3><p>Choose what you see alongside the score.</p></div></div>
-    <Toggle icon={<Ghost size={20} />} title="Original movement" detail="Show a translucent figure before grid snapping." checked={p.showRaw} onChange={p.onShowRaw} />
+    <Toggle icon={<Ghost size={20} />} title={p.motion === "smooth" ? "Snapped movement" : "Original movement"} detail={p.motion === "smooth" ? "Show a translucent figure of the grid-snapped score." : "Show a translucent figure before grid snapping."} checked={p.showRaw} onChange={p.onShowRaw} />
     <Toggle icon={<ScanLine size={20} />} title="Video tracking points" detail={p.canLift ? "Show detected joints over your original video." : "Available when you add a video."} checked={p.showOverlay} onChange={p.onShowOverlay} disabled={!p.canLift} />
   </div>;
   return <div className="settings-content">

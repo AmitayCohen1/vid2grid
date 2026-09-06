@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Pause, Play, Repeat2 } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Music4, Pause, Play, Repeat2 } from "lucide-react";
 import type { Score } from "@/lib/score";
+import type { TempoEstimate } from "@/lib/tempo";
 import { BONES, type BoneId } from "@/lib/skeleton";
 
 interface Props {
@@ -21,6 +22,11 @@ interface Props {
   onSpeed: (speed: number) => void;
   loop: boolean;
   onLoop: () => void;
+  /** Motion-derived pulse, or null before a score exists. */
+  tempo: TempoEstimate | null;
+  /** The tempo actually in force — the estimate unless the user overrode it. */
+  bpm: number;
+  onBpm: (bpm: number) => void;
 }
 
 /** Colour for a grid cell: hue from azimuth, lightness from elevation. */
@@ -30,9 +36,15 @@ function cellColor(az: number, el: number): string {
 }
 
 const ROLL_LS_KEY = "vid2grid:roll-open";
+const BEATS_LS_KEY = "vid2grid:beats-on";
+const BPM_MIN = 30, BPM_MAX = 200;
+/** Beats per bar for the heavier bar line. */
+const BAR = 4;
+const clampBpm = (n: number) => Math.min(BPM_MAX, Math.max(BPM_MIN, Math.round(n * 10) / 10));
 
-export default function Timeline({ score, total, time, playing, onSeek, onTogglePlay, onStep, selected, onSelect, speed, onSpeed, loop, onLoop }: Props) {
+export default function Timeline({ score, total, time, playing, onSeek, onTogglePlay, onStep, selected, onSelect, speed, onSpeed, loop, onLoop, tempo, bpm, onBpm }: Props) {
   const rollRef = useRef<HTMLCanvasElement>(null);
+  const beatRef = useRef<HTMLCanvasElement>(null);
   const duration = score.source.duration;
   const stageTotal = Math.max(total, duration);
   const frac = duration / stageTotal; // the current score's share of the stage clock
@@ -40,6 +52,25 @@ export default function Timeline({ score, total, time, playing, onSeek, onToggle
   const [rollOpen, setRollOpen] = useState(() => {
     try { return localStorage.getItem(ROLL_LS_KEY) === "1"; } catch { return false; }
   });
+  const [beatsOn, setBeatsOn] = useState(() => {
+    try { return localStorage.getItem(BEATS_LS_KEY) === "1"; } catch { return false; }
+  });
+  const toggleBeats = () => {
+    setBeatsOn((o) => {
+      try { localStorage.setItem(BEATS_LS_KEY, o ? "0" : "1"); } catch { /* quota */ }
+      return !o;
+    });
+  };
+  /** Whether the clip actually has a pulse, as opposed to the 100 bpm default. */
+  const detected = !!tempo && tempo.confidence >= 0.25;
+  /** Beat times across the whole stage clock. offsetSec is the phase of the first beat. */
+  const beatTimes = useMemo(() => {
+    const period = 60 / bpm;
+    if (!(period > 0.05)) return [];
+    const out: number[] = [];
+    for (let t = tempo ? tempo.offsetSec % period : 0; t <= stageTotal; t += period) out.push(t);
+    return out;
+  }, [bpm, tempo, stageTotal]);
   const toggleRoll = () => {
     setRollOpen((o) => {
       try { localStorage.setItem(ROLL_LS_KEY, o ? "0" : "1"); } catch { /* quota */ }
@@ -81,12 +112,43 @@ export default function Timeline({ score, total, time, playing, onSeek, onToggle
     // low-confidence shading
     ctx.fillStyle = "rgba(0,0,0,.55)";
     for (let i = 0; i < n; i++) if (score.raw[i].conf < 0.4) ctx.fillRect(i * px, 0, px, h);
+    // the pulse, over the top of the cells
+    if (beatsOn) {
+      beatTimes.forEach((t, b) => {
+        ctx.fillStyle = b % BAR === 0 ? "rgba(255,255,255,.5)" : "rgba(255,255,255,.2)";
+        ctx.fillRect(Math.round((t / stageTotal) * w), 0, 1, h);
+      });
+    }
     };
     draw();
     const observer = new ResizeObserver(draw);
     observer.observe(cv);
     return () => observer.disconnect();
-  }, [score, rows, selected, rollOpen, total]);
+  }, [score, rows, selected, rollOpen, total, beatsOn, beatTimes, stageTotal]);
+
+  // The beat ruler: ticks across the stage clock, heavier every BAR beats.
+  useEffect(() => {
+    const cv = beatRef.current;
+    if (!cv || !beatsOn) return;
+    const draw = () => {
+      const w = cv.clientWidth, h = cv.clientHeight;
+      const dpr = window.devicePixelRatio || 1;
+      cv.width = w * dpr; cv.height = h * dpr;
+      const ctx = cv.getContext("2d")!;
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = getComputedStyle(cv).color;   // inherits the theme's ink
+      beatTimes.forEach((t, b) => {
+        const bar = b % BAR === 0;
+        ctx.globalAlpha = bar ? 0.75 : 0.28;
+        ctx.fillRect(Math.round((t / stageTotal) * w), bar ? 0 : h * 0.45, 1, bar ? h : h * 0.55);
+      });
+    };
+    draw();
+    const observer = new ResizeObserver(draw);
+    observer.observe(cv);
+    return () => observer.disconnect();
+  }, [beatsOn, beatTimes, stageTotal]);
 
   const seekFromEvent = (e: React.PointerEvent<HTMLElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -101,6 +163,7 @@ export default function Timeline({ score, total, time, playing, onSeek, onToggle
         <button className="btn primary play-button" onClick={onTogglePlay} title="Play / pause (Space)">{playing ? <Pause size={18} /> : <Play size={18} />}{playing ? "Pause" : "Play"}</button>
         <button className="btn step-button" onClick={() => onStep(1)} aria-label="Next frame" title="Next frame (→)"><ChevronRight size={20} /></button>
         <button className={`btn loop-button ${loop ? "text-brand" : ""}`} onClick={onLoop} aria-label="Loop playback" aria-pressed={loop} title="Loop playback"><Repeat2 size={18} /><span>Loop</span></button>
+        <button className={`btn loop-button ${beatsOn ? "text-brand" : ""}`} onClick={toggleBeats} aria-label="Show the beat" aria-pressed={beatsOn} title={tempo && tempo.confidence >= 0.25 ? `Show the beat (about ${Math.round(tempo.bpm)} BPM)` : "Show the beat — no clear pulse found, set it yourself"}><Music4 size={18} /><span>Beats</span></button>
         <select aria-label="Playback speed" className="speed-select mono" value={speed} onChange={(e) => onSpeed(Number(e.target.value))}>{[0.25, 0.5, 0.75, 1, 1.5, 2].map((s) => <option key={s} value={s}>{s}×</option>)}</select>
         <span className="transport-time mono text-muted-foreground ml-2">
           <span className="text-foreground">{time.toFixed(2)}</span> / {stageTotal.toFixed(2)} s <span className="transport-detail">· {score.keyframes.length} keyframes</span>
@@ -111,6 +174,19 @@ export default function Timeline({ score, total, time, playing, onSeek, onToggle
         </button>
       </div>
       <input className="playhead-range" type="range" aria-label="Playhead" aria-valuetext={`${time.toFixed(2)} seconds`} min={0} max={stageTotal} step={1 / score.source.fps} value={time} onChange={(e) => onSeek(Number(e.target.value))} />
+      {beatsOn && (
+      <div className="beat-strip">
+        <canvas ref={beatRef} aria-hidden="true" />
+        <div className="beat-controls mono">
+          <button onClick={() => onBpm(clampBpm(bpm / 2))} disabled={bpm / 2 < BPM_MIN} title="Half tempo">÷2</button>
+          <input type="number" aria-label="Beats per minute" min={BPM_MIN} max={BPM_MAX} step={0.5} value={Math.round(bpm * 10) / 10}
+            data-guess={detected ? undefined : ""} title={detected ? "Detected from the movement — edit to override" : "No pulse detected in this clip — set the tempo yourself"}
+            onChange={(e) => { const n = Number(e.target.value); if (Number.isFinite(n)) onBpm(clampBpm(n)); }} />
+          <span>{detected ? "BPM" : "BPM · set it"}</span>
+          <button onClick={() => onBpm(clampBpm(bpm * 2))} disabled={bpm * 2 > BPM_MAX} title="Double tempo">×2</button>
+        </div>
+      </div>
+      )}
       {rollOpen && (
       <div className="flex gap-2">
         <div className="w-10 shrink-0 flex flex-col text-[10px] leading-none text-muted-foreground mono">

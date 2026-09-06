@@ -419,6 +419,33 @@ html { scroll-behavior: smooth; }
 .studio-tools { display: flex; gap: 8px; }
 .flow-shell .focused-workspace { display: grid; grid-template-columns: minmax(0, 1fr); overflow: hidden; min-height: 300px; }
 .flow-shell .focused-workspace.compare-workspace { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+
+/* Live settings sidebar — a column of the workspace, so the stage keeps rendering
+   while a setting is dragged. Below 1100px it becomes an overlay drawer. */
+.flow-shell .focused-workspace.with-settings { grid-template-columns: minmax(0, 1fr) var(--settings-w, 380px); }
+.flow-shell .focused-workspace.compare-workspace.with-settings { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--settings-w, 380px); }
+.settings-sidebar { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--card); animation: sidebar-in .18s ease-out; }
+.sidebar-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 14px 18px 13px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.sidebar-heading p { margin-top: 7px; font-size: 12px; line-height: 1.6; color: var(--muted-foreground); }
+.sidebar-heading .icon-button { margin: -6px -8px 0 0; }
+.sidebar-content { flex: 1; min-height: 0; padding: 18px; overflow-y: auto; overscroll-behavior: contain; }
+.settings-sidebar .dialog-tabs { margin-bottom: 20px; }
+.settings-sidebar .dialog-tabs button { min-height: 62px; gap: 6px; font-size: 11px; line-height: 1.3; }
+.settings-sidebar .settings-content { gap: 18px; }
+.settings-sidebar .choice-cards button { padding: 14px 11px; gap: 8px; }
+.settings-sidebar .choice-cards span { font-size: 11px; }
+.studio-tools .btn[aria-expanded="true"] { background: var(--n-brand-soft); border-color: var(--n-brand); color: var(--n-brand); }
+@keyframes sidebar-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@media (min-width: 1500px) { .flow-shell .focused-workspace { --settings-w: 420px; } }
+@media (max-width: 1100px) {
+  .flow-shell .focused-workspace.with-settings { grid-template-columns: minmax(0, 1fr); }
+  .flow-shell .focused-workspace.compare-workspace.with-settings { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .settings-sidebar { position: fixed; z-index: 40; top: 0; right: 0; bottom: 0; width: min(400px, 100vw); border-left: 1px solid var(--border); box-shadow: -18px 0 60px #0007; }
+}
+@media (max-width: 700px) {
+  .settings-sidebar .choice-cards.three { grid-template-columns: 1fr; }
+  .settings-sidebar .choice-cards button { flex-direction: row; align-items: center; flex-wrap: wrap; }
+}
 .flow-shell .focused-workspace .source-hidden { display: none; }
 .flow-shell .stage-panel { position: relative; min-width: 0; min-height: 300px; height: 100%; order: 0; }
 .flow-shell .source-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
@@ -438,6 +465,18 @@ html { scroll-behavior: smooth; }
 .flow-shell .transport-time { font-size: 12px; margin-left: 12px; }
 .flow-shell .timeline-toggle { margin-left: auto; }
 .playhead-range { width: 100%; height: 32px; cursor: pointer; margin: 0; }
+
+/* Beat ruler: full-width so its ticks line up with the playhead above it.
+   The tempo controls float over its right end rather than insetting it. */
+.beat-strip { position: relative; height: 22px; margin-top: -2px; color: var(--foreground); }
+.beat-strip canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.beat-controls { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 5px; padding-left: 10px; font-size: 11px; color: var(--muted-foreground); background: linear-gradient(90deg, transparent, var(--card) 14px); }
+.beat-controls button { min-width: 24px; height: 22px; border: 1px solid var(--border); border-radius: 6px; font-size: 11px; color: var(--muted-foreground); }
+.beat-controls button:hover:not(:disabled) { color: var(--foreground); border-color: var(--muted-foreground); }
+.beat-controls button:disabled { opacity: .4; }
+.beat-controls input { width: 52px; height: 22px; padding: 0 5px; text-align: right; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--foreground); font-size: 11px; font-family: inherit; }
+.beat-controls input[data-guess] { color: var(--muted-foreground); border-style: dashed; }
+.beat-controls input::-webkit-outer-spin-button, .beat-controls input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0; color: var(--muted-foreground); }
 .icon-button:hover { background: var(--muted); color: var(--foreground); }
 .studio-dialog { position: fixed; inset: 0; margin: auto; width: min(620px, calc(100vw - 40px)); max-width: none; max-height: min(860px, calc(100dvh - 64px)); padding: 0; color: var(--foreground); background: var(--card); border: 1px solid var(--border); border-radius: 22px; box-shadow: 0 30px 100px #0008; overflow: hidden; }
