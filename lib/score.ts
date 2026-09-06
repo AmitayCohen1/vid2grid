@@ -117,6 +117,10 @@ export function snapPoses(raw: Pose[], g: GridConfig): { frames: Pose[]; keyfram
       const cand = snapCell(g, tr.cell, raw[i].bones[id]);
       if (tr.cell === null) {
         tr.cell = cand;
+      } else if (!sameCell(cand, tr.cell) && g.minDwell <= 1) {
+        tr.cell = cand;
+        tr.pending = null;
+        tr.leftSince = -1;
       } else if (!sameCell(cand, tr.cell)) {
         if (tr.leftSince < 0) tr.leftSince = i;
         if (tr.pending && sameCell(cand, tr.pending)) {
@@ -207,7 +211,35 @@ export function serializeScore(s: Score): string {
 }
 
 export function parseScore(text: string): Score {
-  const s = JSON.parse(text) as Score;
-  if (s.version !== 1 || !Array.isArray(s.frames) || !s.source) throw new Error("Not a vid2grid score");
+  let value: unknown;
+  try { value = JSON.parse(text); } catch { throw new Error("This file is not valid JSON. Choose an exported vid2grid score."); }
+  const fail = (): never => { throw new Error("This score is incomplete or invalid. Choose a complete vid2grid JSON export."); };
+  if (!value || typeof value !== "object") return fail();
+  const s = value as Score;
+  const finite = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n);
+  const positive = (n: unknown) => finite(n) && n > 0;
+  if (s.version !== 1 || !s.source || typeof s.source.name !== "string" ||
+      !positive(s.source.duration) || s.source.duration > 3600 ||
+      !positive(s.source.fps) || s.source.fps > 240 ||
+      !positive(s.source.width) || !positive(s.source.height)) return fail();
+  if (!s.grid || !s.smooth || !s.body?.lengths) return fail();
+  const divides = (step: number, angle: number) => positive(step) && step >= 1 && Math.abs(angle / step - Math.round(angle / step)) < 1e-6;
+  if (!divides(s.grid.azStep, 360) || !divides(s.grid.elStep, 90) || !divides(s.grid.facingStep, 360) ||
+      !finite(s.grid.hysteresis) || s.grid.hysteresis < 0 || s.grid.hysteresis > 0.5 ||
+      !Number.isInteger(s.grid.minDwell) || s.grid.minDwell < 1 || s.grid.minDwell > 120 ||
+      !positive(s.smooth.minCutoff) || !finite(s.smooth.beta) || s.smooth.beta < 0 ||
+      !positive(s.body.hipWidth) || !positive(s.body.shoulderWidth) ||
+      BONE_IDS.some((id) => !positive(s.body.lengths[id]))) return fail();
+  // Earlier v1 exports predate the explicit lifting-mode field.
+  s.lift ??= "anchored";
+  if (s.lift !== "anchored" && s.lift !== "world") return fail();
+  if (!Array.isArray(s.raw) || !Array.isArray(s.frames) || !s.frames.length || s.frames.length > 108000 || s.raw.length !== s.frames.length) return fail();
+  const validPose = (p: Pose, i: number, poses: Pose[]) => p &&
+    [p.t, p.x, p.z, p.hipY, p.facing, p.conf].every(finite) && p.t >= 0 &&
+    p.t <= s.source.duration + .001 && (i === 0 || p.t > poses[i - 1].t) &&
+    Math.abs(p.t - i / s.source.fps) <= .002 && p.conf >= 0 && p.conf <= 1 && p.bones &&
+    BONE_IDS.every((id) => Array.isArray(p.bones[id]) && p.bones[id].length === 2 && p.bones[id].every(finite) && Math.abs(p.bones[id][1]) <= 90);
+  if (!s.raw.every(validPose) || !s.frames.every(validPose) || !Array.isArray(s.keyframes) ||
+      s.keyframes.some((k, i) => !Number.isInteger(k) || k < 0 || k >= s.frames.length || (i > 0 && k <= s.keyframes[i - 1]))) return fail();
   return s;
 }

@@ -27,6 +27,7 @@ export default function BoneTable({ snapped, raw, selected, onSelect }: Props) {
         return (
           <button
             key={b.id}
+            aria-pressed={sel}
             onClick={() => onSelect(sel ? null : b.id)}
             className={`w-full grid grid-cols-[1.4fr_1fr_1.3fr_1fr_1fr] gap-x-2 px-3 py-[3px] text-left border-b border-border/50 transition-colors hover:bg-accent ${sel ? "bg-accent text-brand" : ""} ${b.core ? "" : "text-muted-foreground"}`}
           >

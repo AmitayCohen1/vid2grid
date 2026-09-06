@@ -49,16 +49,23 @@ export interface TrackOptions {
   onProgress?: (done: number, total: number, frame: TrackedFrame) => void;
 }
 
-function seek(video: HTMLVideoElement, t: number): Promise<void> {
+function seek(video: HTMLVideoElement, t: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(new DOMException("Cancelled", "AbortError")); return; }
+    if (Math.abs(video.currentTime - t) < 1e-5 && video.readyState >= 2) { resolve(); return; }
     const onSeeked = () => { cleanup(); resolve(); };
     const onError = () => { cleanup(); reject(new Error("video seek failed")); };
+    const onAbort = () => { cleanup(); reject(new DOMException("Cancelled", "AbortError")); };
+    const timeout = setTimeout(() => { cleanup(); reject(new Error("The video stopped responding. Try a shorter MP4 clip.")); }, 10000);
     const cleanup = () => {
+      clearTimeout(timeout);
       video.removeEventListener("seeked", onSeeked);
       video.removeEventListener("error", onError);
+      signal?.removeEventListener("abort", onAbort);
     };
     video.addEventListener("seeked", onSeeked, { once: true });
     video.addEventListener("error", onError, { once: true });
+    signal?.addEventListener("abort", onAbort, { once: true });
     video.currentTime = t;
   });
 }
@@ -74,7 +81,7 @@ export async function trackVideo(video: HTMLVideoElement, opts: TrackOptions): P
   for (let i = 0; i < total; i++) {
     if (opts.signal?.aborted) throw new DOMException("aborted", "AbortError");
     const t = Math.min(duration - 1e-3, i / opts.fps);
-    await seek(video, t);
+    await seek(video, t, opts.signal);
     if (opts.signal?.aborted) throw new DOMException("aborted", "AbortError");
     const ts = Math.max(base + Math.round(t * 1000), clock + 1);
     clock = ts;
@@ -96,7 +103,8 @@ export async function trackVideo(video: HTMLVideoElement, opts: TrackOptions): P
 /** Fill gaps where nobody was detected by holding the last good pose. */
 export function fillGaps(frames: TrackedFrame[], fps: number): Extraction[] {
   const out: Extraction[] = [];
-  let last: Extraction | null = null;
+  // Backfill the leading gap so every source frame keeps its original index.
+  let last: Extraction | null = frames.find((f) => f.extraction)?.extraction ?? null;
   for (let i = 0; i < frames.length; i++) {
     const e = frames[i].extraction;
     if (e) last = e;

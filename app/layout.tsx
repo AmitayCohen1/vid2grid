@@ -11,14 +11,14 @@ const SITE = "https://vid2grid.vercel.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
-  title: { default: "Video — Movement Languages", template: "%s — Movement Languages" },
+  title: { default: "vid2grid — Movement has a language", template: "%s — vid2grid" },
   description: "Film a phrase, read it back: a short video of one dancer becomes a grid-snapped, playable 3D score in Labanotation and Eshkol-Wachman terms.",
   applicationName: "Movement Languages",
   openGraph: {
     type: "website",
     siteName: "Movement Languages",
     url: SITE,
-    title: "Video — Movement Languages",
+    title: "vid2grid — Movement has a language",
     description: "A short video of one dancer becomes a grid-snapped, playable 3D score.",
   },
 };
@@ -27,7 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning className={`${geist.variable} ${geistMono.variable} ${newsreader.variable}`}>
       <body>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
           {children}
         </ThemeProvider>
       </body>

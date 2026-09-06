@@ -2,21 +2,25 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
-import { FileDown, FileUp, Film, Moon, Sun } from "lucide-react";
-import Source from "./Source";
-import { AVATAR_PRESETS, DEFAULT_AVATAR_URL } from "./Avatar";
+import dynamic from "next/dynamic";
+import { ArrowLeft, Box, Check, CircleHelp, Download, Film, Grid2X2, Moon, Plus, ScanLine, SlidersHorizontal, Sun, X, PersonStanding, Users, List, Activity, Eye, Layers } from "lucide-react";
+import Dialog from "./Dialog";
+import NewScore from "./NewScore";
+import SaveScore from "./SaveScore";
+import Welcome from "./Welcome";
+import { createDemo, type DemoPhrase } from "@/lib/demo";
+import { DEFAULT_AVATAR_URL } from "@/lib/avatars";
 import CastPanel, { type CastMember } from "./Cast";
 import type { StageCastMember } from "./Stage";
 import { idbGet, idbSet } from "@/lib/store";
 import VideoPane from "./VideoPane";
-import Stage from "./Stage";
 import Timeline from "./Timeline";
 import BoneTable from "./BoneTable";
-import Controls from "./Controls";
+import Controls, { Toggle } from "./Controls";
 import Objects, { DEFAULT_OBJECTS, Drawing, type ObjectsOptions } from "./Objects";
 import { DEFAULT_GRID, type GridConfig } from "@/lib/grid";
 import { DEFAULT_SMOOTH, type LiftMode, type Score, type SmoothConfig, type SourceInfo, frameAt, measureBody, parseScore, rawPoses, serializeScore, smoothPoses, snapPoses } from "@/lib/score";
-import { fillGaps, getLandmarker, trackVideo, type TrackedFrame } from "@/lib/tracker";
+import { fillGaps, trackVideo, type TrackedFrame } from "@/lib/tracker";
 import type { BoneId } from "@/lib/skeleton";
 import type { Body } from "@/lib/fk";
 import type { Pose } from "@/lib/pose";
@@ -25,6 +29,10 @@ type Phase = "idle" | "loading" | "tracking" | "ready" | "error";
 const SAMPLE_FPS = 30;
 const LS_KEY = "vid2grid:last-score";
 const CAST_KEY = "vid2grid:cast";
+const Stage = dynamic(() => import("./Stage"), {
+  ssr: false,
+  loading: () => <div role="status" className="grid h-full place-items-center text-xs text-white/60">Preparing the stage…</div>,
+});
 
 interface Analysis {
   tracked: TrackedFrame[];
@@ -38,7 +46,10 @@ export default function App() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState({ done: 0, total: 1 });
   const [error, setError] = useState<string | null>(null);
-  const [showSource, setShowSource] = useState(true);
+  const [modal, setModal] = useState<"new" | "settings" | "save" | "details" | "help" | "compare" | null>(null);
+  const [newMode, setNewMode] = useState<"upload" | "import">("upload");
+  const [settingsTab, setSettingsTab] = useState<"dancer" | "grid" | "cast" | "traces">("dancer");
+  const [toast, setToast] = useState<string | null>(null);
 
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
@@ -49,6 +60,10 @@ export default function App() {
 
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [loop, setLoop] = useState(true);
+  const [home, setHome] = useState(true);
+  const timeRef = useRef(0);
   const [selected, setSelected] = useState<BoneId | null>(null);
   const [showRaw, setShowRaw] = useState(true);
   const [avatar, setAvatar] = useState(false);
@@ -58,9 +73,11 @@ export default function App() {
   const [view, setView] = useState<"score" | "duet" | "objects">("score");
   const [objects, setObjects] = useState<ObjectsOptions>(DEFAULT_OBJECTS);
   const [cast, setCast] = useState<CastMember[]>([]);
+  const previousRef = useRef<{ analysis: Analysis | null; imported: Score | null; src: string | null; time: number; home: boolean } | null>(null);
 
-  // Warm the model while the user picks a clip.
-  useEffect(() => { getLandmarker().catch(() => {}); }, []);
+  const openModal = (name: NonNullable<typeof modal>) => { setPlaying(false); setError(null); setModal(name); };
+  const openNew = (mode: "upload" | "import" = "upload") => { setNewMode(mode); openModal("new"); };
+  useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 5000); return () => clearTimeout(id); }, [toast]);
 
   // Restore the last score (figure only; the video is not kept).
   useEffect(() => {
@@ -72,13 +89,14 @@ export default function App() {
     if (!sc) return;
     const restored = sc;
     // Deferred so the restore is a subscription-style update, not a synchronous cascade.
-    const id = setTimeout(() => { setImported(restored); setGrid(restored.grid); setSmooth(restored.smooth); setShowSource(false); setPhase("ready"); }, 0);
+    const id = setTimeout(() => { setImported(restored); setGrid(restored.grid); setSmooth(restored.smooth); setLift(restored.lift); setPhase("ready"); }, 0);
     return () => clearTimeout(id);
   }, []);
 
   /* ---------- derive the score ---------- */
 
   const extractions = useMemo(() => (analysis ? fillGaps(analysis.tracked, analysis.source.fps) : null), [analysis]);
+  const overlays = useMemo(() => analysis?.tracked.map((frame) => frame.image) ?? null, [analysis]);
   const raw: Pose[] | null = useMemo(
     () => (extractions ? smoothPoses(rawPoses(extractions, lift), smooth) : imported?.raw ?? null),
     [extractions, smooth, imported, lift],
@@ -93,7 +111,10 @@ export default function App() {
 
   useEffect(() => {
     if (!score) return;
-    try { localStorage.setItem(LS_KEY, serializeScore(score)); } catch { /* quota */ }
+    const id = setTimeout(() => {
+      try { localStorage.setItem(LS_KEY, serializeScore(score)); } catch { /* quota */ }
+    }, 500);
+    return () => clearTimeout(id);
   }, [score]);
 
   const fi = score ? frameAt(score, time) : 0;
@@ -111,7 +132,10 @@ export default function App() {
     idbGet<CastMember[]>(CAST_KEY).then((members) => {
       if (!alive) return;
       castLoaded.current = true;
-      const ok = (members ?? []).filter((m) => m.score?.version === 1 && Array.isArray(m.score.frames));
+      const ok = (Array.isArray(members) ? members : []).filter((m) => {
+        try { return m && typeof m.id === "string" && typeof m.name === "string" &&
+          [m.x, m.z, m.rot].every(Number.isFinite) && !!parseScore(JSON.stringify(m.score)); } catch { return false; }
+      });
       if (ok.length) setCast(ok);
     }).catch(() => { castLoaded.current = true; });
     return () => { alive = false; };
@@ -171,34 +195,55 @@ export default function App() {
   /* ---------- getting a clip in ---------- */
 
   const onFile = useCallback((file: File) => {
+    if (!file.type.startsWith("video/") && !/\.(mp4|mov|webm|m4v|ogv)$/i.test(file.name)) {
+      setError("Choose a video file, such as MP4, MOV, or WebM.");
+      return;
+    }
+    if (file.size > 250 * 1024 * 1024) {
+      setError("This video is too large. Choose a clip smaller than 250 MB.");
+      return;
+    }
     abortRef.current?.abort();
-    if (src) URL.revokeObjectURL(src);
+    if (!previousRef.current) previousRef.current = { analysis, imported, src, time: timeRef.current, home };
+    if (src && src !== previousRef.current.src) URL.revokeObjectURL(src);
     setAnalysis(null);
     setImported(null);
     setPlaying(false);
     setTime(0);
+    timeRef.current = 0;
+    setHome(false);
     setError(null);
     setPhase("loading");
-    setShowSource(false);
+    setModal("new");
     fileNameRef.current = file.name;
     setSrc(URL.createObjectURL(file));
-  }, [src]);
+  }, [src, analysis, imported, home]);
   const fileNameRef = useRef("clip");
 
   const onLoaded = useCallback(async (video: HTMLVideoElement) => {
     setVideoEl(video);
+    // Returning from the home screen remounts the video; keep the existing analysis.
+    if (analysis) { video.currentTime = Math.min(timeRef.current, video.duration); return; }
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
     try {
       // MediaRecorder webm files often report Infinity; force the duration to resolve.
       if (!isFinite(video.duration)) {
-        await new Promise<void>((resolve) => {
-          const done = () => { video.removeEventListener("durationchange", done); resolve(); };
+        await new Promise<void>((resolve, reject) => {
+          const cleanup = () => { clearTimeout(timeout); video.removeEventListener("durationchange", done); ac.signal.removeEventListener("abort", aborted); };
+          const done = () => { if (Number.isFinite(video.duration)) { cleanup(); resolve(); } };
+          const aborted = () => { cleanup(); reject(new DOMException("Cancelled", "AbortError")); };
+          const timeout = setTimeout(() => { cleanup(); reject(new Error("Could not read this clip’s duration. Try exporting it as MP4.")); }, 10000);
           video.addEventListener("durationchange", done);
+          ac.signal.addEventListener("abort", aborted, { once: true });
           video.currentTime = 1e101;
         });
         video.currentTime = 0;
+      }
+      if (ac.signal.aborted) return;
+      if (!Number.isFinite(video.duration) || video.duration < 1 || video.duration > 120) {
+        throw new Error("Choose a clip between 1 and 120 seconds. A 5–30 second phrase works best.");
       }
       video.pause();
       setPhase("tracking");
@@ -213,7 +258,6 @@ export default function App() {
       if (ac.signal.aborted) return;
       const detected = tracked.filter((f) => f.extraction).length;
       if (!detected) throw new Error("No person detected in this clip. Try a clip with your whole body in frame.");
-      if (typeof window !== "undefined") (window as unknown as { __vid2grid?: unknown }).__vid2grid = { tracked };
       setAnalysis({
         tracked,
         source: { name: fileNameRef.current, duration: video.duration, fps, width: video.videoWidth, height: video.videoHeight },
@@ -221,12 +265,15 @@ export default function App() {
       video.currentTime = 0;
       setTime(0);
       setPhase("ready");
+      if (previousRef.current?.src) URL.revokeObjectURL(previousRef.current.src);
+      previousRef.current = null;
+      setModal(null); setView("score"); setToast("Your score is ready. Press Play to explore the movement.");
     } catch (e) {
       if (ac.signal.aborted) return; // superseded by a newer clip
       setError(e instanceof Error ? e.message : String(e));
       setPhase("error");
     }
-  }, []);
+  }, [analysis]);
 
   /* ---------- playback ---------- */
 
@@ -235,10 +282,12 @@ export default function App() {
     const d = stageDuration || v?.duration || 0;
     const tt = Math.max(0, Math.min(d, t));
     setTime(tt);
+    timeRef.current = tt;
+    setPlaying(false);
     if (v && analysis) v.currentTime = Math.min(tt, v.duration);
   }, [stageDuration, analysis]);
 
-  const togglePlay = useCallback(() => setPlaying((p) => !p), []);
+  const togglePlay = useCallback(() => { if (score) setPlaying((p) => !p); }, [score]);
 
   // A clock drives the stage (the cast may outlast the current clip); the
   // video plays alongside while it has frames left, then pauses.
@@ -247,25 +296,29 @@ export default function App() {
     const v = videoRef.current;
     const hasVideo = !!(v && analysis);
     let raf = 0;
-    const t0 = performance.now();
-    const start = time >= stageDuration - 1e-3 ? 0 : time;
+    let t0 = performance.now();
+    let start = timeRef.current >= stageDuration - 1e-3 ? 0 : timeRef.current;
     if (hasVideo) {
       v.currentTime = Math.min(start, Math.max(0, v.duration - 0.01));
+      v.playbackRate = speed;
       if (start < v.duration - 0.02) v.play().catch(() => {});
     }
     let lastFrame = -1;
     const tick = () => {
-      const t = start + (performance.now() - t0) / 1000;
-      if (t >= stageDuration - 1e-3) { setTime(stageDuration); setPlaying(false); return; }
+      let t = start + (performance.now() - t0) / 1000 * speed;
+      if (t >= stageDuration - 1e-3) {
+        if (!loop) { timeRef.current = stageDuration; setTime(stageDuration); setPlaying(false); return; }
+        t = t % stageDuration; start = t; t0 = performance.now();
+        if (hasVideo) { v.currentTime = Math.min(t, v.duration); if (t < v.duration) v.play().catch(() => {}); }
+      }
       if (hasVideo && !v.paused && (v.ended || v.currentTime >= v.duration - 0.02)) v.pause();
       const f = Math.floor(t * SAMPLE_FPS);
-      if (f !== lastFrame) { lastFrame = f; setTime(t); }
+      if (f !== lastFrame) { lastFrame = f; timeRef.current = t; setTime(t); }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => { cancelAnimationFrame(raf); if (hasVideo) v.pause(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, score, analysis, stageDuration]);
+  }, [playing, score, analysis, stageDuration, speed, loop]);
 
   const step = useCallback((n: number) => {
     if (!score) return;
@@ -275,7 +328,7 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === "INPUT") return;
+      if (home || modal || (e.target as HTMLElement)?.closest("input, select, textarea, button, a, [contenteditable=true], [role=slider]")) return;
       if (e.code === "Space") { e.preventDefault(); togglePlay(); }
       else if (e.code === "ArrowLeft") { e.preventDefault(); step(e.shiftKey ? -10 : -1); }
       else if (e.code === "ArrowRight") { e.preventDefault(); step(e.shiftKey ? 10 : 1); }
@@ -283,27 +336,54 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [togglePlay, step]);
+  }, [togglePlay, step, home, modal]);
 
   /* ---------- export / import ---------- */
 
-  const exportJson = () => {
+  const exportJson = (name: string) => {
     if (!score) return;
     const blob = new Blob([serializeScore(score)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${score.source.name.replace(/\.[^.]+$/, "")}.vid2grid.json`;
+    a.download = `${name.replace(/[\\/:*?"<>|]/g, "-")}.vid2grid.json`;
     a.click();
-    URL.revokeObjectURL(a.href);
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    setModal(null); setToast("Score download started. Reopen it from New score → Open score.");
   };
   const importJson = (file: File) => {
+    if (file.size > 25 * 1024 * 1024) { setError("Choose a score smaller than 25 MB."); return; }
     file.text().then((t) => {
       const sc = parseScore(t);
+      abortRef.current?.abort();
+      if (previousRef.current?.src && previousRef.current.src !== src) URL.revokeObjectURL(previousRef.current.src);
+      previousRef.current = null;
       if (src) URL.revokeObjectURL(src);
-      setSrc(null); setAnalysis(null); setImported(sc); setGrid(sc.grid); setSmooth(sc.smooth);
-      setTime(0); setPlaying(false); setShowSource(false); setPhase("ready"); setError(null);
+      setSrc(null); setAnalysis(null); setImported(sc); setGrid(sc.grid); setSmooth(sc.smooth); setLift(sc.lift); setHome(false); timeRef.current = 0;
+      setTime(0); setPlaying(false); setPhase("ready"); setError(null); setModal(null); setToast("Score opened. Press Play to explore it.");
       setView((v) => (v === "duet" ? "score" : v)); // duet needs a video
-    }).catch((e) => { setError(String(e)); setPhase("error"); });
+    }).catch((e) => { setError(e instanceof Error ? e.message : "Could not import this score."); });
+  };
+
+  const loadDemo = (phrase: DemoPhrase, avatarPresetUrl?: string) => {
+    abortRef.current?.abort();
+    if (previousRef.current?.src && previousRef.current.src !== src) URL.revokeObjectURL(previousRef.current.src);
+    previousRef.current = null;
+    if (src) URL.revokeObjectURL(src);
+    const sc = createDemo(phrase);
+    setSrc(null); setAnalysis(null); setImported(sc); setGrid(sc.grid); setSmooth(sc.smooth); setLift(sc.lift);
+    if (avatarPresetUrl) onAvatarPreset(avatarPresetUrl);
+    timeRef.current = 0; setTime(0); setPlaying(false); setHome(false); setPhase("ready"); setError(null); setView("score"); setSelected(null); setModal(null);
+    setToast(avatarPresetUrl ? "Your character is on stage. Press Play to see them move." : "Example ready. Press Play, then try Settings to make it your own.");
+  };
+
+  const cancelTracking = () => {
+    abortRef.current?.abort();
+    if (src) URL.revokeObjectURL(src);
+    const previous = previousRef.current;
+    setSrc(previous?.src ?? null); setAnalysis(previous?.analysis ?? null); setImported(previous?.imported ?? null);
+    timeRef.current = previous?.time ?? 0; setTime(timeRef.current);
+    setPhase(previous?.analysis || previous?.imported ? "ready" : "idle");
+    setHome(previous?.home ?? true); setError(null); setModal(null); previousRef.current = null;
   };
 
   const busy = phase === "loading" || phase === "tracking";
@@ -329,154 +409,91 @@ export default function App() {
 
   /* ---------- layout ---------- */
 
+  const welcome = home || (!score && !busy && !src);
+  const closeNew = () => { if (previousRef.current) cancelTracking(); else { setModal(null); setError(null); } };
   return (
-    <div className="flex flex-col h-dvh">
-      <header className="flex items-center gap-3 px-4 h-13 border-b bg-card text-sm shrink-0">
-        <div className="flex items-baseline gap-2">
-          <span className="font-semibold tracking-tight text-[15px]">vid2grid</span>
-          <span className="font-serif italic text-muted-foreground text-[13px] hidden sm:inline">a movement language</span>
-        </div>
-        <div className="seg ml-3 text-xs">
-          <button aria-pressed={view === "score"} onClick={() => setView("score")}>score</button>
-          <button aria-pressed={view === "duet"} disabled={!src} className="disabled:opacity-40 disabled:cursor-not-allowed" title={src ? "video and 3D dancer side by side" : "needs a video clip"} onClick={() => setView("duet")}>duet</button>
-          <button aria-pressed={view === "objects"} onClick={() => setView("objects")}>objects</button>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <button className="btn" onClick={() => setShowSource((s) => !s)}><Film size={14} />{showSource ? "hide source" : "new clip"}</button>
-          <label className="btn cursor-pointer"><FileUp size={14} />import<input type="file" accept="application/json,.json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) importJson(f); e.currentTarget.value = ""; }} /></label>
-          <button className="btn" onClick={exportJson} disabled={!score}><FileDown size={14} />export</button>
-          <ThemeToggle />
+    <div className={`app-shell flow-shell ${welcome ? "is-welcome" : "is-studio"}`}>
+      <header className="app-header">
+        <button className="brand-lockup" disabled={busy} onClick={() => { setHome(true); setPlaying(false); }} aria-label="vid2grid home">
+          <span className="brand-mark"><Grid2X2 size={21} strokeWidth={1.7} /></span>
+          <span className="brand-name">vid<span>2</span>grid</span>
+          <span className="brand-descriptor">MOVEMENT<br />LANGUAGES</span>
+        </button>
+        <div className="header-actions">
+          <button className="btn" onClick={() => openModal("help")}><CircleHelp size={17} /><span className="help-label">Help</span></button>
+          {welcome ? <button className="btn" onClick={() => openNew("import")}>Open score</button> : <>
+            <button className="btn" onClick={() => openNew()} disabled={busy}><Plus size={17} />New score</button>
+            <button className="btn primary" onClick={() => openModal("save")} disabled={!score}><Download size={17} />Save</button>
+          </>}
         </div>
       </header>
 
-      {showSource && (
-        <div className="px-4 py-4 border-b bg-card/50 shrink-0">
-          <div className="max-w-3xl w-full mx-auto">
-            <Source onFile={onFile} busy={busy} />
-          </div>
+      {welcome && <>{score && <div className="resume-bar"><button className="resume-card" onClick={() => setHome(false)}><ArrowLeft size={20} /><span><strong>Continue your last score</strong><small>{score.source.name}</small></span><span>Open studio</span></button></div>}<Welcome onStart={() => openNew()} onDemo={loadDemo} /></>}
+      {!welcome && <>
+        <div className="project-bar"><div><button className="text-action" onClick={() => { setHome(true); setPlaying(false); }} disabled={busy}><ArrowLeft size={16} />Home</button><span className="project-name">{source?.name ?? "Creating your score"}</span></div><span className="project-type">{source?.name.endsWith("· example") ? "EXAMPLE STUDY" : "MOVEMENT SCORE"}</span></div>
+        <div className="studio-toolbar">
+          <nav className="seg view-tabs" aria-label="Choose a view">
+            <button aria-pressed={view === "score"} onClick={() => setView("score")}><Box size={18} />3D stage</button>
+            <button aria-pressed={view === "duet"} onClick={() => src ? setView("duet") : openModal("compare")}><Film size={18} />Compare</button>
+            <button aria-pressed={view === "objects"} onClick={() => setView("objects")}><ScanLine size={18} />Traces</button>
+          </nav>
+          <div className="studio-tools"><button className="btn" disabled={!score} onClick={() => openModal("details")}><List size={17} />Notation</button><button className="btn" disabled={!score} onClick={() => { setSettingsTab(view === "objects" ? "traces" : "dancer"); openModal("settings"); }}><SlidersHorizontal size={17} />Settings</button></div>
         </div>
-      )}
+        <main className={`studio-workspace focused-workspace ${view === "duet" ? "compare-workspace" : ""}`}>
+          <section className={`source-panel ${view === "duet" ? "" : "source-hidden"}`} aria-label="Original video">
+            <div className="panel-heading"><span><Film size={16} />Original video</span></div>
+            <div className="source-video"><VideoPane ref={videoRef} src={src} overlay={overlay} showOverlay={showOverlay} onLoaded={onLoaded} onError={() => { abortRef.current?.abort(); setError("This video could not be decoded. Try an MP4 or WebM clip."); setPhase("error"); setModal("new"); }} /></div>
+          </section>
+          <section className="stage-panel" aria-label={view === "objects" ? "Movement traces" : "3D movement stage"}>
+            <div className="stage-heading"><span><span className="status-dot" />{view === "objects" ? "The path of your movement" : "Your movement, in 3D"}</span><span className="mono">{grid.azStep}° GRID</span></div>
+            {view === "objects" && score ? <Objects score={score} overlays={overlays} video={analysis ? videoEl : null} frame={fi} options={objects} /> :
+              (score && body) || stageCast.length ? <Stage pose={snappedPose} raw={rawPose} body={body} grid={grid} showRaw={showRaw} avatar={avatar} avatarUrl={avatarUrl} cast={stageCast} selected={selected} onSelect={setSelected} /> :
+              <div className="stage-empty"><Activity size={35} /><span>Your movement will appear here.</span></div>}
+            {view !== "objects" && <div className="stage-legend"><span><i className="bg-limb-l" />Left side</span><span><i className="bg-limb-r" />Right side</span><span className="stage-help">Drag to rotate · Pinch or scroll to zoom</span></div>}
+            {selected && view !== "objects" && <button className="selected-limb" onClick={() => setSelected(null)}>{selected} · selected <X size={15} /></button>}
+          </section>
+        </main>
+        {score && <footer className="studio-timeline"><Timeline score={score} total={stageDuration} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} onStep={step} selected={selected} onSelect={setSelected} speed={speed} onSpeed={setSpeed} loop={loop} onLoop={() => setLoop((l) => !l)} /></footer>}
+      </>}
 
-      {phase === "error" && (
-        <div className="mx-4 mt-3 rounded-md border border-destructive/40 bg-destructive/10 text-destructive px-3 py-2 text-xs">{error}</div>
-      )}
-
-      <main className={`flex-1 min-h-0 grid grid-cols-1 grid-rows-[auto_1fr] lg:grid-rows-1 gap-px bg-border ${view === "duet" ? "lg:grid-cols-2" : "lg:grid-cols-[minmax(280px,1fr)_2fr_minmax(260px,0.9fr)]"}`}>
-        {/* left: video + readouts (in duet the video takes the whole column) */}
-        <section className="bg-background flex flex-col min-h-0">
-          <div className={`relative bg-black ${view === "duet" ? "flex-1 min-h-[320px] lg:min-h-0" : "aspect-video lg:aspect-auto lg:h-[38%] shrink-0"}`}>
-            <VideoPane ref={videoRef} src={src} overlay={overlay} showOverlay={showOverlay} onLoaded={onLoaded} />
-            {busy && (
-              <div className="absolute inset-0 grid place-items-center bg-black/60">
-                <div className="text-center text-xs text-white">
-                  <div className="mb-2 mono">{phase === "loading" ? "loading clip…" : `tracking ${progress.done}/${progress.total}`}</div>
-                  <div className="w-48 h-1.5 bg-white/20 rounded-full overflow-hidden">
-                    <div className="h-full bg-white transition-[width]" style={{ width: `${(progress.done / Math.max(1, progress.total)) * 100}%` }} />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className={`flex-1 min-h-0 overflow-auto ${view === "duet" ? "hidden" : ""}`}>
-            {snappedPose && rawPose ? (
-              <BoneTable snapped={snappedPose} raw={rawPose} selected={selected} onSelect={setSelected} />
-            ) : (
-              <Empty />
-            )}
-          </div>
-        </section>
-
-        {/* centre: the stage, or the annotated video */}
-        <section className="bg-background min-h-[320px] lg:min-h-0 relative">
-          {view === "objects" ? (
-            score ? (
-              <Objects score={score} overlays={analysis ? analysis.tracked.map((t) => t.image) : null} video={analysis ? videoEl : null} frame={fi} options={objects} />
-            ) : (
-              <div className="w-full h-full grid place-items-center font-serif italic text-muted-foreground">the stage</div>
-            )
-          ) : (score && body) || stageCast.length ? (
-            <Stage pose={snappedPose} raw={rawPose} body={body} grid={grid} showRaw={showRaw} avatar={avatar} avatarUrl={avatarUrl} cast={stageCast} selected={selected} onSelect={setSelected} />
-          ) : (
-            <div className="w-full h-full grid place-items-center font-serif italic text-muted-foreground">the stage</div>
-          )}
-          {selected && view === "score" && (
-            <div className="absolute top-2 left-2 text-[11px] text-[#f0b429] bg-black/60 rounded px-2 py-1 mono">
-              {selected} · yellow = snapped cell · white = raw
-            </div>
-          )}
-          {view === "duet" && score && (
-            <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5">
-              <div className="seg text-xs shadow-sm">
-                <button aria-pressed={!avatar} onClick={() => setAvatar(false)}>stick figure</button>
-                <button aria-pressed={avatar} onClick={() => setAvatar(true)}>character</button>
-              </div>
-              {avatar && (
-                <div className="flex flex-wrap justify-end gap-1 max-w-72">
-                  {AVATAR_PRESETS.map((p) => {
-                    const active = !avatarName && avatarUrl === p.url;
-                    return (
-                      <button
-                        key={p.url}
-                        onClick={() => onAvatarPreset(p.url)}
-                        className={`rounded-md border px-1.5 py-0.5 text-[11px] shadow-sm transition-colors ${active ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-accent"}`}
-                      >
-                        {p.label}
-                      </button>
-                    );
-                  })}
-                  {avatarName && (
-                    <span className="rounded-md border border-primary bg-primary text-primary-foreground px-1.5 py-0.5 text-[11px] truncate max-w-36">{avatarName}</span>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* right: controls (hidden in duet — the split takes the full width) */}
-        <section className={`bg-background flex-col min-h-0 overflow-auto ${view === "duet" ? "hidden" : "flex"}`}>
-          {view === "objects" && score ? (
-            <>
-              <div className="label px-4 pt-4">synchronous objects</div>
-              <div className="text-[13px] flex flex-col gap-2.5 p-4">
-                <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={objects.traces} onChange={(e) => setObjects({ ...objects, traces: e.target.checked })} /> traces of hands, feet, head</label>
-                <label className="grid grid-cols-[7.5rem_1fr] items-center gap-2"><span className="text-muted-foreground mono text-xs">trail {objects.trailSeconds.toFixed(1)} s</span><input type="range" min={0.2} max={6} step={0.1} value={objects.trailSeconds} onChange={(e) => setObjects({ ...objects, trailSeconds: +e.target.value })} /></label>
-                <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={objects.alignments} onChange={(e) => setObjects({ ...objects, alignments: e.target.checked })} /> alignments (∥ parallel · ═ collinear)</label>
-                <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={objects.density} onChange={(e) => setObjects({ ...objects, density: e.target.checked })} /> movement density</label>
-                <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={objects.video} onChange={(e) => setObjects({ ...objects, video: e.target.checked })} /> show video plate</label>
-              </div>
-              <div className="px-4 text-xs text-muted-foreground">generative drawing — the whole clip&apos;s traces, weight by speed</div>
-              <div className="m-4 mt-2 aspect-video card overflow-hidden"><Drawing score={score} overlays={analysis ? analysis.tracked.map((t) => t.image) : null} /></div>
-              <div className="px-4 pb-4 text-[11px] text-muted-foreground leading-relaxed">After Forsythe/OSU&apos;s <em className="font-serif">Synchronous Objects</em> (2009): the dance as data — traces, alignments, density, drawing.</div>
-            </>
-          ) : (<>
-          <Controls grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} />
-          <CastPanel cast={cast} canAdd={!!score} onAdd={addToCast} onDuplicate={duplicateCast} onRemove={removeCast} onUpdate={updateCast} />
-          {score && (
-            <div className="px-4 pb-4 text-[11px] text-muted-foreground leading-relaxed">
-              <div className="mono">{score.source.name}</div>
-              <div>{score.frames.length} frames @ {score.source.fps} fps · {score.keyframes.length} keyframes · body {(score.body.lengths.torso + score.body.lengths.rthigh + score.body.lengths.rshin).toFixed(2)} m torso+leg</div>
-              <div className="mt-2">Click a limb (or a row) to see its grid sphere. Space plays; ←/→ step frames.</div>
-            </div>
-          )}
-          </>)}
-        </section>
-      </main>
-
-      {score && (
-        <footer className="border-t bg-card px-4 py-2.5 shrink-0">
-          <Timeline score={score} total={stageDuration} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} onStep={step} selected={selected} onSelect={setSelected} />
-        </footer>
-      )}
-    </div>
-  );
-}
-
-function Empty() {
-  return (
-    <div className="p-5 text-[13px] text-muted-foreground leading-relaxed">
-      <p className="font-serif italic text-foreground text-[15px] mb-2">Film a phrase, read it back.</p>
-      <p>Upload or record a short clip of one dancer. The tracker runs in your browser (nothing is uploaded), spells every limb as a direction on the sphere, and snaps it to the grid. The snapped score is the truth; the raw track is the evidence.</p>
+      <Dialog open={modal === "new"} title={busy ? "Creating your score" : "Start a new score"} description={busy ? "Your video is being processed on this device." : "A video, a recording, or a saved score. Choose where to begin."} onClose={closeNew} locked={busy}>
+        {error && <p className="inline-error" role="alert">{error}</p>}
+        <NewScore initialMode={newMode} onFile={onFile} onImport={importJson} onDemo={loadDemo} busy={busy} progress={progress} loading={phase === "loading"} onCancel={cancelTracking} />
+      </Dialog>
+      <Dialog open={modal === "save"} title="Save your movement" description="Download a reusable copy of the current dancer’s score." onClose={() => setModal(null)}>
+        {score && <SaveScore key={score.source.name} score={score} onSave={exportJson} />}
+      </Dialog>
+      <Dialog open={modal === "settings"} title="Studio settings" description="Changes apply immediately. Close this panel to see them on the stage." onClose={() => setModal(null)}>
+        <div className="dialog-tabs settings-tabs" aria-label="Settings section">
+          <button aria-pressed={settingsTab === "dancer"} onClick={() => setSettingsTab("dancer")}><PersonStanding size={19} />Dancer</button>
+          <button aria-pressed={settingsTab === "grid"} onClick={() => setSettingsTab("grid")}><Grid2X2 size={19} />Movement grid</button>
+          <button aria-pressed={settingsTab === "cast"} onClick={() => setSettingsTab("cast")}><Users size={19} />Cast{cast.length ? ` (${cast.length})` : ""}</button>
+          {view === "objects" && <button aria-pressed={settingsTab === "traces"} onClick={() => setSettingsTab("traces")}><ScanLine size={19} />Traces</button>}
+        </div>
+        {(settingsTab === "dancer" || settingsTab === "grid") && <Controls panel={settingsTab} grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} />}
+        {settingsTab === "cast" && <div className="settings-content"><div className="setting-heading"><Users size={23} /><div><h3>Build a group piece</h3><p>Add a copy of this dancer, then place it on the stage. Each cast member keeps its own movement.</p></div></div><CastPanel cast={cast} canAdd={!!score} onAdd={() => { addToCast(); setToast("Dancer added to your cast."); }} onDuplicate={duplicateCast} onRemove={removeCast} onUpdate={updateCast} /></div>}
+        {settingsTab === "traces" && score && <div className="settings-content">
+          <Toggle icon={<Activity size={21} />} title="Movement trails" detail="Follow the hands, feet, and head through space." checked={objects.traces} onChange={(traces) => setObjects({ ...objects, traces })} />
+          <label className="setting-slider"><span><strong>Trail length</strong><output>{objects.trailSeconds.toFixed(1)} seconds</output></span><input type="range" min={0.2} max={6} step={0.1} value={objects.trailSeconds} onChange={(e) => setObjects({ ...objects, trailSeconds: +e.target.value })} /></label>
+          <Toggle icon={<Layers size={21} />} title="Body alignments" detail="Highlight parallel and aligned limbs." checked={objects.alignments} onChange={(alignments) => setObjects({ ...objects, alignments })} />
+          <Toggle icon={<ScanLine size={21} />} title="Movement density" detail="Reveal the areas where movement gathers." checked={objects.density} onChange={(density) => setObjects({ ...objects, density })} />
+          <Toggle icon={<Eye size={21} />} title="Original video" detail={analysis ? "Show the recording behind the traces." : "Available when you add a video."} checked={objects.video} disabled={!analysis} onChange={(video) => setObjects({ ...objects, video })} />
+          <div className="setting-heading"><ScanLine size={22} /><div><h3>The whole phrase, drawn</h3><p>Every trace from the clip in a single drawing.</p></div></div><div className="aspect-video card overflow-hidden"><Drawing score={score} overlays={overlays} /></div>
+        </div>}
+        <div className="dialog-footer"><span><Check size={15} /> Changes applied</span><button className="btn primary" onClick={() => setModal(null)}>Done</button></div>
+      </Dialog>
+      <Dialog open={modal === "details"} title="Read the movement" description="Directions for the current frame. Select a limb to highlight it on the stage." onClose={() => setModal(null)} wide>
+        {snappedPose && rawPose && <><div className="notation-scroll"><BoneTable snapped={snappedPose} raw={rawPose} selected={selected} onSelect={(id) => { setSelected(id); setModal(null); setView("score"); }} /></div><p className="dialog-note">Grid: snapped angles. Laban: direction and level. E-W: Eshkol–Wachman units. Raw: the tracked angles before snapping.</p></>}
+      </Dialog>
+      <Dialog open={modal === "compare"} title="Compare needs a video" description="This score contains movement data, but no original recording." onClose={() => setModal(null)}>
+        <div className="empty-dialog"><Film size={35} /><p>Create a score from your own video to watch the recording and 3D dancer together.</p><button className="btn primary" onClick={() => openNew()}>Choose a video</button><button className="btn" onClick={() => setModal(null)}>Back to the stage</button></div>
+      </Dialog>
+      <Dialog open={modal === "help"} title="A quick tour" description="From a video to a movement you can explore." onClose={() => setModal(null)}>
+        <div className="help-steps"><div><Film size={23} /><span><strong>1. Create a score</strong><p>Choose or record a short video. Preview it, then tap Create movement score. Or open an example to try things out.</p></span></div><div><Box size={23} /><span><strong>2. Explore the phrase</strong><p>Press Play. Drag the dancer to rotate the view. Compare shows your source video; Traces reveals movement paths.</p></span></div><div><SlidersHorizontal size={23} /><span><strong>3. Make it yours</strong><p>Settings changes the dancer, movement detail, and cast. Notation explains the selected frame. Save downloads the current dancer’s score.</p></span></div></div>
+        <div className="help-shortcuts"><span><kbd>Space</kbd> Play / pause</span><span><kbd>←</kbd><kbd>→</kbd> Step frames</span></div>
+        <div className="dialog-footer"><span>Appearance</span><ThemeToggle /></div><button className="btn primary dialog-primary" onClick={() => setModal(null)}>Got it</button>
+      </Dialog>
+      {toast && <div className="studio-toast" role="status"><Check size={18} /><span>{toast}</span><button className="icon-button" aria-label="Dismiss notification" onClick={() => setToast(null)}><X size={16} /></button></div>}
     </div>
   );
 }

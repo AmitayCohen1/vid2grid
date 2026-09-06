@@ -19,7 +19,27 @@ and a generative drawing of the whole clip.
 npm install        # also copies the MediaPipe wasm + pose model into public/
 npm run dev        # http://localhost:3000
 npm run build
+npm test          # engine regression checks
 ```
+
+The opening studio includes three authored movement studies, so you can explore
+the stage without supplying a video. Studies are synthetic poses, not captured
+performances. Playback supports 0.25×–2× speed, looping, frame stepping, and a
+keyboard-accessible playhead. The home screen offers a resume card for the last
+score. New score opens a dialog to upload, record, import, or choose an example.
+Videos and recordings are previewed before analysis begins; canceling analysis
+restores the previous score. Settings uses Dancer, Movement grid, and Cast tabs,
+with Simple / Balanced / Detailed grid presets and optional advanced tuning.
+Notation and Save use focused dialogs; on phones, dialogs become bottom sheets.
+
+Video imports accept clips up to 120 seconds / 250 MB; 5–30 seconds remains ideal.
+Score imports validate the full pose sequence before opening it. Tracking gaps
+preserve the original video timestamps and appear as low-confidence frames.
+Smoothing and depth reconstruction are available for video analyses; imported
+scores retain their baked smoothing while the grid remains editable.
+
+If your environment blocks Turbopack's internal worker port, the supported
+alternative is `npm run build -- --webpack`.
 
 Nothing leaves the browser: no upload, no backend, no database. Scores can be
 exported/imported as JSON and the last one is kept in localStorage.

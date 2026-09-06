@@ -1,150 +1,63 @@
 "use client";
 
-import { PersonStanding } from "lucide-react";
-import { AVATAR_PRESETS } from "./Avatar";
-import type { GridConfig } from "@/lib/grid";
-import type { LiftMode, SmoothConfig } from "@/lib/score";
+import { Activity, Box, ChevronDown, Compass, Eye, Ghost, Grid2X2, Layers, PersonStanding, RotateCcw, ScanLine, SlidersHorizontal, Upload } from "lucide-react";
+import { AVATAR_PRESETS } from "@/lib/avatars";
+import { DEFAULT_GRID, type GridConfig } from "@/lib/grid";
+import { DEFAULT_SMOOTH, type LiftMode, type SmoothConfig } from "@/lib/score";
 
 interface Props {
-  grid: GridConfig;
-  smooth: SmoothConfig;
-  onGrid: (g: GridConfig) => void;
-  onSmooth: (s: SmoothConfig) => void;
-  showRaw: boolean;
-  onShowRaw: (b: boolean) => void;
-  avatar: boolean;
-  onAvatar: (b: boolean) => void;
-  avatarUrl: string;
-  avatarName: string | null;
-  onAvatarFile: (f: File) => void;
-  onAvatarPreset: (url: string) => void;
-  showOverlay: boolean;
-  onShowOverlay: (b: boolean) => void;
-  lift: LiftMode;
-  onLift: (m: LiftMode) => void;
-  canLift: boolean;
+  panel: "dancer" | "grid";
+  grid: GridConfig; smooth: SmoothConfig;
+  onGrid: (g: GridConfig) => void; onSmooth: (s: SmoothConfig) => void;
+  showRaw: boolean; onShowRaw: (b: boolean) => void;
+  avatar: boolean; onAvatar: (b: boolean) => void; avatarUrl: string; avatarName: string | null;
+  onAvatarFile: (f: File) => void; onAvatarPreset: (url: string) => void;
+  showOverlay: boolean; onShowOverlay: (b: boolean) => void;
+  lift: LiftMode; onLift: (m: LiftMode) => void; canLift: boolean;
 }
+const PRESETS = [
+  { name: "Simple", step: 45, icon: Box, detail: "Big gestures. Fewer changes." },
+  { name: "Balanced", step: 22.5, icon: Grid2X2, detail: "A clear view of most movement." },
+  { name: "Detailed", step: 11.25, icon: Layers, detail: "Smaller gestures. More changes." },
+];
 
-const AZ_STEPS = [11.25, 22.5, 45];
-const EL_STEPS = [11.25, 22.5, 45];
-
-/** The grid is a setting: change it and the whole score re-snaps instantly. */
-export default function Controls({ grid, smooth, onGrid, onSmooth, showRaw, onShowRaw, avatar, onAvatar, avatarUrl, avatarName, onAvatarFile, onAvatarPreset, showOverlay, onShowOverlay, lift, onLift, canLift }: Props) {
-  return (
-    <div className="text-[13px] flex flex-col gap-5 p-4">
-      <section className="flex flex-col gap-2.5">
-        <div className="label">dancer</div>
-        <Seg
-          value={avatar ? "character" : "lines"}
-          options={["lines", "character"]}
-          fmt={(v) => (v === "lines" ? "stick figure" : "character")}
-          onChange={(v) => onAvatar(v === "character")}
-        />
-        {avatar && (
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {AVATAR_PRESETS.map((p) => {
-                const active = !avatarName && avatarUrl === p.url;
-                return (
-                  <button
-                    key={p.url}
-                    onClick={() => onAvatarPreset(p.url)}
-                    className={`rounded-md border px-2 py-1 text-xs transition-colors ${active ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-accent"}`}
-                  >
-                    {p.label}
-                  </button>
-                );
-              })}
-              {avatarName && (
-                <span className="rounded-md border border-primary bg-primary text-primary-foreground px-2 py-1 text-xs truncate max-w-40">{avatarName}</span>
-              )}
-              <label className="btn cursor-pointer h-7 px-2 text-xs">
-                <PersonStanding size={13} /> load .vrm
-                <input
-                  type="file"
-                  accept=".vrm,model/vrm"
-                  className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) onAvatarFile(f); e.currentTarget.value = ""; }}
-                />
-              </label>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Any VRM avatar works: design a face, outfit and shoes in{" "}
-              <a className="underline underline-offset-2 hover:text-foreground" href="https://vroid.com/en/studio" target="_blank" rel="noreferrer">VRoid Studio</a>{" "}
-              (free) or pick one on{" "}
-              <a className="underline underline-offset-2 hover:text-foreground" href="https://hub.vroid.com/en" target="_blank" rel="noreferrer">VRoid Hub</a>,
-              then load the .vrm here. It never leaves your device.
-            </p>
-          </div>
-        )}
-        <div className="flex gap-4 pt-0.5">
-          <Check label="raw ghost" checked={showRaw} onChange={onShowRaw} />
-          <Check label="landmarks" checked={showOverlay} onChange={onShowOverlay} />
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-2.5">
-        <div className="label">the grid</div>
-        <Row label="3D from">
-          <div className={canLift ? "" : "opacity-40 pointer-events-none"}>
-            <Seg value={lift} options={["anchored", "world"] as LiftMode[]} fmt={(v) => (v === "anchored" ? "2D-anchored" : "MediaPipe 3D")} onChange={onLift} />
-          </div>
-        </Row>
-        <Row label="azimuth step">
-          <Seg value={grid.azStep} options={AZ_STEPS} fmt={(v) => `${v}°`} onChange={(v) => onGrid({ ...grid, azStep: v })} />
-        </Row>
-        <Row label="elevation step">
-          <Seg value={grid.elStep} options={EL_STEPS} fmt={(v) => `${v}°`} onChange={(v) => onGrid({ ...grid, elStep: v })} />
-        </Row>
-        <Row label="facing step">
-          <Seg value={grid.facingStep} options={[22.5, 45, 90]} fmt={(v) => `${v}°`} onChange={(v) => onGrid({ ...grid, facingStep: v })} />
-        </Row>
-        <Row label={`hysteresis ${grid.hysteresis.toFixed(2)}`}>
-          <input type="range" min={0} max={0.5} step={0.05} value={grid.hysteresis} onChange={(e) => onGrid({ ...grid, hysteresis: +e.target.value })} className="w-full" />
-        </Row>
-        <Row label={`min dwell ${grid.minDwell} f`}>
-          <input type="range" min={1} max={10} step={1} value={grid.minDwell} onChange={(e) => onGrid({ ...grid, minDwell: +e.target.value })} className="w-full" />
-        </Row>
-      </section>
-
-      <section className="flex flex-col gap-2.5">
-        <div className="label">smoothing</div>
-        <Row label={`cutoff ${smooth.minCutoff.toFixed(1)} Hz`}>
-          <input type="range" min={0.3} max={5} step={0.1} value={smooth.minCutoff} onChange={(e) => onSmooth({ ...smooth, minCutoff: +e.target.value })} className="w-full" />
-        </Row>
-        <Row label={`responsiveness ${smooth.beta.toFixed(2)}`}>
-          <input type="range" min={0} max={3} step={0.05} value={smooth.beta} onChange={(e) => onSmooth({ ...smooth, beta: +e.target.value })} className="w-full" />
-        </Row>
-      </section>
+export default function Controls(p: Props) {
+  if (p.panel === "dancer") return <div className="settings-content">
+    <div className="setting-heading"><PersonStanding size={22} /><div><h3>How should your dancer look?</h3><p>Switch the appearance without changing the movement.</p></div></div>
+    <div className="choice-cards two">
+      <button aria-pressed={!p.avatar} onClick={() => p.onAvatar(false)}><Activity size={27} /><strong>Skeleton</strong><span>See every joint and limb clearly.</span></button>
+      <button aria-pressed={p.avatar} onClick={() => p.onAvatar(true)}><PersonStanding size={27} /><strong>Character</strong><span>See the phrase on a 3D avatar.</span></button>
     </div>
-  );
+    {p.avatar && <div className="avatar-picker"><label className="form-field"><span>Choose a character</span><select value={p.avatarName ? "custom" : p.avatarUrl} onChange={(e) => p.onAvatarPreset(e.target.value)}>{AVATAR_PRESETS.map((a) => <option key={a.url} value={a.url}>{a.label}</option>)}{p.avatarName && <option value="custom">{p.avatarName}</option>}</select></label><label className="btn"><Upload size={17} /> Use your own avatar<input aria-label="Choose a VRM avatar" type="file" accept=".vrm" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) p.onAvatarFile(f); e.currentTarget.value = ""; }} /></label><p className="dialog-note">Have a character from VRoid? Open its .vrm file here.</p></div>}
+    <div className="setting-heading"><Eye size={22} /><div><h3>Helpful overlays</h3><p>Choose what you see alongside the score.</p></div></div>
+    <Toggle icon={<Ghost size={20} />} title="Original movement" detail="Show a translucent figure before grid snapping." checked={p.showRaw} onChange={p.onShowRaw} />
+    <Toggle icon={<ScanLine size={20} />} title="Video tracking points" detail={p.canLift ? "Show detected joints over your original video." : "Available when you add a video."} checked={p.showOverlay} onChange={p.onShowOverlay} disabled={!p.canLift} />
+  </div>;
+  return <div className="settings-content">
+    <div className="setting-heading"><Compass size={22} /><div><h3>How much movement detail?</h3><p>The grid turns continuous movement into clear directions. Your score updates as you adjust it.</p></div></div>
+    <div className="choice-cards three">{PRESETS.map(({ name, step, icon: Icon, detail }) => <button key={name} aria-pressed={p.grid.azStep === step && p.grid.elStep === step} onClick={() => p.onGrid({ ...p.grid, azStep: step, elStep: step })}><Icon size={25} /><strong>{name}</strong><span>{detail}</span><small>{step}° steps</small></button>)}</div>
+    <details className="advanced-settings"><summary><SlidersHorizontal size={18} /> Advanced tuning <ChevronDown size={17} /></summary><div className="settings-content">
+      <p className="dialog-note">Fine-tune direction, stability, and tracking. Balanced defaults work well for most clips.</p>
+      <Select label="Horizontal direction (azimuth)" value={p.grid.azStep} options={[11.25, 22.5, 45]} onChange={(azStep) => p.onGrid({ ...p.grid, azStep })} />
+      <Select label="Vertical direction (elevation)" value={p.grid.elStep} options={[11.25, 22.5, 45]} onChange={(elStep) => p.onGrid({ ...p.grid, elStep })} />
+      <Select label="Turning direction (facing)" value={p.grid.facingStep} options={[22.5, 45, 90]} onChange={(facingStep) => p.onGrid({ ...p.grid, facingStep })} />
+      <Slider label="Ignore small wobbles" detail="Higher values keep a direction steadier near a grid boundary." value={p.grid.hysteresis} display={p.grid.hysteresis.toFixed(2)} min={0} max={0.5} step={0.05} onChange={(hysteresis) => p.onGrid({ ...p.grid, hysteresis })} />
+      <Slider label="Hold each new direction" detail="How many frames a direction must last before it is accepted." value={p.grid.minDwell} display={p.grid.minDwell + " frames"} min={1} max={10} step={1} onChange={(minDwell) => p.onGrid({ ...p.grid, minDwell })} />
+      <fieldset disabled={!p.canLift} className="tracking-settings"><legend>Video tracking</legend>{!p.canLift && <p className="dialog-note">These settings are already baked into this score. Add a video to adjust them.</p>}
+        <label className="form-field"><span>Depth estimation</span><select value={p.lift} onChange={(e) => p.onLift(e.target.value as LiftMode)}><option value="anchored">Video-anchored (recommended)</option><option value="world">Tracker’s 3D estimate</option></select></label>
+        <Slider label="Resting smoothness" detail="Lower values reduce jitter when the dancer is still." value={p.smooth.minCutoff} display={p.smooth.minCutoff.toFixed(1) + " Hz"} min={0.3} max={5} step={0.1} onChange={(minCutoff) => p.onSmooth({ ...p.smooth, minCutoff })} />
+        <Slider label="Follow fast movement" detail="Higher values respond faster to quick gestures." value={p.smooth.beta} display={p.smooth.beta.toFixed(2)} min={0} max={3} step={0.05} onChange={(beta) => p.onSmooth({ ...p.smooth, beta })} />
+      </fieldset>
+    </div></details>
+    <button className="btn settings-reset" onClick={() => { p.onGrid(DEFAULT_GRID); if (p.canLift) { p.onSmooth(DEFAULT_SMOOTH); p.onLift("anchored"); } }}><RotateCcw size={16} /> Restore recommended settings</button>
+  </div>;
 }
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="grid grid-cols-[7.5rem_1fr] items-center gap-2">
-      <span className="text-muted-foreground mono text-xs">{label}</span>
-      {children}
-    </label>
-  );
+export function Toggle({ icon, title, detail, checked, onChange, disabled = false }: { icon: React.ReactNode; title: string; detail: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return <label className={`setting-toggle ${disabled ? "is-disabled" : ""}`}>{icon}<span><strong>{title}</strong><small>{detail}</small></span><input type="checkbox" role="switch" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} /></label>;
 }
-
-function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (b: boolean) => void }) {
-  return (
-    <label className="flex items-center gap-1.5 cursor-pointer select-none">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} /> {label}
-    </label>
-  );
+function Select({ label, value, options, onChange }: { label: string; value: number; options: number[]; onChange: (n: number) => void }) {
+  return <label className="form-field"><span>{label}</span><select value={value} onChange={(e) => onChange(Number(e.target.value))}>{options.map((n) => <option key={n} value={n}>{n}° steps</option>)}</select></label>;
 }
-
-function Seg<T extends number | string>({ value, options, fmt, onChange }: { value: T; options: T[]; fmt: (v: T) => string; onChange: (v: T) => void }) {
-  return (
-    <div className="seg self-start">
-      {options.map((o) => (
-        <button key={o} aria-pressed={o === value} onClick={() => onChange(o)} className="mono">
-          {fmt(o)}
-        </button>
-      ))}
-    </div>
-  );
+function Slider({ label, detail, value, display, min, max, step, onChange }: { label: string; detail: string; value: number; display: string; min: number; max: number; step: number; onChange: (n: number) => void }) {
+  return <label className="setting-slider"><span><strong>{label}</strong><output>{display}</output></span><small>{detail}</small><input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} /></label>;
 }

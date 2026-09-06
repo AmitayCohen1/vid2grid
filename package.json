@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "node --test scripts/test-core.mjs",
     "postinstall": "node scripts/setup-assets.mjs"
   },
   "dependencies": {

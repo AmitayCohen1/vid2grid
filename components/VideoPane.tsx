@@ -2,16 +2,18 @@
 
 import { forwardRef, useEffect, useRef } from "react";
 import { LM_EDGES } from "@/lib/skeleton";
+import { Film } from "lucide-react";
 
 interface Props {
   src: string | null;
   overlay: Float32Array | null;
   showOverlay: boolean;
   onLoaded?: (v: HTMLVideoElement) => void;
+  onError?: () => void;
 }
 
 /** The source video with the tracker's 2D landmarks drawn over it. */
-const VideoPane = forwardRef<HTMLVideoElement, Props>(function VideoPane({ src, overlay, showOverlay, onLoaded }, ref) {
+const VideoPane = forwardRef<HTMLVideoElement, Props>(function VideoPane({ src, overlay, showOverlay, onLoaded, onError }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -19,6 +21,7 @@ const VideoPane = forwardRef<HTMLVideoElement, Props>(function VideoPane({ src, 
     const cv = canvasRef.current;
     const box = boxRef.current;
     if (!cv || !box) return;
+    const draw = () => {
     const w = box.clientWidth, h = box.clientHeight;
     if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
     const ctx = cv.getContext("2d")!;
@@ -49,7 +52,12 @@ const VideoPane = forwardRef<HTMLVideoElement, Props>(function VideoPane({ src, 
       if (v < 0.3) continue;
       ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
     }
-  }, [overlay, showOverlay]);
+    };
+    draw();
+    const observer = new ResizeObserver(draw);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [overlay, showOverlay, src]);
 
   return (
     <div ref={boxRef} className="relative w-full h-full bg-black">
@@ -62,9 +70,10 @@ const VideoPane = forwardRef<HTMLVideoElement, Props>(function VideoPane({ src, 
           muted
           preload="auto"
           onLoadedMetadata={(e) => onLoaded?.(e.currentTarget)}
+          onError={onError}
         />
       ) : (
-        <div className="w-full h-full grid place-items-center font-serif italic text-sm text-white/40">no video</div>
+        <div className="video-placeholder"><Film size={23} strokeWidth={1.2} /><span>A score without a camera.</span><small>This study has no source video.<br />Explore its movement on the stage.</small></div>
       )}
       <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none" />
     </div>
