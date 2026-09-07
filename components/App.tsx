@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
-import { ArrowLeft, Box, Check, CircleHelp, Download, Film, Grid2X2, Moon, Plus, ScanLine, SlidersHorizontal, Sun, X, PersonStanding, Users, List, Activity, Eye, Layers } from "lucide-react";
+import { ArrowLeft, Box, Check, CircleHelp, Download, Film, Grid2X2, Moon, PanelRightClose, Plus, ScanLine, SlidersHorizontal, Sun, X, PersonStanding, Users, List, Activity, Eye, Layers } from "lucide-react";
 import Dialog from "./Dialog";
 import NewScore from "./NewScore";
 import SaveScore from "./SaveScore";
@@ -26,6 +26,13 @@ import { estimateTempo } from "@/lib/tempo";
 import type { BoneId } from "@/lib/skeleton";
 import type { Body } from "@/lib/fk";
 import type { Pose } from "@/lib/pose";
+
+const RAIL = [
+  { id: "dancer" as const, label: "Dancer", icon: <PersonStanding size={19} /> },
+  { id: "grid" as const, label: "Movement grid", icon: <Grid2X2 size={19} /> },
+  { id: "cast" as const, label: "Cast", icon: <Users size={19} /> },
+  { id: "traces" as const, label: "Traces", icon: <ScanLine size={19} /> },
+];
 
 type Phase = "idle" | "loading" | "tracking" | "ready" | "error";
 const SAMPLE_FPS = 30;
@@ -51,7 +58,7 @@ export default function App() {
   const [modal, setModal] = useState<"new" | "save" | "details" | "help" | "compare" | null>(null);
   const [newMode, setNewMode] = useState<"upload" | "import">("upload");
   const [settingsTab, setSettingsTab] = useState<"dancer" | "grid" | "cast" | "traces">("dancer");
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(true);
   const [motion, setMotion] = useState<"stepped" | "smooth">("stepped");
   const [toast, setToast] = useState<string | null>(null);
 
@@ -390,7 +397,7 @@ export default function App() {
     setSrc(null); setAnalysis(null); setImported(sc); setGrid(sc.grid); setSmooth(sc.smooth); setLift(sc.lift);
     if (avatarPresetUrl) onAvatarPreset(avatarPresetUrl);
     timeRef.current = 0; setTime(0); setPlaying(false); setHome(false); setPhase("ready"); setError(null); setView("score"); setSelected(null); setModal(null);
-    setToast(avatarPresetUrl ? "Your character is on stage. Press Play to see them move." : "Example ready. Press Play, then try Settings to make it your own.");
+    setToast(avatarPresetUrl ? "Your character is on stage. Press Play to see them move." : "Example ready. Press Play, then use the panel on the right to make it your own.");
   };
 
   const cancelTracking = () => {
@@ -437,43 +444,44 @@ export default function App() {
           <span className="brand-name">vid<span>2</span>grid</span>
           <span className="brand-descriptor">MOVEMENT<br />LANGUAGES</span>
         </button>
+        {!welcome && <>
+          <span className="project-chip" title={source?.name ?? undefined}>{source?.name ?? "Creating your score"}</span>
+          <nav className="seg view-tabs" aria-label="Choose a view">
+            <button aria-pressed={view === "score"} onClick={() => setView("score")}><Box size={18} />3D stage</button>
+            <button aria-pressed={view === "duet"} onClick={() => src ? setView("duet") : openModal("compare")}><Film size={18} />Compare</button>
+            <button aria-pressed={view === "objects"} onClick={() => setView("objects")}><ScanLine size={18} />Traces</button>
+          </nav>
+        </>}
         <div className="header-actions">
+          {!welcome && <button className="btn" disabled={!score} onClick={() => openModal("details")}><List size={17} /><span className="tool-label">Notation</span></button>}
           <button className="btn" onClick={() => openModal("help")}><CircleHelp size={17} /><span className="help-label">Help</span></button>
           {welcome ? <button className="btn" onClick={() => openNew("import")}>Open score</button> : <>
-            <button className="btn" onClick={() => openNew()} disabled={busy}><Plus size={17} />New score</button>
-            <button className="btn primary" onClick={() => openModal("save")} disabled={!score}><Download size={17} />Save</button>
+            <button className="btn" onClick={() => openNew()} disabled={busy}><Plus size={17} /><span className="tool-label">New score</span></button>
+            <button className="btn primary" onClick={() => openModal("save")} disabled={!score}><Download size={17} /><span className="tool-label">Save</span></button>
           </>}
         </div>
       </header>
 
       {welcome && <>{score && <div className="resume-bar"><button className="resume-card" onClick={() => setHome(false)}><ArrowLeft size={20} /><span><strong>Continue your last score</strong><small>{score.source.name}</small></span><span>Open studio</span></button></div>}<Welcome onStart={() => openNew()} onDemo={loadDemo} /></>}
       {!welcome && <>
-        <div className="project-bar"><div><button className="text-action" onClick={() => { setHome(true); setPlaying(false); }} disabled={busy}><ArrowLeft size={16} />Home</button><span className="project-name">{source?.name ?? "Creating your score"}</span></div><span className="project-type">{source?.name.endsWith("· example") ? "EXAMPLE STUDY" : "MOVEMENT SCORE"}</span></div>
-        <div className="studio-toolbar">
-          <nav className="seg view-tabs" aria-label="Choose a view">
-            <button aria-pressed={view === "score"} onClick={() => setView("score")}><Box size={18} />3D stage</button>
-            <button aria-pressed={view === "duet"} onClick={() => src ? setView("duet") : openModal("compare")}><Film size={18} />Compare</button>
-            <button aria-pressed={view === "objects"} onClick={() => setView("objects")}><ScanLine size={18} />Traces</button>
-          </nav>
-          <div className="studio-tools"><button className="btn" disabled={!score} onClick={() => openModal("details")}><List size={17} />Notation</button><button className="btn" aria-expanded={settingsOpen} disabled={!score} onClick={() => { if (!settingsOpen && view === "objects") setSettingsTab("traces"); setSettingsOpen((o) => !o); }}><SlidersHorizontal size={17} />Settings</button></div>
-        </div>
-        <main className={`studio-workspace focused-workspace ${view === "duet" ? "compare-workspace" : ""} ${settingsOpen ? "with-settings" : ""}`}>
+        <main className={`studio-workspace focused-workspace ${view === "duet" ? "compare-workspace" : ""} ${settingsOpen ? "" : "rail-settings"}`}>
           <section className={`source-panel ${view === "duet" ? "" : "source-hidden"}`} aria-label="Original video">
             <div className="panel-heading"><span><Film size={16} />Original video</span></div>
             <div className="source-video"><VideoPane ref={videoRef} src={src} overlay={overlay} showOverlay={showOverlay} onLoaded={onLoaded} onError={() => { abortRef.current?.abort(); setError("This video could not be decoded. Try an MP4 or WebM clip."); setPhase("error"); setModal("new"); }} /></div>
           </section>
           <section className="stage-panel" aria-label={view === "objects" ? "Movement traces" : "3D movement stage"}>
-            <div className="stage-heading"><span><span className="status-dot" />{view === "objects" ? "The path of your movement" : "Your movement, in 3D"}</span><span className="mono">{motion === "smooth" ? "SMOOTH" : `${grid.azStep}° GRID`}</span></div>
+            <div className="stage-heading"><span className="mono">{motion === "smooth" ? "SMOOTH" : `${grid.azStep}° GRID`}</span></div>
             {view === "objects" && score ? <Objects score={score} overlays={overlays} video={analysis ? videoEl : null} frame={fi} options={objects} /> :
               (score && body) || stageCast.length ? <Stage pose={snappedPose} raw={rawPose} body={body} grid={grid} motion={motion} showRaw={showRaw} avatar={avatar} avatarUrl={avatarUrl} cast={stageCast} selected={selected} onSelect={setSelected} /> :
               <div className="stage-empty"><Activity size={35} /><span>Your movement will appear here.</span></div>}
             {view !== "objects" && <div className="stage-legend"><span><i className="bg-limb-l" />Left side</span><span><i className="bg-limb-r" />Right side</span><span className="stage-help">Drag to rotate · Pinch or scroll to zoom</span></div>}
             {selected && view !== "objects" && <button className="selected-limb" onClick={() => setSelected(null)}>{selected} · selected <X size={15} /></button>}
           </section>
-          {settingsOpen && <aside className="settings-sidebar" aria-label="Studio settings">
+          <aside className={`settings-sidebar ${settingsOpen ? "" : "is-rail"}`} aria-label="Studio settings">
+            {settingsOpen ? <>
             <div className="sidebar-heading">
-              <div><span className="eyebrow">STUDIO SETTINGS</span><p>Every change lands on the stage as you make it.</p></div>
-              <button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Close settings"><X size={20} /></button>
+              <span className="eyebrow">SETTINGS</span>
+              <button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Collapse settings" title="Collapse settings"><PanelRightClose size={19} /></button>
             </div>
             <div className="sidebar-content">
               <div className="dialog-tabs settings-tabs" aria-label="Settings section">
@@ -493,7 +501,15 @@ export default function App() {
               <div className="setting-heading"><ScanLine size={22} /><div><h3>The whole phrase, drawn</h3><p>Every trace from the clip in a single drawing.</p></div></div><div className="aspect-video card overflow-hidden"><Drawing score={score} overlays={overlays} /></div>
             </div>}
             </div>
-          </aside>}
+            </> : (
+            <div className="sidebar-rail">
+              {RAIL.filter((r) => r.id !== "traces" || view === "objects").map((r) => (
+                <button key={r.id} title={r.label} aria-label={r.label}
+                  onClick={() => { setSettingsTab(r.id); setSettingsOpen(true); }}>{r.icon}</button>
+              ))}
+            </div>
+            )}
+          </aside>
         </main>
         {score && <footer className="studio-timeline"><Timeline score={score} total={stageDuration} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} onStep={step} selected={selected} onSelect={setSelected} speed={speed} onSpeed={setSpeed} loop={loop} onLoop={() => setLoop((l) => !l)} tempo={tempo} bpm={bpm} onBpm={onBpm} /></footer>}
       </>}
@@ -512,7 +528,7 @@ export default function App() {
         <div className="empty-dialog"><Film size={35} /><p>Create a score from your own video to watch the recording and 3D dancer together.</p><button className="btn primary" onClick={() => openNew()}>Choose a video</button><button className="btn" onClick={() => setModal(null)}>Back to the stage</button></div>
       </Dialog>
       <Dialog open={modal === "help"} title="A quick tour" description="From a video to a movement you can explore." onClose={() => setModal(null)}>
-        <div className="help-steps"><div><Film size={23} /><span><strong>1. Create a score</strong><p>Choose or record a short video. Preview it, then tap Create movement score. Or open an example to try things out.</p></span></div><div><Box size={23} /><span><strong>2. Explore the phrase</strong><p>Press Play. Drag the dancer to rotate the view. Compare shows your source video; Traces reveals movement paths.</p></span></div><div><SlidersHorizontal size={23} /><span><strong>3. Make it yours</strong><p>Settings changes the dancer, movement detail, and cast. Notation explains the selected frame. Save downloads the current dancer’s score.</p></span></div></div>
+        <div className="help-steps"><div><Film size={23} /><span><strong>1. Create a score</strong><p>Choose or record a short video. Preview it, then tap Create movement score. Or open an example to try things out.</p></span></div><div><Box size={23} /><span><strong>2. Explore the phrase</strong><p>Press Play. Drag the dancer to rotate the view. Compare shows your source video; Traces reveals movement paths.</p></span></div><div><SlidersHorizontal size={23} /><span><strong>3. Make it yours</strong><p>The panel on the right changes the dancer, movement detail, and cast as you watch. Notation explains the selected frame. Save downloads the current dancer’s score.</p></span></div></div>
         <div className="help-shortcuts"><span><kbd>Space</kbd> Play / pause</span><span><kbd>←</kbd><kbd>→</kbd> Step frames</span></div>
         <div className="dialog-footer"><span>Appearance</span><ThemeToggle /></div><button className="btn primary dialog-primary" onClick={() => setModal(null)}>Got it</button>
       </Dialog>

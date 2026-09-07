@@ -37,12 +37,13 @@ ghost shows whichever track is not on stage.
 overridable, including ÷2 / ×2 for the usual half-time confusion. Clips with no
 clear pulse say so rather than guessing.
 Videos and recordings are previewed before analysis begins; canceling analysis
-restores the previous score. Settings opens a live sidebar beside the stage —
+restores the previous score. The studio is one header (brand, project, view
+tabs, actions) over the stage, with a permanent settings sidebar on the right —
 Dancer, Movement grid, and Cast tabs, with Simple / Balanced / Detailed grid
-presets and optional advanced tuning — so every change is visible on the stage
-while playback keeps running; Escape or the toolbar button closes it, and below
-1100px it slides in as an overlay drawer. Notation and Save use focused dialogs;
-on phones, dialogs become bottom sheets.
+presets and optional advanced tuning. It is always open, so every change is
+visible on the stage while playback keeps running; it collapses to an icon rail
+(Escape, or the chevron) and below 1100px the open panel floats over the stage.
+Notation and Save use focused dialogs; on phones, dialogs become bottom sheets.
 
 Video imports accept clips up to 120 seconds / 250 MB; 5–30 seconds remains ideal.
 Score imports validate the full pose sequence before opening it. Tracking gaps
