@@ -179,18 +179,23 @@ git commit -m "test: characterization e2e for Studio before the kernel refactor"
 Throwaway verification, not a committed test. The kernel is copied verbatim, so the three notation views must render **byte-identically** after the refactor. Any difference is a mistake.
 
 **Files:**
-- Create: `$SCRATCH/baseline-studio-svg.mjs` and `$SCRATCH/baseline-before.json`, where `$SCRATCH` is `/private/tmp/claude-501/-Users-galgo-Documents-movement-languages/d21f40f5-2e31-4fdb-94c4-b90256cfab0e/scratchpad`. Nothing in this task is committed.
+- Create: `$WS/baseline-studio-svg.mjs` and `$WS/baseline-before.json`, where `$WS` is the plan's gitignored workspace `/Users/galgo/Documents/movement-languages/vid2grid/.superpowers/sdd/2026-09-08-shared-kernel`. Nothing in this task is committed.
+
+> **The script must live INSIDE the repo, not in a system temp directory.** Node
+> resolves bare imports like `playwright` from the importing file's own directory
+> upward, so a copy under `/tmp` dies with `ERR_MODULE_NOT_FOUND` no matter what
+> `cwd` you run it from. `.superpowers/sdd/...` is inside the repo (so it resolves
+> `vid2grid/node_modules`) and is gitignored (so it still commits nothing).
 
 **Interfaces:**
 - Consumes: the dev server from Task 1.
-- Produces: `$SCRATCH/baseline-before.json`, compared against in Task 5 Step 6.
+- Produces: `$WS/baseline-before.json`, compared against in Task 5 Step 6.
 
 - [ ] **Step 1: Write the capture script**
 
 ```bash
-SCRATCH=/private/tmp/claude-501/-Users-galgo-Documents-movement-languages/d21f40f5-2e31-4fdb-94c4-b90256cfab0e/scratchpad
-mkdir -p "$SCRATCH"
-cat > "$SCRATCH/baseline-studio-svg.mjs" <<'EOF'
+WS=/Users/galgo/Documents/movement-languages/vid2grid/.superpowers/sdd/2026-09-08-shared-kernel
+cat > "$WS/baseline-studio-svg.mjs" <<'EOF'
 /* Throwaway: dump Studio's three notation views for the demo score, so the
    shared-kernel refactor can be proven byte-identical. Usage:
      node baseline-studio-svg.mjs <output.json> */
@@ -215,8 +220,8 @@ EOF
 
 ```bash
 cd /Users/galgo/Documents/movement-languages/vid2grid
-SCRATCH=/private/tmp/claude-501/-Users-galgo-Documents-movement-languages/d21f40f5-2e31-4fdb-94c4-b90256cfab0e/scratchpad
-node "$SCRATCH/baseline-studio-svg.mjs" "$SCRATCH/baseline-before.json"
+WS=/Users/galgo/Documents/movement-languages/vid2grid/.superpowers/sdd/2026-09-08-shared-kernel
+node "$WS/baseline-studio-svg.mjs" "$WS/baseline-before.json"
 ```
 
 Expected: `captured labanView:NNNNb beneshView:NNNNb ewView:NNNNb`, all three non-zero.
@@ -224,7 +229,7 @@ Expected: `captured labanView:NNNNb beneshView:NNNNb ewView:NNNNb`, all three no
 - [ ] **Step 3: Confirm the file is non-trivial**
 
 ```bash
-wc -c "$SCRATCH/baseline-before.json"
+wc -c "$WS/baseline-before.json"
 ```
 
 Expected: several kilobytes. If it is under 500 bytes the views did not render — stop and diagnose before refactoring.
@@ -629,9 +634,9 @@ Expected: **no output.** Any hit is a block that did not delete cleanly.
 
 ```bash
 cd /Users/galgo/Documents/movement-languages/vid2grid
-SCRATCH=/private/tmp/claude-501/-Users-galgo-Documents-movement-languages/d21f40f5-2e31-4fdb-94c4-b90256cfab0e/scratchpad
-node "$SCRATCH/baseline-studio-svg.mjs" "$SCRATCH/baseline-after.json"
-diff "$SCRATCH/baseline-before.json" "$SCRATCH/baseline-after.json" && echo "IDENTICAL"
+WS=/Users/galgo/Documents/movement-languages/vid2grid/.superpowers/sdd/2026-09-08-shared-kernel
+node "$WS/baseline-studio-svg.mjs" "$WS/baseline-after.json"
+diff "$WS/baseline-before.json" "$WS/baseline-after.json" && echo "IDENTICAL"
 ```
 
 Expected: `IDENTICAL`. **Any diff is a bug in the refactor, not an improvement** — the kernel was copied verbatim, so the output must match exactly. Investigate before continuing.
@@ -726,8 +731,8 @@ git commit -m "docs: notation-render is the shared kernel; unfreeze danceforms"
 - [ ] **Step 5: Clean up scratch files**
 
 ```bash
-SCRATCH=/private/tmp/claude-501/-Users-galgo-Documents-movement-languages/d21f40f5-2e31-4fdb-94c4-b90256cfab0e/scratchpad
-rm -f "$SCRATCH/baseline-before.json" "$SCRATCH/baseline-after.json" "$SCRATCH/baseline-studio-svg.mjs" /tmp/danceforms.before.html
+WS=/Users/galgo/Documents/movement-languages/vid2grid/.superpowers/sdd/2026-09-08-shared-kernel
+rm -f "$WS/baseline-before.json" "$WS/baseline-after.json" "$WS/baseline-studio-svg.mjs" /tmp/danceforms.before.html
 ```
 
 ---
