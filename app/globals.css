@@ -691,7 +691,9 @@ kbd { border: 1px solid var(--border); background: var(--background); border-rad
 .duet { position: relative; overflow: visible; }
 .duet-picture { position: absolute; overflow: hidden; border-radius: 4px; background: #111; }
 .duet-video { position: absolute; top: 0; display: block; max-width: none; object-fit: fill; }
-.duet-canvas { position: absolute; inset: 0; pointer-events: none; }
+.duet-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.duet-stage { position: absolute; top: 0; bottom: 0; border-radius: 4px; overflow: hidden; background: #0b0c0f; }
+.duet-stage canvas { touch-action: none; }
 .duet-cast { position: absolute; top: 0; right: 0; bottom: 0; width: 276px; display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: 1fr; gap: 6px; z-index: 2; }
 .duet-cast .strip-card { min-height: 0; }
 .duet-cast .strip-card img { height: 100%; aspect-ratio: auto; object-position: 50% 0; opacity: .6; }

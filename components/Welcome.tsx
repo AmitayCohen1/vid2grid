@@ -39,7 +39,7 @@ export default function Welcome({ onStart, onDemo }: { onStart: () => void; onDe
           </div>
         </div>
         <HeroDuet avatarUrl={avatar.url}>{picker(false)}</HeroDuet>
-        <div className="hero-caption mono"><span>Video → score → {avatar.label}</span><span>Pick a character · or bring your own VRM</span></div>
+        <div className="hero-caption mono"><span>Video → tracking → {avatar.label} · drag the stage to orbit</span><span>Pick a character · or bring your own VRM</span></div>
       </section>
 
       {/* On phones the picker can't sit beside the picture; it becomes a strip under it. */}

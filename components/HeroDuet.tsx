@@ -1,24 +1,22 @@
 "use client";
 
 /* ------------------------------------------------------------------
-   The landing hero: a real clip and a character dancing its score.
+   The landing hero: a real clip, its tracking, and a character dancing
+   the score on the studio's own stage.
 
    `/demo/alice.json` is the app's own output for `/demo/alice.mp4`
-   (poses + per-frame picture anchors, produced by the offline pipeline
-   in lib/tracker → lib/score → lib/invideo). The picture sits at the
-   left of a black stage; the character stands to its right on the
-   dancer's own floor, drawn by the same orthographic recipe as the
-   in-video figures (lib/invideo.ts): the picture is `mpu` metres wide,
-   so metres and pixels are one scale for both of them. The <video>'s
-   clock is the stage clock, exactly as in the studio.
+   (poses, body, the tracker's 2D landmarks per frame — produced by
+   scripts/hero-data.ts through lib/tracker → lib/score). The picture
+   sits at the left with the landmarks drawn over it exactly as the
+   studio's Compare view does; beside it the studio Stage (grid floor,
+   orbit) shows the character at the same instant. The <video>'s clock
+   is the stage clock, exactly as in the studio.
    ------------------------------------------------------------------ */
 
-import { Canvas, useFrame } from "@react-three/fiber";
-import { type ReactNode, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { OrthographicCamera } from "three";
-import Avatar from "./Avatar";
-import { imageToWorld } from "@/lib/invideo";
-import { scaleBody } from "@/lib/devices";
+import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import Stage from "./Stage";
+import { LM_EDGES } from "@/lib/skeleton";
+import { DEFAULT_GRID } from "@/lib/grid";
 import type { Body } from "@/lib/fk";
 import type { Pose } from "@/lib/pose";
 import type { SourceInfo } from "@/lib/score";
@@ -29,28 +27,34 @@ interface HeroData {
   raw: Pose[];
   /** Per frame: [hip u across the picture, floor v down the picture, metres the picture spans]. */
   anchors: [number, number, number][];
+  /** Per frame: the tracker's 2D landmarks, x, y, visibility × 33, in picture fractions; null where nobody was seen. */
+  image?: (number[] | null)[];
 }
 
 interface Rect { x: number; y: number; w: number; h: number }
 
-/** How much bigger than life the character is drawn on the wide layout. Display only. */
-const SIZE = 1.15;
 /** The picture is at most this share of the stage width (wide / narrow), and at most this tall. */
-const PICTURE = 0.56, PICTURE_NARROW = 0.55;
+const PICTURE = 0.36, PICTURE_NARROW = 0.5;
 const MAX_HEIGHT = 600;
 /** The slice of the frame shown, fractions across, for clips whose sides the dancer never uses. */
 const CROP = { l: 0, r: 1 };
 const SPAN = CROP.r - CROP.l;
 /** Wide layouts wider than this also carry the cast picker (`children`) at the stage's right edge. */
 const CAST_FROM = 720;
+/** Pixels between the picture, the stage and the picker. */
+const GUTTER = 6;
+
+const noop = () => {};
 
 export default function HeroDuet({ avatarUrl, children }: { avatarUrl: string; children?: ReactNode }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const castRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
   const [data, setData] = useState<HeroData | null>(null);
   const [width, setWidth] = useState<number | null>(null);
   const [castWidth, setCastWidth] = useState(0);
+  const [fi, setFi] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -70,34 +74,52 @@ export default function HeroDuet({ avatarUrl, children }: { avatarUrl: string; c
   }, [width]);
 
   const aspect = (data ? data.source.width / data.source.height : 720 / 1088) * SPAN;
-  // The picture takes the left of the stage and the character has the rest; a portrait
-  // clip keeps that even on a phone. A landscape clip on a phone is the whole stage and
-  // the character stands inside it. The stage is exactly as tall as the picture.
-  const wide = !!width && (width >= 720 || aspect < 1);
+  const wide = !!width && width >= CAST_FROM;
   const rect: Rect | null = useMemo(() => {
     if (!width) return null;
-    const share = width >= 720 ? PICTURE : PICTURE_NARROW;
-    const w = wide ? Math.min(width * share, MAX_HEIGHT * aspect) : width;
+    const w = Math.min(width * (wide ? PICTURE : PICTURE_NARROW), MAX_HEIGHT * aspect);
     return { x: 0, y: 0, w, h: w / aspect };
   }, [width, wide, aspect]);
-  const box = width && rect ? { W: width, H: rect.h } : null;
+
+  // The video clock drives everything: the frame index for the stage, and the landmarks over the picture.
+  useEffect(() => {
+    if (!data || !rect) return;
+    const n = data.raw.length;
+    let last = -1, raf = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const v = videoRef.current;
+      if (!v) return;
+      const i = Math.max(0, Math.min(n - 1, Math.round(v.currentTime * data.source.fps)));
+      if (i === last) return;
+      last = i;
+      setFi(i);
+      drawLandmarks(overlayRef.current, data.image?.[i] ?? null, rect);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [data, rect]);
+
+  // The dancer's average spot, so the character stays centred on the stage while keeping their travel.
+  const meanX = useMemo(() => (data ? data.raw.reduce((a, p) => a + p.x, 0) / Math.max(1, data.raw.length) : 0), [data]);
+  const pose = useMemo(() => (data ? { ...data.raw[fi], x: data.raw[fi].x - meanX } : null), [data, fi, meanX]);
+  const stageLeft = rect ? rect.w + GUTTER : 0;
+  const stageRight = castWidth ? castWidth + GUTTER : 0;
 
   return (
-    <div ref={boxRef} className="duet" style={{ height: rect?.h }} aria-label="A dancer on video, and a character dancing the same score beside them">
+    <div ref={boxRef} className="duet" style={{ height: rect?.h }} aria-label="A dancer on video with the tracking drawn over them, and a character dancing the same score on the stage beside">
       {rect && (
         <div className="duet-picture" style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}>
           <video ref={videoRef} className="duet-video" src="/demo/alice.mp4" poster="/demo/alice.jpg" muted loop autoPlay playsInline preload="auto"
             style={{ left: -CROP.l * rect.w / SPAN, width: rect.w / SPAN, height: rect.h }} />
+          <canvas ref={overlayRef} className="duet-overlay" />
         </div>
       )}
-      {rect && data && box && (
-        <div className="duet-canvas">
-          <Canvas orthographic camera={{ position: [0, 0, 10], near: 0.1, far: 100 }} gl={{ alpha: true, antialias: true }} style={{ background: "transparent" }} dpr={[1, 2]}>
-            <hemisphereLight args={["#ffffff", "#20232a", 0.9]} />
-            <directionalLight position={[3, 5, 6]} intensity={1.1} />
-            <directionalLight position={[-3, 2, 2]} intensity={0.4} />
-            <Duet data={data} rect={rect} box={box} wide={wide} castWidth={castWidth} videoRef={videoRef} avatarUrl={avatarUrl} />
-          </Canvas>
+      {rect && (
+        <div className="duet-stage" style={{ left: stageLeft, right: stageRight }}>
+          {pose && data && (
+            <Stage pose={pose} raw={pose} body={data.body} grid={DEFAULT_GRID} motion="stepped" showRaw={false} avatar avatarUrl={avatarUrl} cast={[]} selected={null} onSelect={noop} />
+          )}
         </div>
       )}
       {width !== null && width >= CAST_FROM && children && <div ref={castRef} className="duet-cast">{children}</div>}
@@ -105,47 +127,30 @@ export default function HeroDuet({ avatarUrl, children }: { avatarUrl: string; c
   );
 }
 
-/** Reads the video clock each frame, places the character, keeps the camera at picture scale. */
-function Duet({ data, rect, box, wide, castWidth, videoRef, avatarUrl }: {
-  data: HeroData; rect: Rect; box: { W: number; H: number }; wide: boolean; castWidth: number;
-  videoRef: React.RefObject<HTMLVideoElement | null>; avatarUrl: string;
-}) {
-  const [fi, setFi] = useState(0);
-  const n = data.raw.length;
-  const aspect = (data.source.width / data.source.height) * SPAN;
-  // The dancer's average spot, so the character's travel is theirs but centred in its own column.
-  const meanX = useMemo(() => data.raw.reduce((a, p) => a + p.x, 0) / Math.max(1, n), [data, n]);
-
-  useFrame(({ camera, size }) => {
-    const v = videoRef.current;
-    if (!v) return;
-    const i = Math.max(0, Math.min(n - 1, Math.round(v.currentTime * data.source.fps)));
-    if (i !== fi) setFi(i);
-    // Pixels per metre: the frame is `mpu` metres wide, the picture is its cropped slice.
-    const mpu = (data.anchors[i]?.[2] ?? data.anchors[0][2]) * SPAN;
-    const cam = camera as OrthographicCamera;
-    const zoom = (rect.w / mpu) * (size.width / box.W);
-    if (Math.abs(cam.zoom - zoom) > 1e-6) { cam.zoom = zoom; cam.updateProjectionMatrix(); }
-  });
-
-  const [fullU, floorV, fullMpu] = data.anchors[fi] ?? data.anchors[0];
-  const u = (fullU - CROP.l) / SPAN, mpu = fullMpu * SPAN; // in the cropped picture
-  const k = mpu / rect.w; // metres per pixel
-  // Picture centre, in stage metres from the stage centre.
-  const cx = (rect.x + rect.w / 2 - box.W / 2) * k;
-  const cy = -(rect.y + rect.h / 2 - box.H / 2) * k;
-  const at = imageToWorld(u, floorV, mpu, aspect);
-  const p = data.raw[fi];
-  const size = wide && box.W >= 720 ? SIZE : 0.92;
-  // Wide: centred in the band between the picture and the cast picker, feet on the dancer's
-  // floor, its own travel halved. Narrow: beside the dancer inside the picture, like Compare.
-  const columnX = wide ? ((rect.x + rect.w + box.W - castWidth) / 2 - box.W / 2) * k : cx + at.x + 1.1;
-  const pose: Pose = { ...p, x: columnX + (wide ? (p.x - meanX) * 0.5 : 0), z: 0, hipY: cy + at.y + p.hipY * size };
-  const body = useMemo(() => scaleBody(data.body, size), [data.body, size]);
-
-  return (
-    <Suspense fallback={null}>
-      <Avatar pose={pose} body={body} url={avatarUrl} instanceKey="hero" />
-    </Suspense>
-  );
+/** The studio's overlay: landmark edges in the person's left (cyan) / right (magenta), joints in amber. */
+function drawLandmarks(cv: HTMLCanvasElement | null, lm: number[] | null, rect: Rect) {
+  if (!cv) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.round(rect.w * dpr), h = Math.round(rect.h * dpr);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const ctx = cv.getContext("2d")!;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, rect.w, rect.h);
+  if (!lm) return;
+  const P = (i: number) => [((lm[i * 3] - CROP.l) / SPAN) * rect.w, lm[i * 3 + 1] * rect.h, lm[i * 3 + 2]] as const;
+  ctx.lineWidth = 2;
+  for (const [a, b] of LM_EDGES) {
+    const [ax, ay, av] = P(a), [bx, by, bv] = P(b);
+    if (Math.min(av, bv) < 0.3) continue;
+    const left = a % 2 === 1 && b % 2 === 1 && a > 0;
+    const right = a % 2 === 0 && b % 2 === 0 && a > 0;
+    ctx.strokeStyle = left ? "rgba(76,201,240,.9)" : right ? "rgba(247,37,133,.9)" : "rgba(232,233,236,.8)";
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+  }
+  ctx.fillStyle = "#f0b429";
+  for (let i = 0; i < 33; i++) {
+    const [x, y, v] = P(i);
+    if (v < 0.3) continue;
+    ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
+  }
 }
