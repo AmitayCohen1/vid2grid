@@ -293,3 +293,97 @@ test("renderEW focus emphasizes the focused bone row", () => {
   const svg = R.renderEW(w3dancer(), { focusSegment: "rfarm" });
   assert.match(svg, /class="[^"]*focus[^"]*" data-seg="rfarm"/);
 });
+
+/* ---- shared kernel: interpolation + pose constructors (spec 2026-09-08) ---- */
+
+const twoKey = () => ({
+  beats: 2,
+  keys: [
+    { beat: 0, pose: R.merge(R.standPose(), { rfarm: [0, 20] }) },
+    { beat: 1, pose: R.merge(R.standPose(), { rfarm: [0, -60] }) },
+  ],
+});
+
+test("poseAt returns each key's pose exactly at that key's beat", () => {
+  const d = twoKey();
+  assert.deepEqual(R.poseAt(d, 0).bones.rfarm.map(Math.round), [0, 20]);
+  assert.deepEqual(R.poseAt(d, 1).bones.rfarm.map(Math.round), [0, -60]);
+});
+
+test("poseAt clamps outside the key range and does not extrapolate", () => {
+  const d = twoKey();
+  assert.deepEqual(R.poseAt(d, -5).bones.rfarm.map(Math.round), [0, 20]);
+  assert.deepEqual(R.poseAt(d, 99).bones.rfarm.map(Math.round), [0, -60]);
+});
+
+test("poseAt interpolates between keys, staying strictly between the endpoints", () => {
+  const el = R.poseAt(twoKey(), 0.5).bones.rfarm[1];
+  assert.ok(el < 20 && el > -60, `midpoint elevation ${el} is not between the keys`);
+});
+
+test("poseAt yields unit-length bone directions (nlerp on the sphere, not an angle average)", () => {
+  const p = R.poseAt(twoKey(), 0.5);
+  for (const b of R.BONES) {
+    const v = R.vec(...p.bones[b.id]);
+    const m = Math.hypot(v.x, v.y, v.z);
+    assert.ok(Math.abs(m - 1) < 1e-9, `${b.id} direction has length ${m}`);
+  }
+});
+
+test("poseAt does not mutate the dancer it reads", () => {
+  const d = twoKey();
+  const before = JSON.stringify(d);
+  R.poseAt(d, 0.5);
+  assert.equal(JSON.stringify(d), before);
+});
+
+test("lerpAngle takes the short way around the wrap", () => {
+  // Note: lerpAngle does NOT normalize its result — 350→10 midpoint is 360,
+  // which is the same bearing as 0. Normalize before comparing.
+  const norm = (a) => ((a % 360) + 360) % 360;
+  assert.equal(Math.round(norm(R.lerpAngle(350, 10, 0.5))), 0);
+  assert.equal(Math.round(norm(R.lerpAngle(10, 350, 0.5))), 0);
+  // The short way, not the long way: 170→190 passes through 180, not through 0.
+  assert.equal(Math.round(R.lerpAngle(170, 190, 0.5)), 180);
+});
+
+test("smooth is a smoothstep pinned at 0, 0.5 and 1", () => {
+  assert.equal(R.smooth(0), 0);
+  assert.equal(R.smooth(1), 1);
+  assert.equal(R.smooth(0.5), 0.5);
+});
+
+test("nlerp returns a unit vector", () => {
+  const v = R.nlerp({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, 0.5);
+  assert.ok(Math.abs(Math.hypot(v.x, v.y, v.z) - 1) < 1e-12);
+});
+
+test("mkPose({}) equals standPose() and leaves STAND untouched", () => {
+  assert.deepEqual(R.mkPose({}), R.standPose());
+  const snapshot = JSON.stringify(R.standPose());
+  R.mkPose({ hipY: 0.5, bones: { torso: [1, 2] } });
+  assert.equal(JSON.stringify(R.standPose()), snapshot);
+});
+
+test("mkPose applies hipY and bone overrides", () => {
+  const p = R.mkPose({ hipY: 0.74, bones: { rthigh: [58, -48] } });
+  assert.equal(p.hipY, 0.74);
+  assert.deepEqual(p.bones.rthigh, [58, -48]);
+  assert.deepEqual(p.bones.head, R.standPose().bones.head);
+});
+
+test("labanToVec inverts labanOf for the cardinal directions", () => {
+  for (const dir of ["forward", "right", "back", "left"]) {
+    for (const level of ["low", "middle", "high"]) {
+      const q = { dir, level, pin: 0 };
+      const round = R.labanOf(R.labanToVec(q));
+      assert.equal(round.dir, dir, `${dir}/${level} round-tripped to ${round.dir}`);
+      assert.equal(round.level, level, `${dir}/${level} round-tripped to ${round.level}`);
+    }
+  }
+});
+
+test("labanToVec maps place-high and place-low to the poles", () => {
+  assert.deepEqual(R.labanToVec({ dir: "place", level: "high" }), { x: 0, y: 1, z: 0 });
+  assert.deepEqual(R.labanToVec({ dir: "place", level: "low" }), { x: 0, y: -1, z: 0 });
+});

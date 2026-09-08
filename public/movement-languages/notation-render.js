@@ -12,6 +12,11 @@
   const D2R = Math.PI / 180;
   function vec(az, el){ const a=az*D2R, e=el*D2R; return {x:Math.sin(a)*Math.cos(e), y:Math.sin(e), z:Math.cos(a)*Math.cos(e)}; }
   function rotY(v, deg){ const r=deg*D2R, c=Math.cos(r), s=Math.sin(r); return {x:v.x*c+v.z*s, y:v.y, z:-v.x*s+v.z*c}; }
+  function nlerp(a,b,u){ const x=a.x+(b.x-a.x)*u, y=a.y+(b.y-a.y)*u, z=a.z+(b.z-a.z)*u;
+    const m=Math.hypot(x,y,z)||1; return {x:x/m,y:y/m,z:z/m}; }
+  function lerp(a,b,u){ return a+(b-a)*u; }
+  function lerpAngle(a,b,u){ let d=((b-a)%360+540)%360-180; return a+d*u; }
+  function smooth(u){ return u*u*(3-2*u); }
   function dirToAzEl(v){ return [Math.atan2(v.x,v.z)/D2R, Math.asin(Math.max(-1,Math.min(1,v.y)))/D2R]; }
 
   // --- bones + pose: verbatim from danceforms.html:429-457 (BONES, BONE, STAND, clonePose) ---
@@ -42,6 +47,33 @@
   function standPose(){ return clonePose(STAND); }
 
   function merge(pose, boneOverrides){ const p = clonePose(pose); for (const k in boneOverrides) p.bones[k] = boneOverrides[k].slice(); return p; }
+  function mkPose(over){
+    const p = clonePose(STAND);
+    if(over.hipY!==undefined) p.hipY=over.hipY;
+    if(over.bones) for(const k in over.bones) p.bones[k]=over.bones[k].slice();
+    return p;
+  }
+
+  /* pose at time t for a dancer (interpolated, full pose incl. x/z/facing) */
+  function poseAt(d, t){
+    const ks = d.keys;
+    if(!ks.length) return clonePose(STAND);
+    if(t<=ks[0].beat) return clonePose(ks[0].pose);
+    if(t>=ks[ks.length-1].beat) return clonePose(ks[ks.length-1].pose);
+    let i=0; while(i<ks.length-1 && ks[i+1].beat<=t) i++;
+    const A=ks[i], B=ks[i+1];
+    const u = smooth((t-A.beat)/Math.max(1e-6, B.beat-A.beat));
+    const p = clonePose(A.pose);
+    p.hipY = lerp(A.pose.hipY, B.pose.hipY, u);
+    p.x = lerp(A.pose.x, B.pose.x, u);
+    p.z = lerp(A.pose.z, B.pose.z, u);
+    p.facing = lerpAngle(A.pose.facing, B.pose.facing, u);
+    for(const b of BONES){
+      const va = vec(...A.pose.bones[b.id]), vb = vec(...B.pose.bones[b.id]);
+      p.bones[b.id] = dirToAzEl(nlerp(va,vb,u));
+    }
+    return p;
+  }
 
   // --- skeleton FK: verbatim from danceforms.html:556-587 ---
   function skeleton(p){
@@ -114,6 +146,11 @@
     const pin = (el-base)>11.25? 1 : (el-base)<-11.25? -1 : 0;
     const i16=((Math.round(az/22.5)%16)+16)%16;
     return {dir:DIR16[i16], level, pin};
+  }
+  function labanToVec(q){
+    if(q.dir==="place") return q.level==="high"? {x:0,y:1,z:0}: {x:0,y:-1,z:0};
+    const el={low:-45,middle:0,high:45}[q.level] + (q.pin||0)*22.5;
+    return vec(DIR16.indexOf(q.dir)*22.5, el);
   }
   function hatchDef(id){
     return `<pattern id="${id}" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -328,5 +365,7 @@
     return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:none">${g}</svg>`;
   }
 
-  return { BONES, BONE, LIMBSETS, standPose, clonePose, merge, skeleton, limbVec, setLimbVec, vec, rotY, dirToAzEl, renderLaban, renderBenesh, renderEW };
+  return { BONES, BONE, LIMBSETS, standPose, clonePose, merge, mkPose, skeleton, poseAt,
+           limbVec, setLimbVec, vec, rotY, dirToAzEl, nlerp, lerp, lerpAngle, smooth,
+           labanOf, labanToVec, renderLaban, renderBenesh, renderEW };
 });
