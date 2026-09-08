@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
-import { ArrowLeft, Box, Check, CircleHelp, Download, Film, Grid2X2, Moon, PanelRightClose, Plus, ScanLine, SlidersHorizontal, Sun, X, PersonStanding, Users, List, Activity } from "lucide-react";
+import { ArrowLeft, Box, Check, CircleHelp, Download, Film, Grid2X2, Moon, PanelRightClose, Plus, ScanLine, SlidersHorizontal, Sun, X, PersonStanding, Users, List, Activity, ImageDown, RotateCcw } from "lucide-react";
 import Dialog from "./Dialog";
 import NewScore from "./NewScore";
 import SaveScore from "./SaveScore";
@@ -20,8 +20,9 @@ import Timeline from "./Timeline";
 import LiveBar from "./LiveBar";
 import BoneTable from "./BoneTable";
 import Controls from "./Controls";
-import { NumSlider, Section, Switch } from "./Inspector";
-import Objects, { DEFAULT_OBJECTS, Drawing, type ObjectsOptions } from "./Objects";
+import { Chips, Colour, Note, NumSlider, Section, Seg, Switch } from "./Inspector";
+import Objects, { DEFAULT_OBJECTS, Drawing, type ObjectsHandle, type ObjectsOptions } from "./Objects";
+import { DEFAULT_TRACE_STYLE, TRACE_GROUPS, TRACE_PRESETS, type TraceStyle } from "@/lib/traces";
 import { DEFAULT_GRID, type GridConfig } from "@/lib/grid";
 import { DEFAULT_SMOOTH, type LiftMode, type Score, type SmoothConfig, type SourceInfo, frameAt, measureBody, parseScore, rawPoses, serializeScore, smoothPoses, snapPoses } from "@/lib/score";
 import { fillGaps, trackVideo, type TrackedFrame } from "@/lib/tracker";
@@ -103,6 +104,8 @@ export default function App() {
   const [showOverlay, setShowOverlay] = useState(true);
   const [view, setView] = useState<"score" | "duet" | "objects">("score");
   const [objects, setObjects] = useState<ObjectsOptions>(DEFAULT_OBJECTS);
+  const [traceStyle, setTraceStyle] = useState<TraceStyle>(DEFAULT_TRACE_STYLE);
+  const objectsRef = useRef<ObjectsHandle>(null);
   const [cast, setCast] = useState<CastMember[]>([]);
   /** Compare view: draw the character and the cast inside the recording, beside the person. */
   const [inVideo, setInVideo] = useState(true);
@@ -142,6 +145,16 @@ export default function App() {
   );
   const body: Body | null = useMemo(() => (extractions ? measureBody(extractions, lift) : imported?.body ?? null), [extractions, imported, lift]);
   const source = analysis?.source ?? imported?.source ?? null;
+  const savePicture = useCallback(async () => {
+    const blob = await objectsRef.current?.toPng();
+    if (!blob) { setToast("Nothing to save yet."); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${(source?.name ?? "score").replace(/\.[^.]+$/, "")}-traces.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+    setToast("Picture saved.");
+  }, [source]);
   const score: Score | null = useMemo(() => {
     if (!raw || !body || !source || !raw.length) return null;
     const { frames, keyframes } = snapPoses(raw, grid);
@@ -649,7 +662,7 @@ export default function App() {
           </section>
           <section className="stage-panel" aria-label={view === "objects" ? "Movement traces" : "3D movement stage"}>
             <div className="stage-heading"><span className="mono">{motion === "smooth" ? "SMOOTH" : `${grid.azStep}° GRID`}</span></div>
-            {view === "objects" && score ? <Objects score={score} overlays={overlays} video={analysis ? videoEl : null} frame={fi} options={objects} /> :
+            {view === "objects" && score ? <Objects ref={objectsRef} score={score} overlays={overlays} video={analysis ? videoEl : null} frame={fi} options={objects} style={traceStyle} /> :
               (snappedPose && curBody) || stageCast.length ? <Stage pose={stagePose} raw={stageRaw} body={stageBody} grid={grid} motion={motion} showRaw={showRaw} avatar={avatar} avatarUrl={avatarUrl} cast={stageCast} selected={selected} onSelect={setSelected} /> :
               <div className="stage-empty"><Activity size={35} /><span>{live ? "Looking for you. Step back so your whole body is in the picture." : "Your movement will appear here."}</span></div>}
             {view !== "objects" && <div className="stage-legend"><span><i className="bg-limb-l" />Left side</span><span><i className="bg-limb-r" />Right side</span><span className="stage-help">Drag to rotate · Pinch or scroll to zoom</span></div>}
@@ -672,14 +685,49 @@ export default function App() {
               {tab === "cast" && <CastPanel cast={cast} canAdd={!!score} beat={60 / bpm} onAdd={() => { addToCast(); setToast("Dancer added to your cast."); }} onCanon={(voices, gap) => { addCanon(voices, gap); setToast(`Canon added: ${voices} voices, ${gap.toFixed(2)} s apart.`); }} onDuplicate={duplicateCast} onRemove={removeCast} onUpdate={updateCast} />}
               {tab === "traces" && score && <>
                 <Section title="Traces">
-                  <Switch label="Movement trails" hint="Follow the hands, feet, and head through space." checked={objects.traces} onChange={(traces) => setObjects({ ...objects, traces })} />
-                  <NumSlider label="Length" value={objects.trailSeconds} min={0.2} max={6} step={0.1} decimals={1} unit="s" disabled={!objects.traces} onChange={(trailSeconds) => setObjects({ ...objects, trailSeconds })} />
+                  <Switch label="Movement trails" hint="Follow the traced joints through space." checked={objects.traces} onChange={(traces) => setObjects({ ...objects, traces })} />
+                  <NumSlider label="Length" value={objects.trailSeconds} min={0.2} max={6} step={0.1} decimals={1} unit="s" disabled={!objects.traces || objects.whole} onChange={(trailSeconds) => setObjects({ ...objects, trailSeconds })} />
+                  <Switch label="From the start" hint="Keep every trace since the beginning of the clip; the drawing grows as it plays." checked={objects.whole} disabled={!objects.traces} onChange={(whole) => setObjects({ ...objects, whole })} />
                   <Switch label="Alignments" hint="Highlight parallel and aligned limbs." checked={objects.alignments} onChange={(alignments) => setObjects({ ...objects, alignments })} />
                   <Switch label="Density" hint="Reveal the areas where movement gathers." checked={objects.density} onChange={(density) => setObjects({ ...objects, density })} />
                   <Switch label="Video plate" hint={analysis ? "Show the recording behind the traces." : "Available when you add a video."} checked={objects.video} disabled={!analysis} onChange={(video) => setObjects({ ...objects, video })} />
+                  <NumSlider label="Dim" hint="How much the picture is darkened so the drawing reads." value={traceStyle.dim} min={0} max={1} step={0.05} decimals={2} disabled={!analysis || !objects.video} onChange={(dim) => setTraceStyle({ ...traceStyle, dim })} />
+                  <Seg label="Ground" value={traceStyle.ground} onChange={(ground) => setTraceStyle({ ...traceStyle, ground })} options={[
+                    { value: "night", label: "Night", hint: "Ink on black (when the video plate is off)." },
+                    { value: "paper", label: "Paper", hint: "Ink on warm paper (when the video plate is off)." },
+                  ]} />
                 </Section>
-                <Section title="Whole phrase" aside={<span className="insp-aside">every trace, once</span>}>
-                  <div className="insp-drawing"><Drawing score={score} overlays={overlays} /></div>
+                <Section title="Style" aside={<button className="insp-btn" onClick={() => setTraceStyle(DEFAULT_TRACE_STYLE)} disabled={traceStyle === DEFAULT_TRACE_STYLE}><RotateCcw size={11} /> Reset</button>}>
+                  <div className="insp-presets">
+                    {TRACE_PRESETS.map((p) => <button key={p.name} className="insp-btn" title={p.hint} onClick={() => setTraceStyle({ ...DEFAULT_TRACE_STYLE, ...p.style, dim: traceStyle.dim })}>{p.name}</button>)}
+                  </div>
+                  <Chips label="Traced joints" value={traceStyle.groups} onChange={(groups) => setTraceStyle({ ...traceStyle, groups })} options={TRACE_GROUPS.map((g) => ({ value: g.id, label: g.label }))} />
+                  <Seg label="Colour" value={traceStyle.colour} onChange={(colour) => setTraceStyle({ ...traceStyle, colour })} options={[
+                    { value: "sides", label: "Sides", hint: "Left side blue, right side pink, centre white." },
+                    { value: "speed", label: "Speed", hint: "Cool when slow, hot when fast." },
+                    { value: "time", label: "Time", hint: "The hue turns through the clip." },
+                    { value: "ink", label: "Ink", hint: "One colour of your choosing." },
+                  ]} />
+                  {traceStyle.colour === "ink" && <Colour label="Ink" value={traceStyle.ink} onChange={(ink) => setTraceStyle({ ...traceStyle, ink })} />}
+                  <Seg label="Stroke" value={traceStyle.mark} onChange={(mark) => setTraceStyle({ ...traceStyle, mark })} options={[
+                    { value: "line", label: "Line", hint: "A continuous trail." },
+                    { value: "dots", label: "Dots", hint: "One dot per frame." },
+                  ]} />
+                  <NumSlider label="Weight" value={traceStyle.weight} min={0.3} max={8} step={0.1} decimals={1} unit="px" onChange={(weight) => setTraceStyle({ ...traceStyle, weight })} />
+                  <Switch label="Weight by speed" hint="Thicker where the joint moves fast, thinner where it lingers." checked={traceStyle.pulse} onChange={(pulse) => setTraceStyle({ ...traceStyle, pulse })} />
+                  <Switch label="Smooth curves" hint="Bend the trail through the samples instead of joining them with straight lines." checked={traceStyle.curve} disabled={traceStyle.mark === "dots"} onChange={(curve) => setTraceStyle({ ...traceStyle, curve })} />
+                  <NumSlider label="Glow" value={traceStyle.glow} min={0} max={1} step={0.05} decimals={2} onChange={(glow) => setTraceStyle({ ...traceStyle, glow })} />
+                  <NumSlider label="Fade" hint="How much the tail of a trail fades out. 0 keeps everything." value={traceStyle.fade} min={0} max={1} step={0.05} decimals={2} onChange={(fade) => setTraceStyle({ ...traceStyle, fade })} />
+                  <Seg label="Ribbons" value={traceStyle.ribbons} onChange={(ribbons) => setTraceStyle({ ...traceStyle, ribbons })} options={[
+                    { value: "off", label: "None" },
+                    { value: "pairs", label: "Pairs", hint: "A string between left and right: hand to hand, foot to foot." },
+                    { value: "web", label: "Web", hint: "Strings between every traced joint." },
+                  ]} />
+                  <Switch label="Position dots" hint="A marker on each joint's current position." checked={traceStyle.dots} onChange={(dots) => setTraceStyle({ ...traceStyle, dots })} />
+                </Section>
+                <Section title="Whole phrase" aside={<button className="insp-btn" onClick={savePicture} title="Save what is on the plate now as a PNG"><ImageDown size={11} /> Save picture</button>}>
+                  <div className="insp-drawing"><Drawing score={score} overlays={overlays} style={traceStyle} /></div>
+                  <Note>Every trace of the clip at once, in the current style. The picture saved above is the plate as it stands: the playhead, the trails, the picture behind.</Note>
                 </Section>
               </>}
             </div>

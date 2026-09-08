@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Focus, Pause, Play, RotateCcw, X } from "lucide-react";
 import { type Crop, FULL_CROP, type Handle, MIN_CROP, clampCrop, cropZoom, isFullCrop, moveCrop, resizeCrop, zoomCrop } from "@/lib/crop";
 import { type Anchor, type PersonPick, anchorOf, pickAnchor } from "@/lib/follow";
@@ -16,12 +16,14 @@ interface Props {
   onPick: (pick: PersonPick | null) => void;
   onMeta?: (video: HTMLVideoElement) => void;
   onError?: () => void;
+  /** Rendered at the top of the side column, above the framing tools. */
+  head?: React.ReactNode;
+  /** Rendered at the bottom of the side column, below the framing tools. */
+  children?: React.ReactNode;
 }
 
 const HANDLES: Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 const MAX_ZOOM = 1 / MIN_CROP;
-/** Tallest the preview frame gets; a portrait clip narrows to keep its aspect exact (the box maps to it 1:1). */
-const FRAME_MAX_HEIGHT = 320;
 
 /** A pick refers to the moment it was made; this close to it the boxes show who was picked. */
 const PICK_TIME_TOLERANCE = 0.3;
@@ -33,10 +35,24 @@ const PICK_TIME_TOLERANCE = 0.3;
  * When the paused frame holds more than one person, each gets a box;
  * clicking one says "follow this dancer".
  */
-export default function CropEditor({ src, crop, onChange, pick, onPick, onMeta, onError }: Props) {
+export default function CropEditor({ src, crop, onChange, pick, onPick, onMeta, onError, head, children }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
+  const roomRef = useRef<HTMLDivElement>(null);
   const [aspect, setAspect] = useState(16 / 9);
+  /* The frame fills the room it is given, keeping the clip's aspect exactly (the box maps to it 1:1). */
+  const [room, setRoom] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = roomRef.current;
+    if (!el) return;
+    const measure = () => setRoom({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const frameW = Math.max(0, Math.floor(Math.min(room.w, room.h * aspect)));
+  const frameH = Math.max(0, Math.floor(frameW / aspect));
   const [duration, setDuration] = useState(0);
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -158,7 +174,9 @@ export default function CropEditor({ src, crop, onChange, pick, onPick, onMeta, 
 
   return (
     <div className="crop-editor">
-      <div ref={frameRef} className="crop-frame" data-people={people.length} style={{ aspectRatio: `${aspect}`, width: `min(100%, ${Math.round(FRAME_MAX_HEIGHT * aspect)}px)` }} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+      <div className="crop-stage">
+      <div ref={roomRef} className="crop-room">
+      <div ref={frameRef} className="crop-frame" data-people={people.length} style={{ width: frameW || undefined, height: frameH || undefined }} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
         <video
           ref={videoRef}
           src={src}
@@ -205,21 +223,30 @@ export default function CropEditor({ src, crop, onChange, pick, onPick, onMeta, 
         ))}
         {fitting && <div className="crop-fitting" role="status">Finding the dancer…</div>}
       </div>
+      </div>
+      <div className="crop-tools">
+        <button type="button" className="btn" onClick={toggle} aria-label={playing ? "Pause" : "Play"} disabled={!duration}>{playing ? <Pause size={15} /> : <Play size={15} />}</button>
+        <input type="range" aria-label="Scrub the clip" min={0} max={Math.max(0.01, duration)} step={0.01} value={Math.min(time, duration || 0)} onChange={(e) => scrub(Number(e.target.value))} disabled={!duration} />
+        <span className="crop-time mono">{time.toFixed(1)} / {duration.toFixed(1)} s</span>
+      </div>
       {(showPeople || pick) && <div className="crop-people">
         {pick
           ? <><span>Following the dancer you chose at {pick.t.toFixed(1)} s{people.length > 1 ? " — click someone else to switch" : ""}.</span><button type="button" className="btn" onClick={() => onPick(null)} aria-label="Stop following this dancer"><X size={14} /> Clear</button></>
           : <span>{people.length} people in this frame — click the dancer to follow them; the biggest body is followed otherwise.</span>}
       </div>}
-      <div className="crop-tools">
-        <button type="button" className="btn" onClick={toggle} aria-label={playing ? "Pause" : "Play"} disabled={!duration}>{playing ? <Pause size={15} /> : <Play size={15} />}</button>
-        <input type="range" aria-label="Scrub the clip" min={0} max={Math.max(0.01, duration)} step={0.01} value={Math.min(time, duration || 0)} onChange={(e) => scrub(Number(e.target.value))} disabled={!duration} />
       </div>
-      <div className="crop-tools">
-        <label className="crop-zoom-slider"><span>Zoom</span><input type="range" aria-label="Zoom" min={1} max={MAX_ZOOM} step={0.05} value={zoom} onChange={(e) => onChange(zoomCrop(crop, Number(e.target.value)))} /></label>
-        <button type="button" className="btn" onClick={fit} disabled={fitting || !duration}><Focus size={15} /> Fit to dancer</button>
-        <button type="button" className="btn" onClick={() => onChange(clampCrop(FULL_CROP))} disabled={full} aria-label="Reset crop"><RotateCcw size={15} /></button>
+      <div className="crop-side">
+        {head}
+        <div className="crop-tools crop-tools-zoom">
+          <label className="crop-zoom-slider"><span>Zoom</span><input type="range" aria-label="Zoom" min={1} max={MAX_ZOOM} step={0.05} value={zoom} onChange={(e) => onChange(zoomCrop(crop, Number(e.target.value)))} /><span className="mono crop-zoom-value">{full ? "full" : `${zoom.toFixed(1)}×`}</span></label>
+        </div>
+        <div className="crop-tools">
+          <button type="button" className="btn" onClick={fit} disabled={fitting || !duration}><Focus size={15} /> Fit to dancer</button>
+          <button type="button" className="btn" onClick={() => onChange(clampCrop(FULL_CROP))} disabled={full} aria-label="Reset crop" title="Reset to the full frame"><RotateCcw size={15} /></button>
+        </div>
+        {note && <p role="alert" className="inline-error">{note}</p>}
+        {children}
       </div>
-      {note && <p role="alert" className="inline-error">{note}</p>}
     </div>
   );
 }

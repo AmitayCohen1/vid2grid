@@ -51,15 +51,7 @@ export function pointsFromPose(pose: Pose, body: Body, aspect: number): Points2D
   return out;
 }
 
-/* ---------- traces ---------- */
-
-export const TRACE_JOINTS: { id: JointId; color: string }[] = [
-  { id: "lwrist", color: "#4cc9f0" },
-  { id: "rwrist", color: "#f72585" },
-  { id: "lankle", color: "#4cc9f0" },
-  { id: "rankle", color: "#f72585" },
-  { id: "headTop", color: "#e8e9ec" },
-];
+/* ---------- traces: which joints, and how they are drawn, live in lib/traces.ts ---------- */
 
 /* ---------- alignments ---------- */
 

@@ -12,13 +12,16 @@ interface Props {
   onFile: (file: File, crop?: Crop, follow?: PersonPick) => void;
   busy: boolean;
   mode?: "upload" | "record";
+  /** Told when a clip is chosen (true) or put back (false). */
+  onFraming?: (framing: boolean) => void;
 }
 
 /** Get a clip in: drop/choose a file, or record one from the webcam. */
-export default function Source({ onFile, busy, mode = "upload" }: Props) {
+export default function Source({ onFile, busy, mode = "upload", onFraming }: Props) {
   const [selection, setSelection] = useState<{ file: File; url: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => () => { if (selection) URL.revokeObjectURL(selection.url); }, [selection]);
+  useEffect(() => { onFraming?.(!!selection); }, [selection, onFraming]);
   const choose = (file: File) => {
     if ((!file.type.startsWith("video/") && !/\.(mp4|mov|webm|m4v|ogv)$/i.test(file.name)) || file.size > 250 * 1024 * 1024) {
       setError("Choose an MP4, MOV, or WebM video smaller than 250 MB."); return;
@@ -26,7 +29,7 @@ export default function Source({ onFile, busy, mode = "upload" }: Props) {
     setError(null); setSelection({ file, url: URL.createObjectURL(file) });
   };
   return (
-    <div className="flex flex-col gap-3">
+    <div className={`flex flex-col gap-3 ${selection ? "source-framing" : ""}`}>
       {error && <p role="alert" className="inline-error">{error}</p>}
       {selection ? <ClipPreview file={selection.file} url={selection.url} onBack={() => setSelection(null)} onConfirm={(crop, pick) => onFile(selection.file, isFullCrop(crop) ? undefined : crop, pick ?? undefined)} /> : mode === "upload" ? <Upload onFile={choose} busy={busy} /> : <Record onFile={choose} busy={busy} />}
     </div>
@@ -37,11 +40,15 @@ function ClipPreview({ file, url, onBack, onConfirm }: { file: File; url: string
   const [error, setError] = useState<string | null>(null);
   const [crop, setCrop] = useState<Crop>(FULL_CROP);
   const [pick, setPick] = useState<PersonPick | null>(null);
-  return <div className="clip-preview"><div className="flow-steps"><span>1. Choose video</span><ArrowRight size={14} /><strong>2. Frame the dancer &amp; create</strong></div>
-    <CropEditor src={url} crop={crop} onChange={setCrop} pick={pick} onPick={setPick} onError={() => setError("This video cannot be played. Try an MP4 or WebM file.")} onMeta={(v) => { if (Number.isFinite(v.duration) && (v.duration < 1 || v.duration > 120)) setError("Choose a clip between 1 and 120 seconds."); }} />
-    <div className="clip-file"><strong>{file.name}</strong><span>{(file.size / 1024 / 1024).toFixed(1)} MB</span></div>
-    {error ? <p role="alert" className="inline-error">{error}</p> : <p className="dialog-note">Dancer far away? Zoom in so they fill the frame — drag the box, scroll to zoom, or press <em>Fit to dancer</em>. Only the framed region is tracked and shown. Several people in the shot? Pause on them and click the dancer to follow.</p>}
-    <div className="dialog-actions"><button className="btn" onClick={onBack}>Choose another</button><button className="btn primary" disabled={!!error} onClick={() => onConfirm(crop, pick)}>Create movement score <ArrowRight size={17} /></button></div>
+  return <div className="clip-preview">
+    <CropEditor src={url} crop={crop} onChange={setCrop} pick={pick} onPick={setPick} onError={() => setError("This video cannot be played. Try an MP4 or WebM file.")} onMeta={(v) => { if (Number.isFinite(v.duration) && (v.duration < 1 || v.duration > 120)) setError("Choose a clip between 1 and 120 seconds."); }}
+      head={<>
+        <div className="flow-steps"><span>1. Choose video</span><ArrowRight size={14} /><strong>2. Frame the dancer</strong></div>
+        <div className="clip-file"><strong title={file.name}>{file.name}</strong><span>{(file.size / 1024 / 1024).toFixed(1)} MB</span></div>
+      </>}>
+      {error ? <p role="alert" className="inline-error">{error}</p> : <p className="dialog-note">Only the framed region is tracked. Drag the box, scroll to zoom, or press <em>Fit to dancer</em>. Several people? Pause on them and click the one to follow.</p>}
+      <div className="dialog-actions clip-actions"><button className="btn primary" disabled={!!error} onClick={() => onConfirm(crop, pick)}>Create movement score <ArrowRight size={17} /></button><button className="btn" onClick={onBack}>Choose another</button></div>
+    </CropEditor>
   </div>;
 }
 

@@ -53,6 +53,28 @@ export function Seg<T extends string | number>({ label, value, options, onChange
   );
 }
 
+/** Several small toggles in a row: pick any number of them. */
+export function Chips<T extends string>({ label, value, options, onChange }: { label: string; value: T[]; options: { value: T; label: string; hint?: string }[]; onChange: (v: T[]) => void }) {
+  const toggle = (v: T) => onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v]);
+  return (
+    <div className="insp-chips" role="group" aria-label={label}>
+      {options.map((o) => (
+        <button key={o.value} aria-pressed={value.includes(o.value)} title={o.hint} onClick={() => toggle(o.value)}>{o.label}</button>
+      ))}
+    </div>
+  );
+}
+
+/** A colour swatch that opens the native picker. */
+export function Colour({ label, hint, value, disabled = false, onChange }: { label: string; hint?: string; value: string; disabled?: boolean; onChange: (v: string) => void }) {
+  return (
+    <label className={`insp-row ${disabled ? "is-disabled" : ""}`} title={hint}>
+      <span className="insp-label">{label}</span>
+      <input type="color" className="insp-color" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}
+
 /** A slider with its value as an editable number beside it. */
 export function NumSlider({ label, hint, value, min, max, step, unit = "", decimals = 0, disabled = false, onChange }:
   { label: string; hint?: string; value: number; min: number; max: number; step: number; unit?: string; decimals?: number; disabled?: boolean; onChange: (n: number) => void }) {
