@@ -358,9 +358,14 @@ test("labanToVec maps place-high and place-low to the poles", () => {
 Run: `npm test`
 Expected: FAIL — `TypeError: R.poseAt is not a function` (and similar for `mkPose`, `labanToVec`, `smooth`, `nlerp`, `lerpAngle`).
 
+> **Line numbers in this task are as-of-task-start and DRIFT as you insert.**
+> Each insertion shifts everything below it — by Step 7 the drift is 36 lines.
+> **Anchor on the quoted content, never on the number.** The numbers below are
+> orientation only.
+
 - [ ] **Step 3: Add the interpolation primitives to `notation-render.js`**
 
-In `public/movement-languages/notation-render.js`, in the math block, immediately after the `rotY` line (line 14) and before `dirToAzEl` (line 15), insert — copied verbatim from `danceforms.html:578-582`:
+In `public/movement-languages/notation-render.js`, in the math block, immediately after the `function rotY(...)` line and before the `function dirToAzEl(...)` line (≈14–15 at task start), insert — copied verbatim from `danceforms.html:578-582`:
 
 ```js
   function nlerp(a,b,u){ const x=a.x+(b.x-a.x)*u, y=a.y+(b.y-a.y)*u, z=a.z+(b.z-a.z)*u;
@@ -372,7 +377,7 @@ In `public/movement-languages/notation-render.js`, in the math block, immediatel
 
 - [ ] **Step 4: Add `mkPose` next to the existing pose constructors**
 
-Immediately after the existing `merge(...)` definition (line 44), insert — verbatim from `danceforms.html:499-504`:
+Immediately after the existing `function merge(pose, boneOverrides){...}` line (≈44 at task start; ≈48 after Step 3), insert — verbatim from `danceforms.html:499-504`:
 
 ```js
   function mkPose(over){
@@ -385,7 +390,7 @@ Immediately after the existing `merge(...)` definition (line 44), insert — ver
 
 - [ ] **Step 5: Add `poseAt` before `skeleton`**
 
-Immediately before `function skeleton(p){` (line 47), insert — verbatim from `danceforms.html:585-604`:
+Immediately before `function skeleton(p){` (≈47 at task start; ≈57 after Steps 3–4), insert — verbatim from `danceforms.html:585-604`:
 
 ```js
   /* pose at time t for a dancer (interpolated, full pose incl. x/z/facing) */
@@ -412,7 +417,7 @@ Immediately before `function skeleton(p){` (line 47), insert — verbatim from `
 
 - [ ] **Step 6: Add `labanToVec` next to `labanOf`**
 
-Immediately after the `labanOf` function and before `hatchDef`, insert — verbatim from `danceforms.html:929-933`:
+Immediately after the closing brace of `function labanOf(v){...}` and before `function hatchDef(id){`, insert — verbatim from `danceforms.html:929-933`:
 
 ```js
   function labanToVec(q){
@@ -424,7 +429,7 @@ Immediately after the `labanOf` function and before `hatchDef`, insert — verba
 
 - [ ] **Step 7: Export the seven new symbols**
 
-Replace the return statement on line 331 with:
+Replace the module's single `return { ... };` statement — the last statement before the closing `});`, near the end of the file — with:
 
 ```js
   return { BONES, BONE, LIMBSETS, standPose, clonePose, merge, mkPose, skeleton, poseAt,
@@ -646,7 +651,7 @@ Expected: both green, including `e2e-studio: OK`. If Studio throws `X is not def
 git diff --stat public/movement-languages/danceforms.html
 ```
 
-Expected: roughly 171 deletions against ~8 insertions (one script tag, seven preamble lines).
+Expected: roughly 171 deletions against ~11 insertions (one `<script>` tag, four comment lines, six preamble lines).
 
 - [ ] **Step 9: Commit**
 
