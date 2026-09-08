@@ -1,7 +1,17 @@
-/* notation-render.js — React-free twin of the pose model + the three notation
-   renderers embedded in danceforms.html. SOURCE OF TRUTH: danceforms.html.
-   Ported verbatim; only DOM/selection coupling is removed (see comparison spec
-   2026-08-28). Keep in step with danceforms.html by hand until it is unfrozen. */
+/* notation-render.js — the shared pose kernel for the movement-languages pages,
+   plus React-free copies of the three notation renderers.
+
+   KERNEL (pose model, FK, limb helpers, interpolation, Laban quantization):
+   defined HERE and nowhere else. danceforms.html loads this module and rebinds
+   these symbols via a destructuring preamble; comparison.html uses them
+   directly. test/notation.test.mjs pins the export list.
+
+   RENDERERS (renderLaban / renderBenesh / renderEW): deliberately duplicated —
+   danceforms.html keeps its own selection-and-tools versions, and remains the
+   source of truth for their layout. Ported verbatim; only DOM/selection
+   coupling is removed. Keep those three in step by hand.
+
+   See docs/superpowers/specs/2026-09-08-shared-kernel-design.md. */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory();
   else root.NotationRender = factory();
