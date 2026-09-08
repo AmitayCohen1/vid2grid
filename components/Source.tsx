@@ -5,6 +5,7 @@ import { ArrowRight, Camera, UploadCloud } from "lucide-react";
 import CropEditor from "./CropEditor";
 import { type Crop, FULL_CROP, isFullCrop } from "@/lib/crop";
 import type { PersonPick } from "@/lib/follow";
+import { recorderMime } from "@/lib/capture";
 
 interface Props {
   /** The chosen clip, the region of it to track (absent = the whole frame), and who to follow (absent = the biggest body). */
@@ -109,7 +110,7 @@ function Record({ onFile, busy }: Props) {
   const start = () => {
     const stream = streamRef.current;
     if (!stream) return;
-    const mime = ["video/mp4;codecs=avc1", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
+    const mime = recorderMime();
     const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 4_000_000 } : undefined);
     chunksRef.current = [];
     rec.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data); };

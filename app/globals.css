@@ -741,3 +741,13 @@ kbd { border: 1px solid var(--border); background: var(--background); border-rad
 /* cast devices: two small toggles in one row */
 .insp-toggles { display: flex; gap: 4px; justify-content: flex-end; grid-column: 2 / -1; }
 .insp-btn[aria-pressed="true"] { background: var(--n-brand-soft); border-color: var(--n-brand); color: var(--foreground); }
+
+/* Live take: the transport while the camera is the source. */
+.live-zone { width: 100%; font: inherit; color: inherit; }
+.live-zone strong { font-size: 15px; }
+.live-bar { min-height: 44px; }
+.live-pill { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--n-signal); color: var(--n-signal); font-size: 11px; letter-spacing: .08em; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--n-signal); animation: live-pulse 1.2s ease-in-out infinite; }
+.live-hint { font-size: 12px; color: var(--muted-foreground); margin-left: 6px; }
+@keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+@media (max-width: 720px) { .live-hint { display: none; } }

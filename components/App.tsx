@@ -17,6 +17,7 @@ import { imageToWorld, videoAnchors } from "@/lib/invideo";
 import { idbGet, idbSet } from "@/lib/store";
 import VideoPane from "./VideoPane";
 import Timeline from "./Timeline";
+import LiveBar from "./LiveBar";
 import BoneTable from "./BoneTable";
 import Controls from "./Controls";
 import { NumSlider, Section, Switch } from "./Inspector";
@@ -24,6 +25,8 @@ import Objects, { DEFAULT_OBJECTS, Drawing, type ObjectsOptions } from "./Object
 import { DEFAULT_GRID, type GridConfig } from "@/lib/grid";
 import { DEFAULT_SMOOTH, type LiftMode, type Score, type SmoothConfig, type SourceInfo, frameAt, measureBody, parseScore, rawPoses, serializeScore, smoothPoses, snapPoses } from "@/lib/score";
 import { fillGaps, trackVideo, type TrackedFrame } from "@/lib/tracker";
+import { LiveCapture } from "@/lib/capture";
+import { type LiveFrame, LiveScore, resampleLive } from "@/lib/live";
 import { type Crop, cropPixels, isFullCrop } from "@/lib/crop";
 import type { PersonPick } from "@/lib/follow";
 import { describeError } from "@/lib/errors";
@@ -39,7 +42,7 @@ const RAIL = [
   { id: "traces" as const, label: "Traces", short: "Traces", icon: <ScanLine size={15} /> },
 ];
 
-type Phase = "idle" | "loading" | "tracking" | "ready" | "error";
+type Phase = "idle" | "loading" | "tracking" | "live" | "ready" | "error";
 const SAMPLE_FPS = 30;
 const LS_KEY = "vid2grid:last-score";
 const CAST_KEY = "vid2grid:cast";
@@ -62,7 +65,7 @@ export default function App() {
   const [progress, setProgress] = useState({ done: 0, total: 1 });
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<"new" | "save" | "details" | "help" | "compare" | null>(null);
-  const [newMode, setNewMode] = useState<"upload" | "import">("upload");
+  const [newMode, setNewMode] = useState<"upload" | "import" | "live">("upload");
   const [settingsTab, setSettingsTab] = useState<"dancer" | "grid" | "cast" | "traces">("dancer");
   const [settingsOpen, setSettingsOpen] = useState(true);
   const [motion, setMotion] = useState<"stepped" | "smooth">("stepped");
@@ -77,6 +80,14 @@ export default function App() {
   const [grid, setGrid] = useState<GridConfig>(DEFAULT_GRID);
   const [smooth, setSmooth] = useState<SmoothConfig>(DEFAULT_SMOOTH);
   const [lift, setLift] = useState<LiftMode>("anchored");
+
+  /* A live take: the camera is the source and the score forms as the dancer moves. */
+  const [live, setLive] = useState<{ capture: LiveCapture; stream: MediaStream } | null>(null);
+  const liveRef = useRef<LiveCapture | null>(null);
+  const [liveFrame, setLiveFrame] = useState<LiveFrame | null>(null);
+  const [liveOverlay, setLiveOverlay] = useState<Float32Array | null>(null);
+  const [finishing, setFinishing] = useState(false);
+  const [limitHit, setLimitHit] = useState(false);
 
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -104,7 +115,7 @@ export default function App() {
   const previousRef = useRef<{ analysis: Analysis | null; imported: Score | null; src: string | null; time: number; home: boolean } | null>(null);
 
   const openModal = (name: NonNullable<typeof modal>) => { setPlaying(false); setError(null); setModal(name); };
-  const openNew = (mode: "upload" | "import" = "upload") => { setNewMode(mode); openModal("new"); };
+  const openNew = (mode: "upload" | "import" | "live" = "upload") => { setNewMode(mode); openModal("new"); };
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 5000); return () => clearTimeout(id); }, [toast]);
 
   // Restore the last score (figure only; the video is not kept).
@@ -157,13 +168,15 @@ export default function App() {
   }, [score]);
 
   const fi = score ? frameAt(score, time) : 0;
-  const snappedPose = score?.frames[fi] ?? null;
-  const rawPose = score?.raw[fi] ?? null;
+  // The current dancer's frame: from the score, or — live — whatever the camera just gave.
+  const snappedPose = live ? liveFrame?.snapped ?? null : score?.frames[fi] ?? null;
+  const rawPose = live ? liveFrame?.raw ?? null : score?.raw[fi] ?? null;
+  const curBody = live ? liveFrame?.body ?? null : body;
   // What the stage draws for the current dancer: the same poses at the chosen size. Notation and exports use the unscaled ones.
-  const stageBody = useMemo(() => (body ? scaleBody(body, size) : null), [body, size]);
+  const stageBody = useMemo(() => (curBody ? scaleBody(curBody, size) : null), [curBody, size]);
   const stagePose = useMemo(() => (snappedPose ? scalePose(snappedPose, size) : null), [snappedPose, size]);
   const stageRaw = useMemo(() => (rawPose ? scalePose(rawPose, size) : null), [rawPose, size]);
-  const overlay = analysis?.tracked[fi]?.image ?? null;
+  const overlay = live ? liveOverlay : analysis?.tracked[fi]?.image ?? null;
 
   /* ---------- the cast: dancers pinned onto the shared stage ---------- */
 
@@ -313,26 +326,22 @@ export default function App() {
   const fileNameRef = useRef("clip");
 
   const onLoaded = useCallback(async (video: HTMLVideoElement) => {
+    // The camera: start scoring what it shows.
+    if (video.srcObject) { liveRef.current?.run(video); return; }
     setVideoEl(video);
     // Returning from the home screen remounts the video; keep the existing analysis.
-    if (analysis) { video.currentTime = Math.min(timeRef.current, video.duration); return; }
+    // (A finished live take arrives here the same way, with its frames already tracked.)
+    if (analysis) {
+      if (!isFinite(video.duration)) await resolveDuration(video).catch(() => {});
+      video.currentTime = Math.min(timeRef.current, video.duration);
+      return;
+    }
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
     try {
       // MediaRecorder webm files often report Infinity; force the duration to resolve.
-      if (!isFinite(video.duration)) {
-        await new Promise<void>((resolve, reject) => {
-          const cleanup = () => { clearTimeout(timeout); video.removeEventListener("durationchange", done); ac.signal.removeEventListener("abort", aborted); };
-          const done = () => { if (Number.isFinite(video.duration)) { cleanup(); resolve(); } };
-          const aborted = () => { cleanup(); reject(new DOMException("Cancelled", "AbortError")); };
-          const timeout = setTimeout(() => { cleanup(); reject(new Error("Could not read this clip’s duration. Try exporting it as MP4.")); }, 10000);
-          video.addEventListener("durationchange", done);
-          ac.signal.addEventListener("abort", aborted, { once: true });
-          video.currentTime = 1e101;
-        });
-        video.currentTime = 0;
-      }
+      if (!isFinite(video.duration)) await resolveDuration(video, ac.signal);
       if (ac.signal.aborted) return;
       if (!Number.isFinite(video.duration) || video.duration < 1 || video.duration > 120) {
         throw new Error("Choose a clip between 1 and 120 seconds. A 5–30 second phrase works best.");
@@ -370,6 +379,90 @@ export default function App() {
       setPhase("error");
     }
   }, [analysis, pendingCrop, pendingFollow]);
+
+  /* ---------- a live take ---------- */
+
+  const startLive = useCallback(() => {
+    abortRef.current?.abort();
+    if (!previousRef.current) previousRef.current = { analysis, imported, src, time: timeRef.current, home };
+    if (src && src !== previousRef.current.src) URL.revokeObjectURL(src);
+    setSrc(null); setAnalysis(null); setImported(null); setVideoEl(null);
+    setPlaying(false); setTime(0); timeRef.current = 0;
+    setLiveFrame(null); setLiveOverlay(null); setFinishing(false);
+    setHome(false); setError(null); setPhase("loading"); setModal("new"); setSelected(null);
+    setView((v) => (v === "objects" ? "score" : v));
+    const engine = new LiveScore({ grid, smooth, lift });
+    const capture: LiveCapture = new LiveCapture({
+      engine,
+      fps: SAMPLE_FPS,
+      onFrame: (frame, image, t) => { setLiveFrame(frame); setLiveOverlay(image); timeRef.current = t; setTime(t); },
+      onLimit: () => setLimitHit(true),
+      onError: (e) => { capture.cancel(); liveRef.current = null; setLive(null); setError(describeError(e)); setPhase("error"); setModal("new"); },
+    });
+    liveRef.current = capture;
+    capture.open().then((stream) => {
+      if (liveRef.current !== capture) { capture.cancel(); return; } // superseded
+      setLive({ capture, stream });
+      setPhase("live");
+      setModal(null);
+      setToast("You're live. Move — the score is written as you go.");
+    }).catch((e) => {
+      if (liveRef.current === capture) liveRef.current = null;
+      setError(e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError")
+        ? "The camera was not allowed. Give this page camera access, then try again."
+        : describeError(e));
+      setPhase("error");
+    });
+  }, [analysis, imported, src, home, grid, smooth, lift]);
+
+  const restorePrevious = useCallback(() => {
+    const previous = previousRef.current;
+    setSrc(previous?.src ?? null); setAnalysis(previous?.analysis ?? null); setImported(previous?.imported ?? null); setPendingCrop(null);
+    timeRef.current = previous?.time ?? 0; setTime(timeRef.current);
+    setPhase(previous?.analysis || previous?.imported ? "ready" : "idle");
+    setHome(previous?.home ?? true); setError(null); setModal(null); previousRef.current = null;
+  }, []);
+
+  const discardLive = useCallback(() => {
+    liveRef.current?.cancel();
+    liveRef.current = null;
+    setLive(null); setLiveFrame(null); setLiveOverlay(null); setFinishing(false);
+    restorePrevious();
+  }, [restorePrevious]);
+
+  const finishLive = useCallback(async () => {
+    const capture = liveRef.current;
+    if (!capture) return;
+    liveRef.current = null;
+    setFinishing(true);
+    const result = await capture.stop();
+    setLive(null); setLiveFrame(null); setLiveOverlay(null); setFinishing(false); setLimitHit(false);
+    const tracked = resampleLive(result.samples, SAMPLE_FPS, result.duration);
+    const seen = tracked.filter((f) => f.extraction).length;
+    if (result.duration < 1 || seen < SAMPLE_FPS) {
+      restorePrevious();
+      setError("That take was too short to score. Go live again and dance for at least a second in full view.");
+      setModal("new"); setNewMode("live"); setPhase("error");
+      return;
+    }
+    const name = result.file?.name ?? `live-${new Date().toISOString().slice(0, 16).replace("T", " ")}`;
+    if (previousRef.current?.src) URL.revokeObjectURL(previousRef.current.src);
+    previousRef.current = null;
+    setSrc(result.file ? URL.createObjectURL(result.file) : null);
+    setAnalysis({ tracked, source: { name, duration: tracked.length / SAMPLE_FPS, fps: SAMPLE_FPS, width: result.width, height: result.height } });
+    setTime(0); timeRef.current = 0;
+    setPhase("ready"); setView("score");
+    setToast("Take kept. The whole score has been re-read from it — press Play to explore.");
+  }, [restorePrevious]);
+  // The capture reports reaching its limit; the take is finished from here, with the current handlers.
+  useEffect(() => { if (limitHit) void finishLive(); }, [limitHit, finishLive]);
+
+  // Settings apply live as they do offline; the engine restarts the affected stage from here.
+  useEffect(() => { live?.capture.engine.setGrid(grid); }, [live, grid]);
+  useEffect(() => { live?.capture.engine.setSmooth(smooth); }, [live, smooth]);
+  useEffect(() => { live?.capture.engine.setLift(lift); }, [live, lift]);
+  // Leaving the page mid-take releases the camera.
+  useEffect(() => () => { liveRef.current?.cancel(); }, []);
 
   /* ---------- playback ---------- */
 
@@ -481,12 +574,9 @@ export default function App() {
 
   const cancelTracking = () => {
     abortRef.current?.abort();
+    if (liveRef.current) { discardLive(); return; }
     if (src) URL.revokeObjectURL(src);
-    const previous = previousRef.current;
-    setSrc(previous?.src ?? null); setAnalysis(previous?.analysis ?? null); setImported(previous?.imported ?? null); setPendingCrop(null);
-    timeRef.current = previous?.time ?? 0; setTime(timeRef.current);
-    setPhase(previous?.analysis || previous?.imported ? "ready" : "idle");
-    setHome(previous?.home ?? true); setError(null); setModal(null); previousRef.current = null;
+    restorePrevious();
   };
 
   const busy = phase === "loading" || phase === "tracking";
@@ -512,30 +602,30 @@ export default function App() {
 
   /* ---------- layout ---------- */
 
-  const welcome = home || (!score && !busy && !src);
+  const welcome = home || (!score && !busy && !src && !live);
   const tab = settingsTab === "traces" && view !== "objects" ? "dancer" : settingsTab;
   const closeNew = () => { if (previousRef.current) cancelTracking(); else { setModal(null); setError(null); } };
   return (
     <div className={`app-shell flow-shell ${welcome ? "is-welcome" : "is-studio"}`}>
       <header className="app-header">
-        <button className="brand-lockup" disabled={busy} onClick={() => { setHome(true); setPlaying(false); }} aria-label="vid2grid home">
+        <button className="brand-lockup" disabled={busy || !!live} onClick={() => { setHome(true); setPlaying(false); }} aria-label="vid2grid home">
           <span className="brand-mark"><Grid2X2 size={21} strokeWidth={1.7} /></span>
           <span className="brand-name">vid<span>2</span>grid</span>
           <span className="brand-descriptor">MOVEMENT<br />LANGUAGES</span>
         </button>
         {!welcome && <>
-          <span className="project-chip" title={source?.name ?? undefined}>{source?.name ?? "Creating your score"}</span>
+          <span className="project-chip" title={source?.name ?? undefined}>{live ? "Live take" : source?.name ?? "Creating your score"}</span>
           <nav className="seg view-tabs" aria-label="Choose a view">
             <button aria-pressed={view === "score"} onClick={() => setView("score")}><Box size={18} />3D stage</button>
-            <button aria-pressed={view === "duet"} onClick={() => src ? setView("duet") : openModal("compare")}><Film size={18} />Compare</button>
-            <button aria-pressed={view === "objects"} onClick={() => setView("objects")}><ScanLine size={18} />Traces</button>
+            <button aria-pressed={view === "duet"} onClick={() => src || live ? setView("duet") : openModal("compare")}><Film size={18} />Compare</button>
+            <button aria-pressed={view === "objects"} onClick={() => setView("objects")} disabled={!!live} title={live ? "Traces are drawn once the take is finished" : undefined}><ScanLine size={18} />Traces</button>
           </nav>
         </>}
         <div className="header-actions">
           {!welcome && <button className="btn" disabled={!score} onClick={() => openModal("details")}><List size={17} /><span className="tool-label">Notation</span></button>}
           <button className="btn" onClick={() => openModal("help")}><CircleHelp size={17} /><span className="help-label">Help</span></button>
           {welcome ? <button className="btn" onClick={() => openNew("import")}>Open score</button> : <>
-            <button className="btn" onClick={() => openNew()} disabled={busy}><Plus size={17} /><span className="tool-label">New score</span></button>
+            <button className="btn" onClick={() => openNew()} disabled={busy || !!live}><Plus size={17} /><span className="tool-label">New score</span></button>
             <button className="btn primary" onClick={() => openModal("save")} disabled={!score}><Download size={17} /><span className="tool-label">Save</span></button>
           </>}
         </div>
@@ -545,17 +635,17 @@ export default function App() {
       {!welcome && <>
         <main className={`studio-workspace focused-workspace ${view === "duet" ? "compare-workspace" : ""} ${settingsOpen ? "" : "rail-settings"}`}>
           <section className={`source-panel ${view === "duet" ? "" : "source-hidden"}`} aria-label="Original video">
-            <div className="panel-heading"><span><Film size={16} />Original video</span></div>
+            <div className="panel-heading"><span><Film size={16} />{live ? "Camera" : "Original video"}</span></div>
             <div className="source-video relative">
-              <VideoPane ref={videoRef} src={src} crop={analysis?.source.crop ?? pendingCrop} overlay={overlay} showOverlay={showOverlay} onLoaded={onLoaded} onError={() => { abortRef.current?.abort(); setError("This video could not be decoded. Try an MP4 or WebM clip."); setPhase("error"); setModal("new"); }} />
+              <VideoPane ref={videoRef} src={src} stream={live?.stream ?? null} crop={analysis?.source.crop ?? pendingCrop} overlay={overlay} showOverlay={showOverlay} onLoaded={onLoaded} onError={() => { abortRef.current?.abort(); setError("This video could not be decoded. Try an MP4 or WebM clip."); setPhase("error"); setModal("new"); }} />
               {view === "duet" && anchor && videoFigures.length > 0 && <VideoStage aspect={videoAspect} metresAcross={anchor.mpu} figures={videoFigures} />}
             </div>
           </section>
           <section className="stage-panel" aria-label={view === "objects" ? "Movement traces" : "3D movement stage"}>
             <div className="stage-heading"><span className="mono">{motion === "smooth" ? "SMOOTH" : `${grid.azStep}° GRID`}</span></div>
             {view === "objects" && score ? <Objects score={score} overlays={overlays} video={analysis ? videoEl : null} frame={fi} options={objects} /> :
-              (score && body) || stageCast.length ? <Stage pose={stagePose} raw={stageRaw} body={stageBody} grid={grid} motion={motion} showRaw={showRaw} avatar={avatar} avatarUrl={avatarUrl} cast={stageCast} selected={selected} onSelect={setSelected} /> :
-              <div className="stage-empty"><Activity size={35} /><span>Your movement will appear here.</span></div>}
+              (snappedPose && curBody) || stageCast.length ? <Stage pose={stagePose} raw={stageRaw} body={stageBody} grid={grid} motion={motion} showRaw={showRaw} avatar={avatar} avatarUrl={avatarUrl} cast={stageCast} selected={selected} onSelect={setSelected} /> :
+              <div className="stage-empty"><Activity size={35} /><span>{live ? "Looking for you. Step back so your whole body is in the picture." : "Your movement will appear here."}</span></div>}
             {view !== "objects" && <div className="stage-legend"><span><i className="bg-limb-l" />Left side</span><span><i className="bg-limb-r" />Right side</span><span className="stage-help">Drag to rotate · Pinch or scroll to zoom</span></div>}
             {selected && view !== "objects" && <button className="selected-limb" onClick={() => setSelected(null)}>{selected} · selected <X size={15} /></button>}
           </section>
@@ -572,7 +662,7 @@ export default function App() {
               <button className="insp-icon" onClick={() => setSettingsOpen(false)} aria-label="Collapse settings" title="Collapse settings (Esc)"><PanelRightClose size={15} /></button>
             </div>
             <div className="sidebar-content">
-              {(tab === "dancer" || tab === "grid") && <Controls panel={tab} grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} motion={motion} onMotion={setMotion} size={size} onSize={setSize} inVideo={inVideo} onInVideo={setInVideo} beside={beside} onBeside={setBeside} selfDelay={selfDelay} onSelfDelay={setSelfDelay} />}
+              {(tab === "dancer" || tab === "grid") && <Controls panel={tab} grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis || !!live} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} motion={motion} onMotion={setMotion} size={size} onSize={setSize} inVideo={inVideo} onInVideo={setInVideo} beside={beside} onBeside={setBeside} selfDelay={selfDelay} onSelfDelay={setSelfDelay} />}
               {tab === "cast" && <CastPanel cast={cast} canAdd={!!score} beat={60 / bpm} onAdd={() => { addToCast(); setToast("Dancer added to your cast."); }} onCanon={(voices, gap) => { addCanon(voices, gap); setToast(`Canon added: ${voices} voices, ${gap.toFixed(2)} s apart.`); }} onDuplicate={duplicateCast} onRemove={removeCast} onUpdate={updateCast} />}
               {tab === "traces" && score && <>
                 <Section title="Traces">
@@ -597,12 +687,13 @@ export default function App() {
             )}
           </aside>
         </main>
-        {score && <footer className="studio-timeline"><Timeline score={score} total={stageDuration} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} onStep={step} selected={selected} onSelect={setSelected} speed={speed} onSpeed={setSpeed} loop={loop} onLoop={() => setLoop((l) => !l)} tempo={tempo} bpm={bpm} onBpm={onBpm} /></footer>}
+        {live && <footer className="studio-timeline"><LiveBar elapsed={time} keyframes={liveFrame?.keyframes ?? 0} ready={!!liveFrame} finishing={finishing} onFinish={finishLive} onDiscard={discardLive} /></footer>}
+        {score && !live && <footer className="studio-timeline"><Timeline score={score} total={stageDuration} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} onStep={step} selected={selected} onSelect={setSelected} speed={speed} onSpeed={setSpeed} loop={loop} onLoop={() => setLoop((l) => !l)} tempo={tempo} bpm={bpm} onBpm={onBpm} /></footer>}
       </>}
 
       <Dialog open={modal === "new"} title={busy ? "Creating your score" : "Start a new score"} description={busy ? "Your video is being processed on this device." : "A video, a recording, or a saved score. Choose where to begin."} onClose={closeNew} locked={busy}>
         {error && <p className="inline-error" role="alert">{error}</p>}
-        <NewScore initialMode={newMode} onFile={onFile} onImport={importJson} onDemo={loadDemo} busy={busy} progress={progress} loading={phase === "loading"} onCancel={cancelTracking} />
+        <NewScore initialMode={newMode} onFile={onFile} onImport={importJson} onDemo={loadDemo} onLive={startLive} busy={busy} progress={progress} loading={phase === "loading"} onCancel={cancelTracking} />
       </Dialog>
       <Dialog open={modal === "save"} title="Save your movement" description="Download a reusable copy of the current dancer’s score." onClose={() => setModal(null)}>
         {score && <SaveScore key={score.source.name} score={score} onSave={exportJson} />}
@@ -614,7 +705,7 @@ export default function App() {
         <div className="empty-dialog"><Film size={35} /><p>Create a score from your own video to watch the recording and 3D dancer together.</p><button className="btn primary" onClick={() => openNew()}>Choose a video</button><button className="btn" onClick={() => setModal(null)}>Back to the stage</button></div>
       </Dialog>
       <Dialog open={modal === "help"} title="A quick tour" description="From a video to a movement you can explore." onClose={() => setModal(null)}>
-        <div className="help-steps"><div><Film size={23} /><span><strong>1. Create a score</strong><p>Choose or record a short video. Preview it, then tap Create movement score. Or open an example to try things out.</p></span></div><div><Box size={23} /><span><strong>2. Explore the phrase</strong><p>Press Play. Drag the dancer to rotate the view. Compare shows your source video; Traces reveals movement paths.</p></span></div><div><SlidersHorizontal size={23} /><span><strong>3. Make it yours</strong><p>The panel on the right changes the dancer, movement detail, and cast as you watch. Notation explains the selected frame. Save downloads the current dancer’s score.</p></span></div></div>
+        <div className="help-steps"><div><Film size={23} /><span><strong>1. Create a score</strong><p>Choose or record a short video and tap Create movement score, or go live and dance in front of the camera. Or open an example to try things out.</p></span></div><div><Box size={23} /><span><strong>2. Explore the phrase</strong><p>Press Play. Drag the dancer to rotate the view. Compare shows your source video; Traces reveals movement paths.</p></span></div><div><SlidersHorizontal size={23} /><span><strong>3. Make it yours</strong><p>The panel on the right changes the dancer, movement detail, and cast as you watch. Notation explains the selected frame. Save downloads the current dancer’s score.</p></span></div></div>
         <div className="help-shortcuts"><span><kbd>Space</kbd> Play / pause</span><span><kbd>←</kbd><kbd>→</kbd> Step frames</span></div>
         <div className="dialog-footer"><span>Appearance</span><ThemeToggle /></div><button className="btn primary dialog-primary" onClick={() => setModal(null)}>Got it</button>
       </Dialog>
@@ -624,6 +715,19 @@ export default function App() {
 }
 
 const emptySubscribe = () => () => {};
+
+/** MediaRecorder webm files report an Infinite duration until seeked past the end; make it resolve. */
+function resolveDuration(video: HTMLVideoElement, signal?: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const cleanup = () => { clearTimeout(timeout); video.removeEventListener("durationchange", done); signal?.removeEventListener("abort", aborted); };
+    const done = () => { if (Number.isFinite(video.duration)) { cleanup(); video.currentTime = 0; resolve(); } };
+    const aborted = () => { cleanup(); reject(new DOMException("Cancelled", "AbortError")); };
+    const timeout = setTimeout(() => { cleanup(); reject(new Error("Could not read this clip’s duration. Try exporting it as MP4.")); }, 10000);
+    video.addEventListener("durationchange", done);
+    signal?.addEventListener("abort", aborted, { once: true });
+    video.currentTime = 1e101;
+  });
+}
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();

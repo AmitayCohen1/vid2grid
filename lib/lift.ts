@@ -171,10 +171,10 @@ export function liftClip(ex: Extraction[]): Pose[] {
   return ex.map((e) => (e.evidence ? poseFromPoints(liftFrame(e.evidence, edges, signs), e.pose) : e.pose));
 }
 
-/** Body measurements from the lifted edge lengths (metres). */
-export function bodyFromEdges(ex: Extraction[]) {
+/** Body measurements from the lifted edge lengths (metres). Pass `edges` when they are already measured. */
+export function bodyFromEdges(ex: Extraction[], edges?: Map<string, number>) {
   const evs = ex.map((e) => e.evidence).filter((e): e is LandmarkEvidence => !!e);
-  const edges = measureEdges(evs);
+  edges ??= measureEdges(evs);
   const E = (p: number, c: number) => edges.get(`${p}:${c}`) ?? 0.1;
   const width = (l: number, r: number) => {
     const xs = evs.map((f) => Math.hypot(f.data[r * S] - f.data[l * S], f.data[r * S + 1] - f.data[l * S + 1])).sort((a, b) => a - b);

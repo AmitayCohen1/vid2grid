@@ -7,6 +7,8 @@ import { Film } from "lucide-react";
 
 interface Props {
   src: string | null;
+  /** A live camera instead of a file; shown as-is (not mirrored) so the overlay and the stage agree on left and right. */
+  stream?: MediaStream | null;
   /** The tracked region of the clip; the pane shows only this, and the overlay is in its coordinates. */
   crop?: Crop | null;
   overlay: Float32Array | null;
@@ -16,10 +18,19 @@ interface Props {
 }
 
 /** The source video (or the tracked crop of it) with the tracker's 2D landmarks drawn over it. */
-const VideoPane = forwardRef<HTMLVideoElement, Props>(function VideoPane({ src, crop, overlay, showOverlay, onLoaded, onError }, ref) {
+const VideoPane = forwardRef<HTMLVideoElement, Props>(function VideoPane({ src, stream, crop, overlay, showOverlay, onLoaded, onError }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const drawRef = useRef<() => void>(() => {});
+
+  // A stream can't be a `src` attribute; hand it to the element directly.
+  useEffect(() => {
+    const video = boxRef.current?.querySelector("video");
+    if (!video || !stream) return;
+    video.srcObject = stream;
+    video.play().catch(() => {});
+    return () => { if (video.srcObject === stream) video.srcObject = null; };
+  }, [stream]);
 
   useEffect(() => {
     const cv = canvasRef.current;
@@ -65,17 +76,19 @@ const VideoPane = forwardRef<HTMLVideoElement, Props>(function VideoPane({ src, 
     const observer = new ResizeObserver(draw);
     observer.observe(box);
     return () => observer.disconnect();
-  }, [overlay, showOverlay, src, crop]);
+  }, [overlay, showOverlay, src, stream, crop]);
 
   return (
     <div ref={boxRef} className="relative w-full h-full bg-black overflow-hidden">
-      {src ? (
+      {src || stream ? (
         <video
+          key={src ?? "live"}
           ref={ref}
-          src={src}
+          src={src ?? undefined}
           className="absolute max-w-none w-full h-full"
           playsInline
           muted
+          autoPlay={!!stream}
           preload="auto"
           onLoadedMetadata={(e) => { drawRef.current(); onLoaded?.(e.currentTarget); }}
           onError={onError}

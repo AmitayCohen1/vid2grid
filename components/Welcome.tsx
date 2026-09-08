@@ -14,7 +14,7 @@ const poses = [35, 60, 85, 110, 135].map((i) => forwardKinematics(study.raw[i], 
 const CAST_PHRASES: DemoPhrase[] = ["reach", "turn", "sway", "reach", "turn"];
 
 const FEATURES = [
-  { icon: UploadCloud, title: "Start from any clip", text: "Upload a video or record one on the spot. The tracker reads the dancer frame by frame, entirely in your browser." },
+  { icon: UploadCloud, title: "Start from any clip", text: "Upload a video, record one on the spot, or go live and watch the score form as you move. The tracker reads the dancer frame by frame, entirely in your browser." },
   { icon: Users, title: "Compose your own choreography", text: "Add dancers to the cast, duplicate the one you have, and place each on the stage — a group piece grown from a single phrase." },
   { icon: Play, title: "Play with the movement", text: "Loop it, slow it to quarter speed, step frame by frame, scrub the playhead. The score is yours to explore from every angle." },
   { icon: Grid2X2, title: "Read it as notation", text: "Every limb becomes a direction on a grid — Laban and Eshkol–Wachman readings that re-snap instantly when you change the settings." },

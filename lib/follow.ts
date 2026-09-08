@@ -179,3 +179,21 @@ export function locatePick(frames: (Anchor | null)[][], pick: { x: number; y: nu
   }
   return null;
 }
+
+/**
+ * The same identity rule, one frame at a time, for a live camera: the
+ * nearest continuation of the person we had, and — with nobody to continue
+ * or the person gone for `reseedAfter` frames — the biggest body in view.
+ */
+export class LiveFollower {
+  private last: Anchor | null = null;
+  private gap = 0;
+  constructor(private reseedAfter: number) {}
+  /** Index of the dancer among this frame's anchors, -1 when not seen. */
+  pick(anchors: (Anchor | null)[]): number {
+    let k = this.last ? nextAnchor(anchors, this.last, this.gap) : -1;
+    if (k < 0 && (!this.last || this.gap >= this.reseedAfter)) k = largestAnchor(anchors);
+    if (k >= 0) { this.last = anchors[k]; this.gap = 0; } else this.gap++;
+    return k;
+  }
+}

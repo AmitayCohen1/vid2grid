@@ -126,7 +126,7 @@ function seek(video: HTMLVideoElement, t: number, signal?: AbortSignal): Promise
 }
 
 /** Everyone the model found on one frame, each person once. */
-interface Candidate {
+export interface Candidate {
   world: Landmark[];
   image: Landmark[];
   buf: Float32Array;
@@ -204,6 +204,25 @@ export async function trackVideo(video: HTMLVideoElement, opts: TrackOptions): P
     const c = chosen[i] >= 0 ? found[chosen[i]] : null;
     return c ? { extraction: extractPose(c.world, c.image, times[i], aspect), image: c.buf } : { extraction: null, image: null };
   });
+}
+
+/**
+ * Detection for a live camera: one call per displayed frame, stamped with
+ * the session's own clock (ms since it started) so the model's internal
+ * tracking sees real time deltas, kept strictly increasing across sessions.
+ */
+export class LiveDetector {
+  private base: number;
+  constructor(private lm: PoseLandmarker) { this.base = clock + 1; }
+  detect(source: HTMLVideoElement | HTMLCanvasElement, tMs: number): Candidate[] {
+    const ts = Math.max(clock + 1, this.base + Math.round(tMs));
+    clock = ts;
+    return candidatesOf(this.lm.detectForVideo(source, ts));
+  }
+}
+
+export async function liveDetector(): Promise<LiveDetector> {
+  return new LiveDetector(await getLandmarker());
 }
 
 /**

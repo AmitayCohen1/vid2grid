@@ -9,6 +9,16 @@ discrete grid. **The snapped score is the truth; the raw track is the evidence.*
 Play it back on a 3D stage, read every limb in Laban / Eshkol-Wachman terms, and
 see when the notation changes.
 
+Or **go live**: with the camera as the source the score is written as you move —
+the figure, the grid and your cast follow you in real time, and when you finish
+the take is kept as an ordinary score, recording included. Live, each stage of
+the pipeline runs causally (`lib/live.ts`): the body is re-measured as frames
+arrive, the smoother is the same One-Euro filter, and a new direction shows once
+it has held for the dwell — there is no back-dating, so the live figure runs a
+few frames behind the offline score. On Finish the take is resampled onto the
+fixed frame rate and re-read by the whole-clip pipeline; that result is the
+score, not what the stage showed live.
+
 There is also an **objects** view after Forsythe/OSU's *Synchronous Objects*: the
 video annotated with traces, alignment lines between limbs, movement density,
 and a generative drawing of the whole clip.
@@ -26,7 +36,7 @@ The opening studio includes three authored movement studies, so you can explore
 the stage without supplying a video. Studies are synthetic poses, not captured
 performances. Playback supports 0.25×–2× speed, looping, frame stepping, and a
 keyboard-accessible playhead. The home screen offers a resume card for the last
-score. New score opens a dialog to upload, record, import, or choose an example.
+score. New score opens a dialog to upload, record, go live, import, or choose an example.
 The Dancer tab chooses how the movement reads: **Smooth** drives the figure from
 the tracked motion (true to the video — best for watching and sharing), **Stepped**
 from the grid-snapped score (what the notation reads). It is display only: the

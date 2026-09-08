@@ -68,34 +68,48 @@ export function measureBody(ex: Extraction[], mode: LiftMode = "anchored"): Body
 
 /* ---------- smoothing ---------- */
 
-export function smoothPoses(poses: Pose[], cfg: SmoothConfig): Pose[] {
-  if (!poses.length) return [];
-  // Put the dancer's typical position at the centre of the stage.
-  const cx = median(poses.map((p) => p.x));
-  const cz = median(poses.map((p) => p.z));
-  const boneF = Object.fromEntries(BONE_IDS.map((id) => [id, new OneEuro3(cfg.minCutoff, cfg.beta)])) as Record<BoneId, OneEuro3>;
-  const facingF = new OneEuro3(cfg.minCutoff, cfg.beta);
-  const hipF = new OneEuro(cfg.minCutoff, cfg.beta);
-  const xF = new OneEuro(cfg.minCutoff * 0.6, cfg.beta);
-  const zF = new OneEuro(cfg.minCutoff * 0.4, cfg.beta);
-  const out: Pose[] = [];
-  let tPrev = poses[0].t;
-  for (const p of poses) {
-    const dt = Math.max(1e-3, p.t - tPrev);
-    tPrev = p.t;
+/**
+ * The One-Euro filters behind `smoothPoses`, one frame at a time — causal,
+ * so the live pipeline (live.ts) uses the very same smoothing. `centre` is
+ * subtracted from the stage position: the clip's median offline, where the
+ * dancer started when live.
+ */
+export class PoseSmoother {
+  private boneF: Record<BoneId, OneEuro3>;
+  private facingF: OneEuro3;
+  private hipF: OneEuro;
+  private xF: OneEuro;
+  private zF: OneEuro;
+  private tPrev: number | null = null;
+  constructor(cfg: SmoothConfig, private centre: { x: number; z: number }) {
+    this.boneF = Object.fromEntries(BONE_IDS.map((id) => [id, new OneEuro3(cfg.minCutoff, cfg.beta)])) as Record<BoneId, OneEuro3>;
+    this.facingF = new OneEuro3(cfg.minCutoff, cfg.beta);
+    this.hipF = new OneEuro(cfg.minCutoff, cfg.beta);
+    this.xF = new OneEuro(cfg.minCutoff * 0.6, cfg.beta);
+    this.zF = new OneEuro(cfg.minCutoff * 0.4, cfg.beta);
+  }
+  push(p: Pose): Pose {
+    const dt = this.tPrev === null ? 1e-3 : Math.max(1e-3, p.t - this.tPrev);
+    this.tPrev = p.t;
     const bones = {} as Record<BoneId, AzEl>;
-    for (const id of BONE_IDS) bones[id] = toAzEl(boneF[id].filter(fromAzEl(p.bones[id]), dt));
-    const facing = toAzEl(facingF.filter(fromAzEl([p.facing, 0]), dt))[0];
-    out.push({
+    for (const id of BONE_IDS) bones[id] = toAzEl(this.boneF[id].filter(fromAzEl(p.bones[id]), dt));
+    const facing = toAzEl(this.facingF.filter(fromAzEl([p.facing, 0]), dt))[0];
+    return {
       ...p,
       bones,
       facing,
-      hipY: hipF.filter(p.hipY, dt),
-      x: xF.filter(p.x - cx, dt),
-      z: zF.filter(p.z - cz, dt),
-    });
+      hipY: this.hipF.filter(p.hipY, dt),
+      x: this.xF.filter(p.x - this.centre.x, dt),
+      z: this.zF.filter(p.z - this.centre.z, dt),
+    };
   }
-  return out;
+}
+
+export function smoothPoses(poses: Pose[], cfg: SmoothConfig): Pose[] {
+  if (!poses.length) return [];
+  // Put the dancer's typical position at the centre of the stage.
+  const smoother = new PoseSmoother(cfg, { x: median(poses.map((p) => p.x)), z: median(poses.map((p) => p.z)) });
+  return poses.map((p) => smoother.push(p));
 }
 
 /* ---------- snapping ---------- */
