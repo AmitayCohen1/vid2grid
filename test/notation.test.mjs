@@ -395,3 +395,24 @@ test("labanToVec maps place-high and place-low to the poles", () => {
   assert.deepEqual(R.labanToVec({ dir: "place", level: "high" }), { x: 0, y: 1, z: 0 });
   assert.deepEqual(R.labanToVec({ dir: "place", level: "low" }), { x: 0, y: -1, z: 0 });
 });
+
+/* The exact list Studio's destructuring preamble binds (danceforms.html).
+   If this test fails, Studio will throw a ReferenceError at runtime — which
+   only the e2e would otherwise catch. Keep in step with the preamble. */
+const KERNEL_EXPORTS = [
+  "BONES", "BONE", "STAND", "clonePose", "mkPose",
+  "D2R", "vec", "rotY", "nlerp", "lerp", "lerpAngle", "smooth", "dirToAzEl", "poseAt", "skeleton",
+  "LIMBSETS", "limbVec", "setLimbVec", "limbLen",
+  "DIR8", "DIR16", "DIR_ARROW", "labanOf", "labanToVec", "hatchDef", "labanSymbol",
+  "LABAN_COLS", "labanQuantAt",
+  "beneshDepthOf", "ewCoord",
+];
+
+test("notation-render exports every symbol Studio's preamble binds", () => {
+  const missing = KERNEL_EXPORTS.filter((k) => R[k] === undefined);
+  assert.deepEqual(missing, [], "missing kernel exports: " + missing.join(", "));
+});
+
+test("the kernel export list has no duplicates", () => {
+  assert.equal(new Set(KERNEL_EXPORTS).size, KERNEL_EXPORTS.length);
+});

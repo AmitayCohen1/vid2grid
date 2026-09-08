@@ -365,7 +365,20 @@
     return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:none">${g}</svg>`;
   }
 
-  return { BONES, BONE, LIMBSETS, standPose, clonePose, merge, mkPose, skeleton, poseAt,
-           limbVec, setLimbVec, vec, rotY, dirToAzEl, nlerp, lerp, lerpAngle, smooth,
-           labanOf, labanToVec, renderLaban, renderBenesh, renderEW };
+  return {
+    // pose model
+    BONES, BONE, STAND, clonePose, standPose, merge, mkPose,
+    // math + interpolation
+    D2R, vec, rotY, nlerp, lerp, lerpAngle, smooth, dirToAzEl, poseAt, skeleton,
+    // limbs
+    LIMBSETS, limbVec, setLimbVec, limbLen,
+    // Laban quantization + glyphs
+    DIR8, DIR16, DIR_ARROW, labanOf, labanToVec, hatchDef, labanSymbol, LABAN_COLS, labanQuantAt,
+    // Benesh / EWMN readings
+    beneshDepthOf, ewCoord,
+    // Comparison-only helpers (NOT part of the Studio kernel)
+    SEG_TO_LABANCOL, segToLabanCol,
+    // renderers (deliberately duplicated in danceforms.html — see spec)
+    renderLaban, renderBenesh, renderEW,
+  };
 });
