@@ -321,13 +321,21 @@ test("poseAt interpolates between keys, staying strictly between the endpoints",
   assert.ok(el < 20 && el > -60, `midpoint elevation ${el} is not between the keys`);
 });
 
-test("poseAt yields unit-length bone directions (nlerp on the sphere, not an angle average)", () => {
-  const p = R.poseAt(twoKey(), 0.5);
-  for (const b of R.BONES) {
-    const v = R.vec(...p.bones[b.id]);
-    const m = Math.hypot(v.x, v.y, v.z);
-    assert.ok(Math.abs(m - 1) < 1e-9, `${b.id} direction has length ${m}`);
-  }
+test("poseAt interpolates on the sphere, not by averaging angles", () => {
+  // A bone swinging from az 0 to az 180 at a constant high elevation. The
+  // spherical path passes over the pole (el 90); a naive per-component average
+  // of the [az, el] pairs would stay at el 70. Only the former is correct, and
+  // only this shape of case tells them apart — an in-plane swing like
+  // twoKey()'s gives the same answer either way.
+  const d = {
+    beats: 2,
+    keys: [
+      { beat: 0, pose: R.merge(R.standPose(), { rfarm: [0, 70] }) },
+      { beat: 1, pose: R.merge(R.standPose(), { rfarm: [180, 70] }) },
+    ],
+  };
+  const [, el] = R.poseAt(d, 0.5).bones.rfarm;
+  assert.ok(el > 89, `midpoint elevation ${el} suggests angle averaging, not spherical interpolation`);
 });
 
 test("poseAt does not mutate the dancer it reads", () => {
