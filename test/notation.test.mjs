@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 const N = createRequire(import.meta.url)("../public/movement-languages/notation.js");
 
 /* A Window-3 fixture: one forearm-lowering gesture, identical geometry, three
@@ -240,6 +241,27 @@ test("limbVec returns a unit vector for the right arm", () => {
   assert.ok(Math.abs(Math.hypot(v.x, v.y, v.z) - 1) < 1e-9);
 });
 
+test("setLimbVec round-trips through limbVec", () => {
+  // The one kernel symbol with no other coverage, and load-bearing for
+  // Studio's Laban rose editor and Benesh sign-drag.
+  const p = R.standPose();
+  const want = R.vec(35, 20);
+  R.setLimbVec(p, "rarm", want);
+  const got = R.limbVec(p, "rarm");
+  for (const axis of ["x", "y", "z"]) {
+    assert.ok(Math.abs(got[axis] - want[axis]) < 1e-9,
+      `rarm ${axis}: got ${got[axis]}, want ${want[axis]}`);
+  }
+});
+
+test("setLimbVec sets every segment of the limb", () => {
+  const p = R.standPose();
+  R.setLimbVec(p, "rarm", R.vec(35, 20));
+  assert.deepEqual(p.bones.ruarm, p.bones.rfarm);
+  // and leaves other limbs alone
+  assert.deepEqual(p.bones.luarm, R.standPose().bones.luarm);
+});
+
 /* ======================= notation-render.js: Laban renderer ======================= */
 const w3dancer = () => ({
   beats: 2,
@@ -415,4 +437,13 @@ test("notation-render exports every symbol Studio's preamble binds", () => {
 
 test("the kernel export list has no duplicates", () => {
   assert.equal(new Set(KERNEL_EXPORTS).size, KERNEL_EXPORTS.length);
+});
+
+test("Studio's destructuring preamble matches KERNEL_EXPORTS exactly", () => {
+  // The three lists that must agree are: the module's exports, KERNEL_EXPORTS,
+  // and danceforms.html's preamble. The first two are checked above; this pins
+  // the third, which was previously held only by a comment.
+  const studio = readFileSync(new URL("../public/movement-languages/danceforms.html", import.meta.url), "utf8");
+  const preamble = studio.match(/const \{([\s\S]*?)\} = NotationRender;/)[1].split(/[,\s]+/).filter(Boolean);
+  assert.deepEqual(preamble.sort(), [...KERNEL_EXPORTS].sort());
 });

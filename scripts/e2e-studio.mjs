@@ -65,7 +65,7 @@ try {
   const shot1 = await page.locator("#stageCanvas").screenshot();
   if (Buffer.compare(shot0, shot1) === 0) die("scrubbing the timeline did not repaint the stage");
 
-  // 7. Applying a palette pose rewrites the Laban view (exercises setLimbVec +
+  // 7. Applying a palette pose rewrites the Laban view (exercises limbVec +
   //    labanQuantAt + labanSymbol end to end).
   const labanBefore = await page.$eval("#labanView", (el) => el.innerHTML);
   await page.click('#palette button[data-preset="3"]');   // "Plié"
