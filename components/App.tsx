@@ -12,7 +12,7 @@ import { createDemo, type DemoPhrase } from "@/lib/demo";
 import { DEFAULT_AVATAR_URL } from "@/lib/avatars";
 import CastPanel, { type CastMember, type CastPatch } from "./Cast";
 import type { StageCastMember } from "./Stage";
-import { NO_DEVICES, clipTime, memberSpan, mirrorBody, mirrorPose, placePose, sanitizeDevices } from "@/lib/devices";
+import { NO_DEVICES, clipTime, memberSpan, mirrorBody, mirrorPose, placePose, sanitizeDevices, scaleBody, scalePose } from "@/lib/devices";
 import { imageToWorld, videoAnchors } from "@/lib/invideo";
 import { idbGet, idbSet } from "@/lib/store";
 import VideoPane from "./VideoPane";
@@ -99,6 +99,8 @@ export default function App() {
   const [besideOverride, setBesideOverride] = useState<{ source: SourceInfo; beside: number } | null>(null);
   /** Seconds the character in the video runs behind the person — the off-sync ghost, on purpose. */
   const [selfDelay, setSelfDelay] = useState(0);
+  /** How big the current dancer is drawn (stage and video); display only, the score keeps the tracked body. */
+  const [size, setSize] = useState(1);
   const previousRef = useRef<{ analysis: Analysis | null; imported: Score | null; src: string | null; time: number; home: boolean } | null>(null);
 
   const openModal = (name: NonNullable<typeof modal>) => { setPlaying(false); setError(null); setModal(name); };
@@ -157,6 +159,10 @@ export default function App() {
   const fi = score ? frameAt(score, time) : 0;
   const snappedPose = score?.frames[fi] ?? null;
   const rawPose = score?.raw[fi] ?? null;
+  // What the stage draws for the current dancer: the same poses at the chosen size. Notation and exports use the unscaled ones.
+  const stageBody = useMemo(() => (body ? scaleBody(body, size) : null), [body, size]);
+  const stagePose = useMemo(() => (snappedPose ? scalePose(snappedPose, size) : null), [snappedPose, size]);
+  const stageRaw = useMemo(() => (rawPose ? scalePose(rawPose, size) : null), [rawPose, size]);
   const overlay = analysis?.tracked[fi]?.image ?? null;
 
   /* ---------- the cast: dancers pinned onto the shared stage ---------- */
@@ -197,7 +203,8 @@ export default function App() {
     avatarUrl: avatar ? avatarUrl : null,
     x, z: 0, rot: 0,
     ...devices,
-  } : null, [score, avatar, avatarUrl]);
+    size,
+  } : null, [score, avatar, avatarUrl, size]);
   const addToCast = useCallback(() => {
     setCast((c) => {
       // Alternate new dancers left/right of centre so they don't stack —
@@ -239,8 +246,8 @@ export default function App() {
   const stageCast: StageCastMember[] = useMemo(() => cast.map((m) => {
     const track = motion === "smooth" ? m.score.raw : m.score.frames;
     const p = track[frameAt(m.score, clipTime(time, m.score.source.duration, m))];
-    const pose = placePose(m.mirror ? mirrorPose(p) : p, m);
-    return { id: m.id, pose, body: m.mirror ? mirrorBody(m.score.body) : m.score.body, avatarUrl: m.avatarUrl };
+    const pose = scalePose(placePose(m.mirror ? mirrorPose(p) : p, m), m.size);
+    return { id: m.id, pose, body: scaleBody(m.mirror ? mirrorBody(m.score.body) : m.score.body, m.size), avatarUrl: m.avatarUrl };
   }), [cast, time, motion]);
 
   /* ---------- figures inside the video ---------- */
@@ -270,10 +277,10 @@ export default function App() {
     // The character may run behind the person; its travel stays relative to where the person is now.
     const self = selfDelay > 0 ? track[frameAt(score, clipTime(time, score.source.duration, { ...NO_DEVICES, delay: selfDelay }))] : live;
     const at = imageToWorld(anchor.u, anchor.floorV, anchor.mpu, videoAspect);
-    const out: StageCastMember[] = [{ id: "self", pose: { ...self, x: at.x + beside + (self.x - live.x), z: 0, hipY: at.y + self.hipY }, body, avatarUrl: avatar ? avatarUrl : null }];
+    const out: StageCastMember[] = [{ id: "self", pose: { ...self, x: at.x + beside + (self.x - live.x), z: 0, hipY: at.y + self.hipY * size }, body: scaleBody(body, size), avatarUrl: avatar ? avatarUrl : null }];
     for (const m of stageCast) out.push({ ...m, pose: { ...m.pose, x: at.x + (m.pose.x - live.x), z: m.pose.z - live.z, hipY: at.y + m.pose.hipY } });
     return out;
-  }, [inVideo, anchor, score, body, fi, time, selfDelay, motion, videoAspect, beside, avatar, avatarUrl, stageCast]);
+  }, [inVideo, anchor, score, body, size, fi, time, selfDelay, motion, videoAspect, beside, avatar, avatarUrl, stageCast]);
 
   /* ---------- getting a clip in ---------- */
 
@@ -547,7 +554,7 @@ export default function App() {
           <section className="stage-panel" aria-label={view === "objects" ? "Movement traces" : "3D movement stage"}>
             <div className="stage-heading"><span className="mono">{motion === "smooth" ? "SMOOTH" : `${grid.azStep}° GRID`}</span></div>
             {view === "objects" && score ? <Objects score={score} overlays={overlays} video={analysis ? videoEl : null} frame={fi} options={objects} /> :
-              (score && body) || stageCast.length ? <Stage pose={snappedPose} raw={rawPose} body={body} grid={grid} motion={motion} showRaw={showRaw} avatar={avatar} avatarUrl={avatarUrl} cast={stageCast} selected={selected} onSelect={setSelected} /> :
+              (score && body) || stageCast.length ? <Stage pose={stagePose} raw={stageRaw} body={stageBody} grid={grid} motion={motion} showRaw={showRaw} avatar={avatar} avatarUrl={avatarUrl} cast={stageCast} selected={selected} onSelect={setSelected} /> :
               <div className="stage-empty"><Activity size={35} /><span>Your movement will appear here.</span></div>}
             {view !== "objects" && <div className="stage-legend"><span><i className="bg-limb-l" />Left side</span><span><i className="bg-limb-r" />Right side</span><span className="stage-help">Drag to rotate · Pinch or scroll to zoom</span></div>}
             {selected && view !== "objects" && <button className="selected-limb" onClick={() => setSelected(null)}>{selected} · selected <X size={15} /></button>}
@@ -565,7 +572,7 @@ export default function App() {
               <button className="insp-icon" onClick={() => setSettingsOpen(false)} aria-label="Collapse settings" title="Collapse settings (Esc)"><PanelRightClose size={15} /></button>
             </div>
             <div className="sidebar-content">
-              {(tab === "dancer" || tab === "grid") && <Controls panel={tab} grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} motion={motion} onMotion={setMotion} inVideo={inVideo} onInVideo={setInVideo} beside={beside} onBeside={setBeside} selfDelay={selfDelay} onSelfDelay={setSelfDelay} />}
+              {(tab === "dancer" || tab === "grid") && <Controls panel={tab} grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} motion={motion} onMotion={setMotion} size={size} onSize={setSize} inVideo={inVideo} onInVideo={setInVideo} beside={beside} onBeside={setBeside} selfDelay={selfDelay} onSelfDelay={setSelfDelay} />}
               {tab === "cast" && <CastPanel cast={cast} canAdd={!!score} beat={60 / bpm} onAdd={() => { addToCast(); setToast("Dancer added to your cast."); }} onCanon={(voices, gap) => { addCanon(voices, gap); setToast(`Canon added: ${voices} voices, ${gap.toFixed(2)} s apart.`); }} onDuplicate={duplicateCast} onRemove={removeCast} onUpdate={updateCast} />}
               {tab === "traces" && score && <>
                 <Section title="Traces">

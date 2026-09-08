@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { NO_DEVICES, clipTime, memberSpan, mirrorBody, mirrorPose, placePose, sanitizeDevices } from "../lib/devices";
+import { NO_DEVICES, clipTime, memberSpan, mirrorBody, mirrorPose, placePose, sanitizeDevices, scaleBody, scalePose } from "../lib/devices";
 import { forwardKinematics, DEFAULT_BODY } from "../lib/fk";
 import { BONE_IDS } from "../lib/skeleton";
 import type { Pose } from "../lib/pose";
@@ -24,7 +24,18 @@ test("clipTime: waits through the delay, runs at rate, holds at the end, reverse
 
 test("sanitizeDevices fills and clamps", () => {
   assert.deepEqual(sanitizeDevices(undefined), NO_DEVICES);
-  assert.deepEqual(sanitizeDevices({ delay: -3, rate: 99, mirror: true }), { delay: 0, rate: 4, mirror: true, reverse: false });
+  assert.deepEqual(sanitizeDevices({ delay: -3, rate: 99, mirror: true }), { delay: 0, rate: 4, mirror: true, reverse: false, size: 1 });
+  assert.equal(sanitizeDevices({ size: 7 }).size, 2);
+});
+
+test("scaleBody and scalePose keep the feet on the floor", () => {
+  const b = scaleBody(DEFAULT_BODY, 2);
+  assert.equal(b.lengths.lshin, DEFAULT_BODY.lengths.lshin * 2);
+  assert.equal(b.hipWidth, DEFAULT_BODY.hipWidth * 2);
+  assert.equal(scaleBody(DEFAULT_BODY, 1), DEFAULT_BODY);
+  const p = scalePose({ ...pose({}), hipY: 0.9, x: 1.5 }, 2);
+  assert.equal(p.hipY, 1.8);
+  assert.equal(p.x, 1.5);
 });
 
 test("mirrorPose is the audience's mirror image of the figure", () => {

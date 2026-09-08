@@ -24,9 +24,12 @@ export interface Devices {
   rate: number;
   mirror: boolean;
   reverse: boolean;
+  /** Scale of the figure: 1 = the tracked body, 2 = twice as tall. Display only — the score keeps the real body. */
+  size: number;
 }
 
-export const NO_DEVICES: Devices = { delay: 0, rate: 1, mirror: false, reverse: false };
+export const NO_DEVICES: Devices = { delay: 0, rate: 1, mirror: false, reverse: false, size: 1 };
+export const MIN_SIZE = 0.5, MAX_SIZE = 2;
 
 /** Round a stored value into a usable Devices — missing or bad fields fall back. */
 export function sanitizeDevices(d: Partial<Devices> | null | undefined): Devices {
@@ -37,6 +40,7 @@ export function sanitizeDevices(d: Partial<Devices> | null | undefined): Devices
     rate: num(d?.rate, 0.1, 4, 1),
     mirror: d?.mirror === true,
     reverse: d?.reverse === true,
+    size: num(d?.size, MIN_SIZE, MAX_SIZE, 1),
   };
 }
 
@@ -76,6 +80,19 @@ export function mirrorPose(p: Pose): Pose {
     bones[id] = id === "shoulders" ? toAzEl({ x: d.x, y: -d.y, z: -d.z }) : toAzEl({ x: -d.x, y: d.y, z: d.z });
   }
   return { ...p, bones, facing: wrap360(-p.facing), x: -p.x };
+}
+
+/** A body `s` times the size: every bone, and the hip and shoulder widths. */
+export function scaleBody(b: Body, s: number): Body {
+  if (s === 1) return b;
+  const lengths = {} as Record<BoneId, number>;
+  for (const id of BONE_IDS) lengths[id] = b.lengths[id] * s;
+  return { lengths, hipWidth: b.hipWidth * s, shoulderWidth: b.shoulderWidth * s };
+}
+
+/** The pose that goes with a scaled body: the hips ride `s` times as high, so the feet stay on the floor. Travel is unchanged. */
+export function scalePose(p: Pose, s: number): Pose {
+  return s === 1 ? p : { ...p, hipY: p.hipY * s };
 }
 
 export function mirrorBody(b: Body): Body {

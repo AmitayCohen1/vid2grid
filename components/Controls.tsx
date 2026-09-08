@@ -7,6 +7,7 @@ import { AVATAR_PRESETS, turnSheet } from "@/lib/avatars";
 import { DEFAULT_GRID, type GridConfig } from "@/lib/grid";
 import { DEFAULT_SMOOTH, type LiftMode, type SmoothConfig } from "@/lib/score";
 import { Disclosure, Note, NumSlider, Section, Seg, Select, Switch } from "./Inspector";
+import { MAX_SIZE, MIN_SIZE } from "@/lib/devices";
 
 interface Props {
   panel: "dancer" | "grid";
@@ -18,6 +19,8 @@ interface Props {
   showOverlay: boolean; onShowOverlay: (b: boolean) => void;
   lift: LiftMode; onLift: (m: LiftMode) => void; canLift: boolean;
   motion: "stepped" | "smooth"; onMotion: (m: "stepped" | "smooth") => void;
+  /** Scale of the figure on stage and in the video; 1 = the tracked body. */
+  size: number; onSize: (s: number) => void;
   /** Compare view: the character and the cast drawn inside the recording, beside the person. */
   inVideo: boolean; onInVideo: (b: boolean) => void;
   /** Metres to the person's screen-right the character stands in the video. */
@@ -42,6 +45,7 @@ export default function Controls(p: Props) {
     </Section>
     <Section title="Look" aside={<span className="insp-aside">{p.avatar ? (p.avatarName ?? AVATAR_PRESETS.find((a) => a.url === p.avatarUrl)?.label ?? "Character") : "Skeleton"}</span>}>
       <CharacterGrid {...p} />
+      <NumSlider label="Size" hint="How big the figure is drawn, on stage and in the video. 1 is your tracked size; the score itself keeps the real body." min={MIN_SIZE} max={MAX_SIZE} step={0.05} decimals={2} unit="×" value={p.size} onChange={p.onSize} />
     </Section>
     <Section title="Overlays">
       <Switch label={p.motion === "smooth" ? "Snapped ghost" : "Original ghost"}

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Activity, Copy, FlipHorizontal2, Plus, Rewind, User, X } from "lucide-react";
 import { AVATAR_PRESETS } from "@/lib/avatars";
 import type { Score } from "@/lib/score";
-import type { Devices } from "@/lib/devices";
+import { type Devices, MAX_SIZE, MIN_SIZE } from "@/lib/devices";
 import { Note, NumSlider, Row, Section } from "./Inspector";
 
 /** A dancer placed on the shared stage: a snapshot of a score (its own
@@ -23,7 +23,7 @@ export interface CastMember extends Devices {
   rot: number;
 }
 
-export type CastPatch = Partial<Pick<CastMember, "x" | "z" | "rot" | "delay" | "rate" | "mirror" | "reverse">>;
+export type CastPatch = Partial<Pick<CastMember, "x" | "z" | "rot" | "delay" | "rate" | "mirror" | "reverse" | "size">>;
 
 interface Props {
   cast: CastMember[];
@@ -72,6 +72,7 @@ export default function CastPanel({ cast, canAdd, beat, onAdd, onCanon, onDuplic
                 <NumSlider label="Turn" hint="Facing, in degrees" min={-180} max={180} step={5} unit="°" value={m.rot} onChange={(rot) => onUpdate(m.id, { rot })} />
                 <NumSlider label="Delay" hint={`Waits in the first pose, then starts — ${beats(m.delay, beat)} at the current tempo`} min={0} max={8} step={0.05} decimals={2} unit="s" value={m.delay} onChange={(delay) => onUpdate(m.id, { delay })} />
                 <NumSlider label="Speed" hint="How fast the clip runs: 2 is twice as fast, 0.5 half speed" min={0.25} max={2} step={0.05} decimals={2} unit="×" value={m.rate} onChange={(rate) => onUpdate(m.id, { rate })} />
+                <NumSlider label="Size" hint="How big this dancer is drawn: 1 is their tracked size, 2 twice as tall" min={MIN_SIZE} max={MAX_SIZE} step={0.05} decimals={2} unit="×" value={m.size} onChange={(size) => onUpdate(m.id, { size })} />
                 <Row label="Devices" hint="Mirror swaps left and right. Reverse runs the clip backwards.">
                   <span className="insp-toggles">
                     <button className="insp-btn" aria-pressed={m.mirror} onClick={() => onUpdate(m.id, { mirror: !m.mirror })}><FlipHorizontal2 size={12} /> Mirror</button>
