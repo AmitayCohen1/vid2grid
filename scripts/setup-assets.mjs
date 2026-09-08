@@ -18,6 +18,8 @@ const MODEL_URL =
 // - vita/vivi/victoria/shibu/fumiriya.vrm: VRoid Studio beta sample models (Vita, Vivi,
 //   Victoria Rubin, Darkness Shibu, Sakurada Fumiriya), released under CC0:
 //   https://vroid.pixiv.help/hc/en-us/articles/4402614652569
+// - hair-male.vrm: VRoid Studio beta sample "HairSample_Male", CC0 (same page). Three
+//   presets share it (Sora, Kai, Ren) — the latter two are tinted at load, see lib/avatars.ts.
 const AVATARS = [
   ["avatar.vrm", "https://raw.githubusercontent.com/pixiv/three-vrm/dev/packages/three-vrm/examples/models/VRM1_Constraint_Twist_Sample.vrm"],
   ["seed-san.vrm", "https://raw.githubusercontent.com/vrm-c/vrm-specification/master/samples/Seed-san/vrm/Seed-san.vrm"],
@@ -29,6 +31,7 @@ const AVATARS = [
   ["victoria.vrm", "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/beta/Victoria_Rubin.vrm"],
   ["shibu.vrm", "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/beta/Darkness_Shibu.vrm"],
   ["fumiriya.vrm", "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/beta/Sakurada_Fumiriya.vrm"],
+  ["hair-male.vrm", "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/beta/HairSample_Male.vrm"],
 ];
 
 mkdirSync(wasmDst, { recursive: true });
