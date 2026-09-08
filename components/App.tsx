@@ -603,6 +603,9 @@ export default function App() {
   /* ---------- layout ---------- */
 
   const welcome = home || (!score && !busy && !src && !live);
+  // The way back from the landing exists only once the studio has been open this visit; a score restored from storage waits quietly.
+  const [studioSeen, setStudioSeen] = useState(false);
+  if (!welcome && !studioSeen) setStudioSeen(true);
   const tab = settingsTab === "traces" && view !== "objects" ? "dancer" : settingsTab;
   const closeNew = () => { if (previousRef.current) cancelTracking(); else { setModal(null); setError(null); } };
   return (
@@ -624,14 +627,17 @@ export default function App() {
         <div className="header-actions">
           {!welcome && <button className="btn" disabled={!score} onClick={() => openModal("details")}><List size={17} /><span className="tool-label">Notation</span></button>}
           <button className="btn" onClick={() => openModal("help")}><CircleHelp size={17} /><span className="help-label">Help</span></button>
-          {welcome ? <button className="btn" onClick={() => openNew("import")}>Open score</button> : <>
+          {welcome ? <>
+            {studioSeen && score && <button className="btn" onClick={() => setHome(false)}><ArrowLeft size={17} />Back to studio</button>}
+            <button className="btn" onClick={() => openNew("import")}>Open score</button>
+          </> : <>
             <button className="btn" onClick={() => openNew()} disabled={busy || !!live}><Plus size={17} /><span className="tool-label">New score</span></button>
             <button className="btn primary" onClick={() => openModal("save")} disabled={!score}><Download size={17} /><span className="tool-label">Save</span></button>
           </>}
         </div>
       </header>
 
-      {welcome && <>{score && <div className="resume-bar"><button className="resume-card" onClick={() => setHome(false)}><ArrowLeft size={20} /><span><strong>Continue your last score</strong><small>{score.source.name}</small></span><span>Open studio</span></button></div>}<Welcome onStart={() => openNew()} onDemo={loadDemo} /></>}
+      {welcome && <Welcome onStart={() => openNew()} onDemo={loadDemo} />}
       {!welcome && <>
         <main className={`studio-workspace focused-workspace ${view === "duet" ? "compare-workspace" : ""} ${settingsOpen ? "" : "rail-settings"}`}>
           <section className={`source-panel ${view === "duet" ? "" : "source-hidden"}`} aria-label="Original video">

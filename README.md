@@ -35,8 +35,9 @@ npm test          # engine regression checks
 The opening studio includes three authored movement studies, so you can explore
 the stage without supplying a video. Studies are synthetic poses, not captured
 performances. Playback supports 0.25×–2× speed, looping, frame stepping, and a
-keyboard-accessible playhead. The home screen offers a resume card for the last
-score. New score opens a dialog to upload, record, go live, import, or choose an example.
+keyboard-accessible playhead. The home screen is a real demo: a clip and a character dancing its score side by
+side (`public/demo`, regenerated with `scripts/hero-data.ts`) and the cast; the header offers a way
+back to the studio once it has been open. New score opens a dialog to upload, record, go live, import, or choose an example.
 The Dancer tab chooses how the movement reads: **Smooth** drives the figure from
 the tracked motion (true to the video — best for watching and sharing), **Stepped**
 from the grid-snapped score (what the notation reads). It is display only: the
