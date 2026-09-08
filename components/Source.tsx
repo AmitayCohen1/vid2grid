@@ -2,9 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Camera, UploadCloud } from "lucide-react";
+import CropEditor from "./CropEditor";
+import { type Crop, FULL_CROP, isFullCrop } from "@/lib/crop";
+import type { PersonPick } from "@/lib/follow";
 
 interface Props {
-  onFile: (file: File) => void;
+  /** The chosen clip, the region of it to track (absent = the whole frame), and who to follow (absent = the biggest body). */
+  onFile: (file: File, crop?: Crop, follow?: PersonPick) => void;
   busy: boolean;
   mode?: "upload" | "record";
 }
@@ -23,18 +27,20 @@ export default function Source({ onFile, busy, mode = "upload" }: Props) {
   return (
     <div className="flex flex-col gap-3">
       {error && <p role="alert" className="inline-error">{error}</p>}
-      {selection ? <ClipPreview file={selection.file} url={selection.url} onBack={() => setSelection(null)} onConfirm={() => onFile(selection.file)} /> : mode === "upload" ? <Upload onFile={choose} busy={busy} /> : <Record onFile={choose} busy={busy} />}
+      {selection ? <ClipPreview file={selection.file} url={selection.url} onBack={() => setSelection(null)} onConfirm={(crop, pick) => onFile(selection.file, isFullCrop(crop) ? undefined : crop, pick ?? undefined)} /> : mode === "upload" ? <Upload onFile={choose} busy={busy} /> : <Record onFile={choose} busy={busy} />}
     </div>
   );
 }
 
-function ClipPreview({ file, url, onBack, onConfirm }: { file: File; url: string; onBack: () => void; onConfirm: () => void }) {
+function ClipPreview({ file, url, onBack, onConfirm }: { file: File; url: string; onBack: () => void; onConfirm: (crop: Crop, pick: PersonPick | null) => void }) {
   const [error, setError] = useState<string | null>(null);
-  return <div className="clip-preview"><div className="flow-steps"><span>1. Choose video</span><ArrowRight size={14} /><strong>2. Preview &amp; create</strong></div>
-    <video src={url} controls playsInline preload="metadata" onError={() => setError("This video cannot be played. Try an MP4 or WebM file.")} onLoadedMetadata={(e) => { if (Number.isFinite(e.currentTarget.duration) && (e.currentTarget.duration < 1 || e.currentTarget.duration > 120)) setError("Choose a clip between 1 and 120 seconds."); }} />
+  const [crop, setCrop] = useState<Crop>(FULL_CROP);
+  const [pick, setPick] = useState<PersonPick | null>(null);
+  return <div className="clip-preview"><div className="flow-steps"><span>1. Choose video</span><ArrowRight size={14} /><strong>2. Frame the dancer &amp; create</strong></div>
+    <CropEditor src={url} crop={crop} onChange={setCrop} pick={pick} onPick={setPick} onError={() => setError("This video cannot be played. Try an MP4 or WebM file.")} onMeta={(v) => { if (Number.isFinite(v.duration) && (v.duration < 1 || v.duration > 120)) setError("Choose a clip between 1 and 120 seconds."); }} />
     <div className="clip-file"><strong>{file.name}</strong><span>{(file.size / 1024 / 1024).toFixed(1)} MB</span></div>
-    {error ? <p role="alert" className="inline-error">{error}</p> : <p className="dialog-note">Check that one dancer’s full body is visible. Next, we’ll track the movement and open your 3D score.</p>}
-    <div className="dialog-actions"><button className="btn" onClick={onBack}>Choose another</button><button className="btn primary" disabled={!!error} onClick={onConfirm}>Create movement score <ArrowRight size={17} /></button></div>
+    {error ? <p role="alert" className="inline-error">{error}</p> : <p className="dialog-note">Dancer far away? Zoom in so they fill the frame — drag the box, scroll to zoom, or press <em>Fit to dancer</em>. Only the framed region is tracked and shown. Several people in the shot? Pause on them and click the dancer to follow.</p>}
+    <div className="dialog-actions"><button className="btn" onClick={onBack}>Choose another</button><button className="btn primary" disabled={!!error} onClick={() => onConfirm(crop, pick)}>Create movement score <ArrowRight size={17} /></button></div>
   </div>;
 }
 

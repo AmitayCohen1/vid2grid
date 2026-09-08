@@ -13,6 +13,7 @@ import type { Body } from "./fk";
 import type { Extraction, Pose } from "./pose";
 import { bodyFromEdges, liftClip } from "./lift";
 import { BONE_IDS, BONES, type BoneId } from "./skeleton";
+import { type Crop, isCrop } from "./crop";
 
 const CORE_IDS = BONES.filter((b) => b.core).map((b) => b.id);
 
@@ -29,8 +30,11 @@ export interface SourceInfo {
   name: string;
   duration: number;
   fps: number;
+  /** Pixel size of the tracked frame — the crop, when there is one. */
   width: number;
   height: number;
+  /** Region of the original video that was tracked, as fractions. Absent = whole frame. */
+  crop?: Crop;
 }
 
 export type LiftMode = "anchored" | "world";
@@ -221,7 +225,8 @@ export function parseScore(text: string): Score {
   if (s.version !== 1 || !s.source || typeof s.source.name !== "string" ||
       !positive(s.source.duration) || s.source.duration > 3600 ||
       !positive(s.source.fps) || s.source.fps > 240 ||
-      !positive(s.source.width) || !positive(s.source.height)) return fail();
+      !positive(s.source.width) || !positive(s.source.height) ||
+      (s.source.crop !== undefined && !isCrop(s.source.crop))) return fail();
   if (!s.grid || !s.smooth || !s.body?.lengths) return fail();
   const divides = (step: number, angle: number) => positive(step) && step >= 1 && Math.abs(angle / step - Math.round(angle / step)) < 1e-6;
   if (!divides(s.grid.azStep, 360) || !divides(s.grid.elStep, 90) || !divides(s.grid.facingStep, 360) ||

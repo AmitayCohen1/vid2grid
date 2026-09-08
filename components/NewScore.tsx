@@ -4,9 +4,11 @@ import { useState } from "react";
 import { ArrowUpRight, Camera, FileUp, Play, ShieldCheck, UploadCloud } from "lucide-react";
 import Source from "./Source";
 import { DEMO_PHRASES, type DemoPhrase } from "@/lib/demo";
+import type { Crop } from "@/lib/crop";
+import type { PersonPick } from "@/lib/follow";
 
 export default function NewScore({ onFile, onImport, onDemo, busy, progress, loading, onCancel, initialMode = "upload" }: {
-  onFile: (f: File) => void; onImport: (f: File) => void; onDemo: (p: DemoPhrase) => void;
+  onFile: (f: File, crop?: Crop, follow?: PersonPick) => void; onImport: (f: File) => void; onDemo: (p: DemoPhrase) => void;
   busy: boolean; progress: { done: number; total: number }; loading: boolean; onCancel: () => void;
   initialMode?: "upload" | "import";
 }) {

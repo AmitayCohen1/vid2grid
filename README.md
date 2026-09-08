@@ -36,14 +36,35 @@ ghost shows whichever track is not on stage.
 `lib/tempo.ts` derives it from the movement itself (no audio), and it is always
 overridable, including ÷2 / ×2 for the usual half-time confusion. Clips with no
 clear pulse say so rather than guessing.
-Videos and recordings are previewed before analysis begins; canceling analysis
-restores the previous score. The studio is one header (brand, project, view
+Videos and recordings are previewed before analysis begins, and the preview is
+also where you **frame the dancer**: drag the box, drag its edges, scroll or use
+the Zoom slider, or press *Fit to dancer* (the tracker looks at a few frames and
+boxes everywhere the dancer was seen). Only the framed region is tracked and
+shown, so a small figure in a wide shot gets the model's full resolution and the
+video pane in Compare and Traces stays close up. When the paused frame holds
+more than one person, each gets a *Follow* box: click the dancer and the tracker
+keeps to them for the whole clip, forwards and backwards from that moment
+(`lib/follow.ts` carries identity frame to frame by nearest hips, with a jump
+limit scaled to body size). Without a pick, the biggest body is followed; *Fit to
+dancer* honours the pick too. Canceling analysis restores the
+previous score. The studio is one header (brand, project, view
 tabs, actions) over the stage, with a permanent settings sidebar on the right —
 Dancer, Movement grid, and Cast tabs, with Simple / Balanced / Detailed grid
 presets and optional advanced tuning. It is always open, so every change is
 visible on the stage while playback keeps running; it collapses to an icon rail
 (Escape, or the chevron) and below 1100px the open panel floats over the stage.
 Notation and Save use focused dialogs; on phones, dialogs become bottom sheets.
+
+**Cast** pins dancers onto the shared stage, and each one takes *choreographic
+devices* (`lib/devices.ts`): a **delay** (they wait in their first pose, then
+start), a **speed**, **mirror** (the audience's mirror image), and **reverse**
+(retrograde). **Add canon** adds copies of the current dancer entering one
+after another, a chosen number of beats apart, so the timeline stretches to
+the last voice. In **Compare**, the character and the whole cast can dance
+*inside the recording* (Dancer → In the video): the tracker's 2D landmarks and
+metres-per-pixel put each figure beside the person at their scale, feet on
+their floor, with no camera calibration; the "Beside" slider moves the
+character and a cast member's X moves them relative to the person.
 
 Video imports accept clips up to 120 seconds / 250 MB; 5–30 seconds remains ideal.
 Score imports validate the full pose sequence before opening it. Tracking gaps

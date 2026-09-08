@@ -2,20 +2,24 @@
 
 import { forwardRef, useEffect, useRef } from "react";
 import { LM_EDGES } from "@/lib/skeleton";
+import { type Crop, FULL_CROP } from "@/lib/crop";
 import { Film } from "lucide-react";
 
 interface Props {
   src: string | null;
+  /** The tracked region of the clip; the pane shows only this, and the overlay is in its coordinates. */
+  crop?: Crop | null;
   overlay: Float32Array | null;
   showOverlay: boolean;
   onLoaded?: (v: HTMLVideoElement) => void;
   onError?: () => void;
 }
 
-/** The source video with the tracker's 2D landmarks drawn over it. */
-const VideoPane = forwardRef<HTMLVideoElement, Props>(function VideoPane({ src, overlay, showOverlay, onLoaded, onError }, ref) {
+/** The source video (or the tracked crop of it) with the tracker's 2D landmarks drawn over it. */
+const VideoPane = forwardRef<HTMLVideoElement, Props>(function VideoPane({ src, crop, overlay, showOverlay, onLoaded, onError }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const drawRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     const cv = canvasRef.current;
@@ -26,14 +30,17 @@ const VideoPane = forwardRef<HTMLVideoElement, Props>(function VideoPane({ src, 
     if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
     const ctx = cv.getContext("2d")!;
     ctx.clearRect(0, 0, w, h);
-    if (!showOverlay || !overlay) return;
     const video = box.querySelector("video");
     if (!video || !video.videoWidth) return;
-    // object-contain letterboxing
-    const va = video.videoWidth / video.videoHeight;
+    // Letterbox the crop into the box, then size the video so exactly the crop lands there.
+    const c = crop ?? FULL_CROP;
+    const va = (c.w * video.videoWidth) / (c.h * video.videoHeight);
     const ba = w / h;
     let dw = w, dh = h, ox = 0, oy = 0;
     if (va > ba) { dh = w / va; oy = (h - dh) / 2; } else { dw = h * va; ox = (w - dw) / 2; }
+    const vw = dw / c.w, vh = dh / c.h;
+    Object.assign(video.style, { width: `${vw}px`, height: `${vh}px`, left: `${ox - c.x * vw}px`, top: `${oy - c.y * vh}px` });
+    if (!showOverlay || !overlay) return;
     const P = (i: number) => [ox + overlay[i * 3] * dw, oy + overlay[i * 3 + 1] * dh, overlay[i * 3 + 2]] as const;
     ctx.lineWidth = 2;
     for (const [a, b] of LM_EDGES) {
@@ -53,23 +60,24 @@ const VideoPane = forwardRef<HTMLVideoElement, Props>(function VideoPane({ src, 
       ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
     }
     };
+    drawRef.current = draw;
     draw();
     const observer = new ResizeObserver(draw);
     observer.observe(box);
     return () => observer.disconnect();
-  }, [overlay, showOverlay, src]);
+  }, [overlay, showOverlay, src, crop]);
 
   return (
-    <div ref={boxRef} className="relative w-full h-full bg-black">
+    <div ref={boxRef} className="relative w-full h-full bg-black overflow-hidden">
       {src ? (
         <video
           ref={ref}
           src={src}
-          className="w-full h-full object-contain"
+          className="absolute max-w-none w-full h-full"
           playsInline
           muted
           preload="auto"
-          onLoadedMetadata={(e) => onLoaded?.(e.currentTarget)}
+          onLoadedMetadata={(e) => { drawRef.current(); onLoaded?.(e.currentTarget); }}
           onError={onError}
         />
       ) : (

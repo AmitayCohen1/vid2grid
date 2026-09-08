@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Score } from "@/lib/score";
+import { cropPixels } from "@/lib/crop";
 import { TRACE_JOINTS, alignments, movementDensity, pointsFromLandmarks, pointsFromPose, type Points2D } from "@/lib/objects";
 
 export interface ObjectsOptions {
@@ -74,7 +75,9 @@ export default function Objects({ score, overlays, video, frame, options }: Prop
     const Y = (v: number) => oy + v * dh;
 
     if (options.video && video && video.readyState >= 2 && video.videoWidth) {
-      ctx.drawImage(video, ox, oy, dw, dh);
+      const c = score.source.crop;
+      if (c) { const px = cropPixels(c, video.videoWidth, video.videoHeight); ctx.drawImage(video, px.x, px.y, px.w, px.h, ox, oy, dw, dh); }
+      else ctx.drawImage(video, ox, oy, dw, dh);
       // Forsythe-style desaturated plate so the drawing reads.
       ctx.fillStyle = "rgba(5,6,8,0.35)";
       ctx.fillRect(ox, oy, dw, dh);

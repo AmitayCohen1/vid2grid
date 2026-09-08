@@ -73,11 +73,11 @@ export default function Welcome({ onStart, onDemo }: { onStart: () => void; onDe
 
       <section className="cast-section" aria-label="Meet the cast">
         <div className="section-heading"><span className="eyebrow">MEET THE CAST</span><span className="mono subtle">VRM · OR BRING YOUR OWN</span></div>
-        <h2>Five dancers, ready when you are.</h2>
+        <h2>Ten dancers, ready when you are.</h2>
         <p className="subtle cast-intro">Any score can be performed by a character — pick one to see them move, switch mid-piece, or open a VRoid .vrm of your own in the studio.</p>
         <div className="cast-row">
           {AVATAR_PRESETS.map((a, i) => (
-            <button key={a.url} className="cast-card" onClick={() => onDemo(CAST_PHRASES[i], a.url)}>
+            <button key={a.url} className="cast-card" onClick={() => onDemo(CAST_PHRASES[i % CAST_PHRASES.length], a.url)}>
               <Image src={a.portrait} alt={`${a.label}, one of the bundled characters`} width={480} height={640} />
               <span className="cast-name">{a.label}<small><Play size={9} fill="currentColor" /> See them dance</small></span>
             </button>

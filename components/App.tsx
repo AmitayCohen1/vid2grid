@@ -3,24 +3,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
-import { ArrowLeft, Box, Check, CircleHelp, Download, Film, Grid2X2, Moon, PanelRightClose, Plus, ScanLine, SlidersHorizontal, Sun, X, PersonStanding, Users, List, Activity, Eye, Layers } from "lucide-react";
+import { ArrowLeft, Box, Check, CircleHelp, Download, Film, Grid2X2, Moon, PanelRightClose, Plus, ScanLine, SlidersHorizontal, Sun, X, PersonStanding, Users, List, Activity } from "lucide-react";
 import Dialog from "./Dialog";
 import NewScore from "./NewScore";
 import SaveScore from "./SaveScore";
 import Welcome from "./Welcome";
 import { createDemo, type DemoPhrase } from "@/lib/demo";
 import { DEFAULT_AVATAR_URL } from "@/lib/avatars";
-import CastPanel, { type CastMember } from "./Cast";
+import CastPanel, { type CastMember, type CastPatch } from "./Cast";
 import type { StageCastMember } from "./Stage";
+import { NO_DEVICES, clipTime, memberSpan, mirrorBody, mirrorPose, placePose, sanitizeDevices } from "@/lib/devices";
+import { imageToWorld, videoAnchors } from "@/lib/invideo";
 import { idbGet, idbSet } from "@/lib/store";
 import VideoPane from "./VideoPane";
 import Timeline from "./Timeline";
 import BoneTable from "./BoneTable";
-import Controls, { Toggle } from "./Controls";
+import Controls from "./Controls";
+import { NumSlider, Section, Switch } from "./Inspector";
 import Objects, { DEFAULT_OBJECTS, Drawing, type ObjectsOptions } from "./Objects";
 import { DEFAULT_GRID, type GridConfig } from "@/lib/grid";
 import { DEFAULT_SMOOTH, type LiftMode, type Score, type SmoothConfig, type SourceInfo, frameAt, measureBody, parseScore, rawPoses, serializeScore, smoothPoses, snapPoses } from "@/lib/score";
 import { fillGaps, trackVideo, type TrackedFrame } from "@/lib/tracker";
+import { type Crop, cropPixels, isFullCrop } from "@/lib/crop";
+import type { PersonPick } from "@/lib/follow";
 import { describeError } from "@/lib/errors";
 import { estimateTempo } from "@/lib/tempo";
 import type { BoneId } from "@/lib/skeleton";
@@ -28,10 +33,10 @@ import type { Body } from "@/lib/fk";
 import type { Pose } from "@/lib/pose";
 
 const RAIL = [
-  { id: "dancer" as const, label: "Dancer", icon: <PersonStanding size={19} /> },
-  { id: "grid" as const, label: "Movement grid", icon: <Grid2X2 size={19} /> },
-  { id: "cast" as const, label: "Cast", icon: <Users size={19} /> },
-  { id: "traces" as const, label: "Traces", icon: <ScanLine size={19} /> },
+  { id: "dancer" as const, label: "Dancer", short: "Dancer", icon: <PersonStanding size={15} /> },
+  { id: "grid" as const, label: "Movement grid", short: "Grid", icon: <Grid2X2 size={15} /> },
+  { id: "cast" as const, label: "Cast", short: "Cast", icon: <Users size={15} /> },
+  { id: "traces" as const, label: "Traces", short: "Traces", icon: <ScanLine size={15} /> },
 ];
 
 type Phase = "idle" | "loading" | "tracking" | "ready" | "error";
@@ -42,6 +47,7 @@ const Stage = dynamic(() => import("./Stage"), {
   ssr: false,
   loading: () => <div role="status" className="grid h-full place-items-center text-xs text-white/60">Preparing the stage…</div>,
 });
+const VideoStage = dynamic(() => import("./VideoStage"), { ssr: false });
 
 interface Analysis {
   tracked: TrackedFrame[];
@@ -63,6 +69,9 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
 
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  /** Region of the clip being tracked, chosen in the preview; the analysis records its own once done. */
+  const [pendingCrop, setPendingCrop] = useState<Crop | null>(null);
+  const [pendingFollow, setPendingFollow] = useState<PersonPick | null>(null);
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
   const [imported, setImported] = useState<Score | null>(null);
   const [grid, setGrid] = useState<GridConfig>(DEFAULT_GRID);
@@ -84,6 +93,12 @@ export default function App() {
   const [view, setView] = useState<"score" | "duet" | "objects">("score");
   const [objects, setObjects] = useState<ObjectsOptions>(DEFAULT_OBJECTS);
   const [cast, setCast] = useState<CastMember[]>([]);
+  /** Compare view: draw the character and the cast inside the recording, beside the person. */
+  const [inVideo, setInVideo] = useState(true);
+  /** Where the character stands in the video, metres to the person's screen-right — tied to the clip it was set for. */
+  const [besideOverride, setBesideOverride] = useState<{ source: SourceInfo; beside: number } | null>(null);
+  /** Seconds the character in the video runs behind the person — the off-sync ghost, on purpose. */
+  const [selfDelay, setSelfDelay] = useState(0);
   const previousRef = useRef<{ analysis: Analysis | null; imported: Score | null; src: string | null; time: number; home: boolean } | null>(null);
 
   const openModal = (name: NonNullable<typeof modal>) => { setPlaying(false); setError(null); setModal(name); };
@@ -157,7 +172,7 @@ export default function App() {
       const ok = (Array.isArray(members) ? members : []).filter((m) => {
         try { return m && typeof m.id === "string" && typeof m.name === "string" &&
           [m.x, m.z, m.rot].every(Number.isFinite) && !!parseScore(JSON.stringify(m.score)); } catch { return false; }
-      });
+      }).map((m) => ({ ...m, ...sanitizeDevices(m) })); // casts saved before devices existed
       if (ok.length) setCast(ok);
     }).catch(() => { castLoaded.current = true; });
     return () => { alive = false; };
@@ -174,21 +189,35 @@ export default function App() {
     return () => clearTimeout(id);
   }, [cast]);
 
+  /** The current dancer as a cast member, placed `x` metres across. */
+  const member = useCallback((x: number, devices = NO_DEVICES): CastMember | null => score ? {
+    id: crypto.randomUUID(),
+    name: score.source.name.replace(/\.[^.]+$/, ""),
+    score,
+    avatarUrl: avatar ? avatarUrl : null,
+    x, z: 0, rot: 0,
+    ...devices,
+  } : null, [score, avatar, avatarUrl]);
   const addToCast = useCallback(() => {
-    if (!score) return;
     setCast((c) => {
-      // Alternate new dancers left/right of centre so they don't stack.
+      // Alternate new dancers left/right of centre so they don't stack —
+      // starting on the left, since the character stands to the right in the video.
       const slot = c.length + 1;
-      const x = Math.ceil(slot / 2) * 0.9 * (slot % 2 ? 1 : -1);
-      return [...c, {
-        id: crypto.randomUUID(),
-        name: score.source.name.replace(/\.[^.]+$/, ""),
-        score,
-        avatarUrl: avatar ? avatarUrl : null,
-        x, z: 0, rot: 0,
-      }];
+      const m = member(Math.ceil(slot / 2) * 1.0 * (slot % 2 ? -1 : 1));
+      return m ? [...c, m] : c;
     });
-  }, [score, avatar, avatarUrl]);
+  }, [member]);
+  /** A canon: the current dancer again, `voices − 1` times, each entering `gap` seconds after the last, in a line to the left. */
+  const addCanon = useCallback((voices: number, gap: number) => {
+    setCast((c) => {
+      const copies: CastMember[] = [];
+      for (let k = 1; k < voices; k++) {
+        const m = member(-k * 1.0, { ...NO_DEVICES, delay: Math.round(k * gap * 100) / 100 });
+        if (m) copies.push(m);
+      }
+      return [...c, ...copies];
+    });
+  }, [member]);
   const duplicateCast = useCallback((id: string) => {
     setCast((c) => {
       const m = c.find((d) => d.id === id);
@@ -196,27 +225,59 @@ export default function App() {
     });
   }, []);
   const removeCast = useCallback((id: string) => setCast((c) => c.filter((d) => d.id !== id)), []);
-  const updateCast = useCallback((id: string, patch: Partial<Pick<CastMember, "x" | "z" | "rot">>) => {
+  const updateCast = useCallback((id: string, patch: CastPatch) => {
     setCast((c) => c.map((d) => (d.id === id ? { ...d, ...patch } : d)));
   }, []);
 
-  // The stage clock runs to the longest dancer; shorter ones hold their last pose.
+  // The stage clock runs to the longest dancer (delay and speed included); shorter ones hold their last pose.
   const stageDuration = useMemo(
-    () => Math.max(score?.source.duration ?? 0, ...cast.map((m) => m.score.source.duration)),
-    [score, cast],
+    () => Math.max((score?.source.duration ?? 0) + (inVideo ? selfDelay : 0), ...cast.map((m) => memberSpan(m.score.source.duration, m))),
+    [score, cast, inVideo, selfDelay],
   );
+  // Each member at the stage clock, through its devices, with its floor placement baked in.
+  // Same track as the live figure (snapped or smooth), or the stage disagrees with itself.
   const stageCast: StageCastMember[] = useMemo(() => cast.map((m) => {
-    const p = (motion === "smooth" ? m.score.raw : m.score.frames)[frameAt(m.score, time)];
-    // Bake the floor placement into the pose: yaw the facing, turn+shift the root.
-    const rad = (m.rot * Math.PI) / 180;
-    const cos = Math.cos(rad), sin = Math.sin(rad);
-    const pose = { ...p, facing: p.facing + m.rot, x: p.x * cos + p.z * sin + m.x, z: p.z * cos - p.x * sin + m.z };
-    return { id: m.id, pose, body: m.score.body, avatarUrl: m.avatarUrl };
+    const track = motion === "smooth" ? m.score.raw : m.score.frames;
+    const p = track[frameAt(m.score, clipTime(time, m.score.source.duration, m))];
+    const pose = placePose(m.mirror ? mirrorPose(p) : p, m);
+    return { id: m.id, pose, body: m.mirror ? mirrorBody(m.score.body) : m.score.body, avatarUrl: m.avatarUrl };
   }), [cast, time, motion]);
+
+  /* ---------- figures inside the video ---------- */
+
+  // Per frame: where the person is in the picture and how many metres it spans there.
+  const anchors = useMemo(() => {
+    if (!analysis || !extractions || !overlays || !raw) return null;
+    const { width, height } = analysis.source;
+    return videoAnchors(overlays, extractions.map((e) => e.metresPerUnit), raw.map((p) => p.hipY), width / height);
+  }, [analysis, extractions, overlays, raw]);
+  const anchor = anchors?.[fi] ?? null;
+  // Until it is set for this clip, the character stands on whichever side of the person has more picture.
+  const besideDefault = useMemo(() => {
+    if (!anchors?.length) return 1.0;
+    const us = anchors.map((a) => a.u).sort((a, b) => a - b);
+    return us[us.length >> 1] > 0.5 ? -1.0 : 1.0;
+  }, [anchors]);
+  const beside = besideOverride?.source === source ? besideOverride.beside : besideDefault;
+  const setBeside = useCallback((n: number) => { if (source) setBesideOverride({ source, beside: n }); }, [source]);
+  const videoAspect = analysis ? analysis.source.width / analysis.source.height : 16 / 9;
+  // Figures in picture metres: the character `beside` the person, the cast at their stage
+  // offsets from the person — hips at the person's hips, feet on the person's floor.
+  const videoFigures: StageCastMember[] = useMemo(() => {
+    if (!inVideo || !anchor || !score || !body) return [];
+    const track = motion === "smooth" ? score.raw : score.frames;
+    const live = track[fi];
+    // The character may run behind the person; its travel stays relative to where the person is now.
+    const self = selfDelay > 0 ? track[frameAt(score, clipTime(time, score.source.duration, { ...NO_DEVICES, delay: selfDelay }))] : live;
+    const at = imageToWorld(anchor.u, anchor.floorV, anchor.mpu, videoAspect);
+    const out: StageCastMember[] = [{ id: "self", pose: { ...self, x: at.x + beside + (self.x - live.x), z: 0, hipY: at.y + self.hipY }, body, avatarUrl: avatar ? avatarUrl : null }];
+    for (const m of stageCast) out.push({ ...m, pose: { ...m.pose, x: at.x + (m.pose.x - live.x), z: m.pose.z - live.z, hipY: at.y + m.pose.hipY } });
+    return out;
+  }, [inVideo, anchor, score, body, fi, time, selfDelay, motion, videoAspect, beside, avatar, avatarUrl, stageCast]);
 
   /* ---------- getting a clip in ---------- */
 
-  const onFile = useCallback((file: File) => {
+  const onFile = useCallback((file: File, crop?: Crop, follow?: PersonPick) => {
     if (!file.type.startsWith("video/") && !/\.(mp4|mov|webm|m4v|ogv)$/i.test(file.name)) {
       setError("Choose a video file, such as MP4, MOV, or WebM.");
       return;
@@ -238,6 +299,8 @@ export default function App() {
     setPhase("loading");
     setModal("new");
     fileNameRef.current = file.name;
+    setPendingCrop(crop && !isFullCrop(crop) ? crop : null);
+    setPendingFollow(follow ?? null);
     setSrc(URL.createObjectURL(file));
   }, [src, analysis, imported, home]);
   const fileNameRef = useRef("clip");
@@ -272,17 +335,21 @@ export default function App() {
       const fps = SAMPLE_FPS;
       const total = Math.floor(video.duration * fps);
       setProgress({ done: 0, total });
+      const crop = pendingCrop ?? undefined;
       const tracked = await trackVideo(video, {
         fps,
+        crop,
+        follow: pendingFollow ?? undefined,
         signal: ac.signal,
         onProgress: (done, total) => setProgress({ done, total }),
       });
       if (ac.signal.aborted) return;
       const detected = tracked.filter((f) => f.extraction).length;
-      if (!detected) throw new Error("No person detected in this clip. Try a clip with your whole body in frame.");
+      if (!detected) throw new Error(pendingFollow ? "The dancer you chose was never seen clearly. Pick them again on a frame where their whole body is in view." : crop ? "No person detected inside the framed region. Try a wider crop, or Fit to dancer." : "No person detected in this clip. Try a clip with your whole body in frame.");
+      const px = crop ? cropPixels(crop, video.videoWidth, video.videoHeight) : { w: video.videoWidth, h: video.videoHeight };
       setAnalysis({
         tracked,
-        source: { name: fileNameRef.current, duration: video.duration, fps, width: video.videoWidth, height: video.videoHeight },
+        source: { name: fileNameRef.current, duration: video.duration, fps, width: px.w, height: px.h, crop },
       });
       video.currentTime = 0;
       setTime(0);
@@ -295,7 +362,7 @@ export default function App() {
       setError(describeError(e));
       setPhase("error");
     }
-  }, [analysis]);
+  }, [analysis, pendingCrop, pendingFollow]);
 
   /* ---------- playback ---------- */
 
@@ -328,6 +395,11 @@ export default function App() {
     let lastFrame = -1;
     const tick = () => {
       let t = start + (performance.now() - t0) / 1000 * speed;
+      // While the video has frames, its clock is the clock: a late start, a stall
+      // or a dropped frame must not let the figures drift away from the picture.
+      if (hasVideo && !v.paused && !v.ended && v.currentTime < v.duration - 0.02) {
+        t = v.currentTime; start = t; t0 = performance.now();
+      }
       if (t >= stageDuration - 1e-3) {
         if (!loop) { timeRef.current = stageDuration; setTime(stageDuration); setPlaying(false); return; }
         t = t % stageDuration; start = t; t0 = performance.now();
@@ -404,7 +476,7 @@ export default function App() {
     abortRef.current?.abort();
     if (src) URL.revokeObjectURL(src);
     const previous = previousRef.current;
-    setSrc(previous?.src ?? null); setAnalysis(previous?.analysis ?? null); setImported(previous?.imported ?? null);
+    setSrc(previous?.src ?? null); setAnalysis(previous?.analysis ?? null); setImported(previous?.imported ?? null); setPendingCrop(null);
     timeRef.current = previous?.time ?? 0; setTime(timeRef.current);
     setPhase(previous?.analysis || previous?.imported ? "ready" : "idle");
     setHome(previous?.home ?? true); setError(null); setModal(null); previousRef.current = null;
@@ -467,7 +539,10 @@ export default function App() {
         <main className={`studio-workspace focused-workspace ${view === "duet" ? "compare-workspace" : ""} ${settingsOpen ? "" : "rail-settings"}`}>
           <section className={`source-panel ${view === "duet" ? "" : "source-hidden"}`} aria-label="Original video">
             <div className="panel-heading"><span><Film size={16} />Original video</span></div>
-            <div className="source-video"><VideoPane ref={videoRef} src={src} overlay={overlay} showOverlay={showOverlay} onLoaded={onLoaded} onError={() => { abortRef.current?.abort(); setError("This video could not be decoded. Try an MP4 or WebM clip."); setPhase("error"); setModal("new"); }} /></div>
+            <div className="source-video relative">
+              <VideoPane ref={videoRef} src={src} crop={analysis?.source.crop ?? pendingCrop} overlay={overlay} showOverlay={showOverlay} onLoaded={onLoaded} onError={() => { abortRef.current?.abort(); setError("This video could not be decoded. Try an MP4 or WebM clip."); setPhase("error"); setModal("new"); }} />
+              {view === "duet" && anchor && videoFigures.length > 0 && <VideoStage aspect={videoAspect} metresAcross={anchor.mpu} figures={videoFigures} />}
+            </div>
           </section>
           <section className="stage-panel" aria-label={view === "objects" ? "Movement traces" : "3D movement stage"}>
             <div className="stage-heading"><span className="mono">{motion === "smooth" ? "SMOOTH" : `${grid.azStep}° GRID`}</span></div>
@@ -480,26 +555,30 @@ export default function App() {
           <aside className={`settings-sidebar ${settingsOpen ? "" : "is-rail"}`} aria-label="Studio settings">
             {settingsOpen ? <>
             <div className="sidebar-heading">
-              <span className="eyebrow">SETTINGS</span>
-              <button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Collapse settings" title="Collapse settings"><PanelRightClose size={19} /></button>
+              <div className="insp-tabs" role="tablist" aria-label="Settings section">
+                {RAIL.filter((r) => r.id !== "traces" || view === "objects").map((r) => (
+                  <button key={r.id} role="tab" aria-selected={tab === r.id} title={r.label} onClick={() => setSettingsTab(r.id)}>
+                    {r.icon}<span>{r.short}</span>{r.id === "cast" && cast.length > 0 && <b className="insp-badge">{cast.length}</b>}
+                  </button>
+                ))}
+              </div>
+              <button className="insp-icon" onClick={() => setSettingsOpen(false)} aria-label="Collapse settings" title="Collapse settings (Esc)"><PanelRightClose size={15} /></button>
             </div>
             <div className="sidebar-content">
-              <div className="dialog-tabs settings-tabs" aria-label="Settings section">
-              <button aria-pressed={tab === "dancer"} onClick={() => setSettingsTab("dancer")}><PersonStanding size={19} />Dancer</button>
-              <button aria-pressed={tab === "grid"} onClick={() => setSettingsTab("grid")}><Grid2X2 size={19} />Movement grid</button>
-              <button aria-pressed={tab === "cast"} onClick={() => setSettingsTab("cast")}><Users size={19} />Cast{cast.length ? ` (${cast.length})` : ""}</button>
-              {view === "objects" && <button aria-pressed={tab === "traces"} onClick={() => setSettingsTab("traces")}><ScanLine size={19} />Traces</button>}
-            </div>
-            {(tab === "dancer" || tab === "grid") && <Controls panel={tab} grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} motion={motion} onMotion={setMotion} />}
-            {tab === "cast" && <div className="settings-content"><div className="setting-heading"><Users size={23} /><div><h3>Build a group piece</h3><p>Add a copy of this dancer, then place it on the stage. Each cast member keeps its own movement.</p></div></div><CastPanel cast={cast} canAdd={!!score} onAdd={() => { addToCast(); setToast("Dancer added to your cast."); }} onDuplicate={duplicateCast} onRemove={removeCast} onUpdate={updateCast} /></div>}
-            {tab === "traces" && score && <div className="settings-content">
-              <Toggle icon={<Activity size={21} />} title="Movement trails" detail="Follow the hands, feet, and head through space." checked={objects.traces} onChange={(traces) => setObjects({ ...objects, traces })} />
-              <label className="setting-slider"><span><strong>Trail length</strong><output>{objects.trailSeconds.toFixed(1)} seconds</output></span><input type="range" min={0.2} max={6} step={0.1} value={objects.trailSeconds} onChange={(e) => setObjects({ ...objects, trailSeconds: +e.target.value })} /></label>
-              <Toggle icon={<Layers size={21} />} title="Body alignments" detail="Highlight parallel and aligned limbs." checked={objects.alignments} onChange={(alignments) => setObjects({ ...objects, alignments })} />
-              <Toggle icon={<ScanLine size={21} />} title="Movement density" detail="Reveal the areas where movement gathers." checked={objects.density} onChange={(density) => setObjects({ ...objects, density })} />
-              <Toggle icon={<Eye size={21} />} title="Original video" detail={analysis ? "Show the recording behind the traces." : "Available when you add a video."} checked={objects.video} disabled={!analysis} onChange={(video) => setObjects({ ...objects, video })} />
-              <div className="setting-heading"><ScanLine size={22} /><div><h3>The whole phrase, drawn</h3><p>Every trace from the clip in a single drawing.</p></div></div><div className="aspect-video card overflow-hidden"><Drawing score={score} overlays={overlays} /></div>
-            </div>}
+              {(tab === "dancer" || tab === "grid") && <Controls panel={tab} grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} motion={motion} onMotion={setMotion} inVideo={inVideo} onInVideo={setInVideo} beside={beside} onBeside={setBeside} selfDelay={selfDelay} onSelfDelay={setSelfDelay} />}
+              {tab === "cast" && <CastPanel cast={cast} canAdd={!!score} beat={60 / bpm} onAdd={() => { addToCast(); setToast("Dancer added to your cast."); }} onCanon={(voices, gap) => { addCanon(voices, gap); setToast(`Canon added: ${voices} voices, ${gap.toFixed(2)} s apart.`); }} onDuplicate={duplicateCast} onRemove={removeCast} onUpdate={updateCast} />}
+              {tab === "traces" && score && <>
+                <Section title="Traces">
+                  <Switch label="Movement trails" hint="Follow the hands, feet, and head through space." checked={objects.traces} onChange={(traces) => setObjects({ ...objects, traces })} />
+                  <NumSlider label="Length" value={objects.trailSeconds} min={0.2} max={6} step={0.1} decimals={1} unit="s" disabled={!objects.traces} onChange={(trailSeconds) => setObjects({ ...objects, trailSeconds })} />
+                  <Switch label="Alignments" hint="Highlight parallel and aligned limbs." checked={objects.alignments} onChange={(alignments) => setObjects({ ...objects, alignments })} />
+                  <Switch label="Density" hint="Reveal the areas where movement gathers." checked={objects.density} onChange={(density) => setObjects({ ...objects, density })} />
+                  <Switch label="Video plate" hint={analysis ? "Show the recording behind the traces." : "Available when you add a video."} checked={objects.video} disabled={!analysis} onChange={(video) => setObjects({ ...objects, video })} />
+                </Section>
+                <Section title="Whole phrase" aside={<span className="insp-aside">every trace, once</span>}>
+                  <div className="insp-drawing"><Drawing score={score} overlays={overlays} /></div>
+                </Section>
+              </>}
             </div>
             </> : (
             <div className="sidebar-rail">

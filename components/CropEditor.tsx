@@ -1,0 +1,225 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Focus, Pause, Play, RotateCcw, X } from "lucide-react";
+import { type Crop, FULL_CROP, type Handle, MIN_CROP, clampCrop, cropZoom, isFullCrop, moveCrop, resizeCrop, zoomCrop } from "@/lib/crop";
+import { type Anchor, type PersonPick, anchorOf, pickAnchor } from "@/lib/follow";
+import { detectPeople, fitCropToDancer } from "@/lib/tracker";
+import { describeError } from "@/lib/errors";
+
+interface Props {
+  src: string;
+  crop: Crop;
+  onChange: (crop: Crop) => void;
+  /** Who to follow when several people are in frame; null = the biggest body. */
+  pick: PersonPick | null;
+  onPick: (pick: PersonPick | null) => void;
+  onMeta?: (video: HTMLVideoElement) => void;
+  onError?: () => void;
+}
+
+const HANDLES: Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+const MAX_ZOOM = 1 / MIN_CROP;
+/** Tallest the preview frame gets; a portrait clip narrows to keep its aspect exact (the box maps to it 1:1). */
+const FRAME_MAX_HEIGHT = 320;
+
+/** A pick refers to the moment it was made; this close to it the boxes show who was picked. */
+const PICK_TIME_TOLERANCE = 0.3;
+
+/**
+ * Frame the dancer before tracking: drag the box to move it, drag its
+ * edges to resize, scroll or use the slider to zoom, or let the tracker
+ * find them. The crop is what the tracker sees and what the studio shows.
+ * When the paused frame holds more than one person, each gets a box;
+ * clicking one says "follow this dancer".
+ */
+export default function CropEditor({ src, crop, onChange, pick, onPick, onMeta, onError }: Props) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [aspect, setAspect] = useState(16 / 9);
+  const [duration, setDuration] = useState(0);
+  const [time, setTime] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [fitting, setFitting] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  /* ---------- who is in the paused frame ---------- */
+  const [people, setPeople] = useState<Anchor[]>([]);
+  const peopleRun = useRef(0);
+  /** Fit to dancer seeks the same video; its seeks must not be mistaken for the user pausing on a frame. */
+  const fittingRef = useRef(false);
+  const findPeople = useCallback(() => {
+    const v = videoRef.current;
+    const run = ++peopleRun.current;
+    if (!v || v.readyState < 2 || !v.paused || fittingRef.current) return;
+    // Let the seek settle: a burst of scrubbing only detects on the last frame.
+    setTimeout(async () => {
+      if (run !== peopleRun.current || fittingRef.current) return;
+      try {
+        const found = await detectPeople(v);
+        if (run !== peopleRun.current || !v.paused) return;
+        setPeople(found.map((b) => anchorOf(b)).filter((a): a is Anchor => !!a));
+      } catch (e) {
+        // The boxes are a convenience; tracking itself reports a broken tracker.
+        console.warn("detectPeople failed", e);
+      }
+    }, 120);
+  }, []);
+  const clearPeople = () => { peopleRun.current++; setPeople([]); };
+
+  /* ---------- pointer: move and resize ---------- */
+  const drag = useRef<{ handle: Handle | "move"; start: Crop; x: number; y: number } | null>(null);
+  const toFrac = (e: { clientX: number; clientY: number }) => {
+    const r = frameRef.current!.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+  };
+  const onDown = (e: React.PointerEvent, handle: Handle | "move") => {
+    if (e.button !== 0) return;
+    e.preventDefault(); e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const p = toFrac(e);
+    drag.current = { handle, start: crop, x: p.x, y: p.y };
+  };
+  const onMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    const p = toFrac(e);
+    const dx = p.x - d.x, dy = p.y - d.y;
+    onChange(d.handle === "move" ? moveCrop(d.start, dx, dy) : resizeCrop(d.start, d.handle, dx, dy));
+  };
+  const onUp = (e: React.PointerEvent) => {
+    if (!drag.current) return;
+    drag.current = null;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+  };
+
+  /* ---------- wheel: zoom about the pointer (non-passive, so the dialog doesn't scroll) ---------- */
+  useEffect(() => {
+    const el = frameRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const anchor = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+      const factor = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0025));
+      onChange(zoomCrop(crop, cropZoom(crop) * factor, anchor));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [crop, onChange]);
+
+  /* ---------- playback ---------- */
+  const toggle = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) void v.play().catch(() => {}); else v.pause();
+  };
+  const scrub = (t: number) => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.pause();
+    v.currentTime = t;
+    setTime(t);
+  };
+
+  /* ---------- fit to dancer ---------- */
+  const fit = useCallback(async () => {
+    const v = videoRef.current;
+    if (!v || fitting) return;
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+    setFitting(true); setNote(null);
+    fittingRef.current = true; clearPeople();
+    try {
+      const found = await fitCropToDancer(v, { follow: pick ?? undefined, signal: ac.signal });
+      if (ac.signal.aborted) return;
+      if (!found) setNote(pick ? "Couldn't follow the dancer you chose. Pick them again on a frame where their whole body is clear." : "No one was found in the clip. Frame the dancer by hand, or try another clip.");
+      else onChange(found);
+    } catch (e) {
+      if (!ac.signal.aborted) setNote(describeError(e));
+    } finally {
+      fittingRef.current = false;
+      if (!ac.signal.aborted) { setFitting(false); findPeople(); }
+    }
+  }, [fitting, onChange, pick, findPeople]);
+
+  const zoom = cropZoom(crop);
+  const full = isFullCrop(crop);
+  const showPeople = people.length > 1 || (!!pick && people.length > 0);
+  const picked = pick && Math.abs(time - pick.t) < PICK_TIME_TOLERANCE ? pickAnchor(people, pick) : -1;
+  const choose = (a: Anchor) => {
+    const v = videoRef.current;
+    if (!v) return;
+    onPick({ x: a.x, y: a.y, t: v.currentTime });
+  };
+
+  return (
+    <div className="crop-editor">
+      <div ref={frameRef} className="crop-frame" data-people={people.length} style={{ aspectRatio: `${aspect}`, width: `min(100%, ${Math.round(FRAME_MAX_HEIGHT * aspect)}px)` }} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+        <video
+          ref={videoRef}
+          src={src}
+          playsInline
+          muted
+          preload="metadata"
+          onLoadedMetadata={(e) => {
+            const v = e.currentTarget;
+            if (v.videoWidth && v.videoHeight) setAspect(v.videoWidth / v.videoHeight);
+            if (Number.isFinite(v.duration)) setDuration(v.duration);
+            onMeta?.(v);
+          }}
+          onDurationChange={(e) => { if (Number.isFinite(e.currentTarget.duration)) setDuration(e.currentTarget.duration); }}
+          onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)}
+          onLoadedData={findPeople}
+          onSeeked={findPeople}
+          onPlay={() => { setPlaying(true); clearPeople(); }}
+          onPause={() => { setPlaying(false); findPeople(); }}
+          onError={onError}
+        />
+        <div
+          className="crop-box"
+          role="group"
+          aria-label="Crop region"
+          style={{ left: `${crop.x * 100}%`, top: `${crop.y * 100}%`, width: `${crop.w * 100}%`, height: `${crop.h * 100}%` }}
+          onPointerDown={(e) => onDown(e, "move")}
+        >
+          {HANDLES.map((h) => <span key={h} className={`crop-handle crop-${h}`} onPointerDown={(e) => onDown(e, h)} />)}
+          <span className="crop-zoom mono">{full ? "FULL FRAME" : `${zoom.toFixed(1)}×`}</span>
+        </div>
+        {showPeople && people.map((a, i) => (
+          <button
+            key={i}
+            type="button"
+            className={`person-box ${i === picked ? "is-picked" : ""} ${a.box.y < 0.08 ? "is-high" : ""}`}
+            style={{ left: `${a.box.x * 100}%`, top: `${a.box.y * 100}%`, width: `${a.box.w * 100}%`, height: `${a.box.h * 100}%` }}
+            aria-label={i === picked ? "Following this dancer" : "Follow this dancer"}
+            aria-pressed={i === picked}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => choose(a)}
+          >
+            <span className="person-tag mono">{i === picked ? "FOLLOWING" : "FOLLOW"}</span>
+          </button>
+        ))}
+        {fitting && <div className="crop-fitting" role="status">Finding the dancer…</div>}
+      </div>
+      {(showPeople || pick) && <div className="crop-people">
+        {pick
+          ? <><span>Following the dancer you chose at {pick.t.toFixed(1)} s{people.length > 1 ? " — click someone else to switch" : ""}.</span><button type="button" className="btn" onClick={() => onPick(null)} aria-label="Stop following this dancer"><X size={14} /> Clear</button></>
+          : <span>{people.length} people in this frame — click the dancer to follow them; the biggest body is followed otherwise.</span>}
+      </div>}
+      <div className="crop-tools">
+        <button type="button" className="btn" onClick={toggle} aria-label={playing ? "Pause" : "Play"} disabled={!duration}>{playing ? <Pause size={15} /> : <Play size={15} />}</button>
+        <input type="range" aria-label="Scrub the clip" min={0} max={Math.max(0.01, duration)} step={0.01} value={Math.min(time, duration || 0)} onChange={(e) => scrub(Number(e.target.value))} disabled={!duration} />
+      </div>
+      <div className="crop-tools">
+        <label className="crop-zoom-slider"><span>Zoom</span><input type="range" aria-label="Zoom" min={1} max={MAX_ZOOM} step={0.05} value={zoom} onChange={(e) => onChange(zoomCrop(crop, Number(e.target.value)))} /></label>
+        <button type="button" className="btn" onClick={fit} disabled={fitting || !duration}><Focus size={15} /> Fit to dancer</button>
+        <button type="button" className="btn" onClick={() => onChange(clampCrop(FULL_CROP))} disabled={full} aria-label="Reset crop"><RotateCcw size={15} /></button>
+      </div>
+      {note && <p role="alert" className="inline-error">{note}</p>}
+    </div>
+  );
+}
