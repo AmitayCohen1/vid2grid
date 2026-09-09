@@ -15,8 +15,8 @@ const MODEL_URL =
 // - seed-san.vrm: official VRM specification sample model (vrm-c/vrm-specification).
 // - vroid-{a,b,c}.vrm: VRoid Studio sample models (pixiv) — freely usable/alterable
 //   under their conditions of use: https://vroid.pixiv.help/hc/en-us/articles/4402394424089
-// - vita/vivi/victoria/shibu/fumiriya.vrm: VRoid Studio beta sample models (Vita, Vivi,
-//   Victoria Rubin, Darkness Shibu, Sakurada Fumiriya), released under CC0:
+// - vivi/shibu/fumiriya.vrm: VRoid Studio beta sample models (Vivi,
+//   Darkness Shibu, Sakurada Fumiriya), released under CC0:
 //   https://vroid.pixiv.help/hc/en-us/articles/4402614652569
 // - hair-male.vrm: VRoid Studio beta sample "HairSample_Male", CC0 (same page). Three
 //   presets share it (Sora, Kai, Ren) — the latter two are tinted at load, see lib/avatars.ts.
@@ -26,9 +26,7 @@ const AVATARS = [
   ["vroid-a.vrm", "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/stable/AvatarSample_A.vrm"],
   ["vroid-b.vrm", "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/stable/AvatarSample_B.vrm"],
   ["vroid-c.vrm", "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/stable/AvatarSample_C.vrm"],
-  ["vita.vrm", "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/beta/Vita.vrm"],
   ["vivi.vrm", "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/beta/Vivi.vrm"],
-  ["victoria.vrm", "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/beta/Victoria_Rubin.vrm"],
   ["shibu.vrm", "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/beta/Darkness_Shibu.vrm"],
   ["fumiriya.vrm", "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/beta/Sakurada_Fumiriya.vrm"],
   ["hair-male.vrm", "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/beta/HairSample_Male.vrm"],
