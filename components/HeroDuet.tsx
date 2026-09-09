@@ -4,7 +4,7 @@
    The landing hero: a real clip, its tracking, and a character dancing
    the score on the studio's own stage.
 
-   `/demo/alice.json` is the app's own output for `/demo/alice.mp4`
+   `/demo/eden.json` is the app's own output for `/demo/eden.mp4`
    (poses, body, the tracker's 2D landmarks per frame — produced by
    scripts/hero-data.ts through lib/tracker → lib/score). The picture
    sits at the left with the landmarks drawn over it exactly as the
@@ -43,6 +43,8 @@ const SPAN = CROP.r - CROP.l;
 const CAST_FROM = 720;
 /** Pixels between the picture, the stage and the picker. */
 const GUTTER = 6;
+/** How much of the dancer's travel across the floor the character keeps (the stage camera is fixed). */
+const TRAVEL = 0.4;
 
 const noop = () => {};
 
@@ -58,7 +60,7 @@ export default function HeroDuet({ avatarUrl, children }: { avatarUrl: string; c
 
   useEffect(() => {
     let alive = true;
-    fetch("/demo/alice.json").then((r) => r.json()).then((d: HeroData) => { if (alive) setData(d); }).catch(() => { /* the video still plays */ });
+    fetch("/demo/eden.json").then((r) => r.json()).then((d: HeroData) => { if (alive) setData(d); }).catch(() => { /* the video still plays */ });
     return () => { alive = false; };
   }, []);
 
@@ -73,7 +75,7 @@ export default function HeroDuet({ avatarUrl, children }: { avatarUrl: string; c
     return () => ro.disconnect();
   }, [width]);
 
-  const aspect = (data ? data.source.width / data.source.height : 720 / 1088) * SPAN;
+  const aspect = (data ? data.source.width / data.source.height : 540 / 464) * SPAN;
   const wide = !!width && width >= CAST_FROM;
   const rect: Rect | null = useMemo(() => {
     if (!width) return null;
@@ -100,9 +102,14 @@ export default function HeroDuet({ avatarUrl, children }: { avatarUrl: string; c
     return () => cancelAnimationFrame(raf);
   }, [data, rect]);
 
-  // The dancer's average spot, so the character stays centred on the stage while keeping their travel.
-  const meanX = useMemo(() => (data ? data.raw.reduce((a, p) => a + p.x, 0) / Math.max(1, data.raw.length) : 0), [data]);
-  const pose = useMemo(() => (data ? { ...data.raw[fi], x: data.raw[fi].x - meanX } : null), [data, fi, meanX]);
+  // The dancer's average spot, so the character stays centred on the stage; the travel around it is
+  // kept but shrunk, the hero's camera is fixed and a dancer who crosses the room would leave the frame.
+  const centre = useMemo(() => {
+    if (!data || !data.raw.length) return { x: 0, z: 0 };
+    const n = data.raw.length;
+    return { x: data.raw.reduce((a, p) => a + p.x, 0) / n, z: data.raw.reduce((a, p) => a + p.z, 0) / n };
+  }, [data]);
+  const pose = useMemo(() => (data ? { ...data.raw[fi], x: (data.raw[fi].x - centre.x) * TRAVEL, z: (data.raw[fi].z - centre.z) * TRAVEL } : null), [data, fi, centre]);
   const stageLeft = rect ? rect.w + GUTTER : 0;
   const stageRight = castWidth ? castWidth + GUTTER : 0;
 
@@ -110,7 +117,7 @@ export default function HeroDuet({ avatarUrl, children }: { avatarUrl: string; c
     <div ref={boxRef} className="duet" style={{ height: rect?.h }} aria-label="A dancer on video with the tracking drawn over them, and a character performing the same dance on the stage beside">
       {rect && (
         <div className="duet-picture" style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}>
-          <video ref={videoRef} className="duet-video" src="/demo/alice.mp4" poster="/demo/alice.jpg" muted loop autoPlay playsInline preload="auto"
+          <video ref={videoRef} className="duet-video" src="/demo/eden.mp4" poster="/demo/eden.jpg" muted loop autoPlay playsInline preload="auto"
             style={{ left: -CROP.l * rect.w / SPAN, width: rect.w / SPAN, height: rect.h }} />
           <canvas ref={overlayRef} className="duet-overlay" />
         </div>

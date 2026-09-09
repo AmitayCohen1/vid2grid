@@ -1,6 +1,6 @@
 /* ------------------------------------------------------------------
-   Regenerate the landing hero's data: public/demo/alice.json for
-   public/demo/alice.mp4 (or any other clip), through the app's own
+   Regenerate the landing hero's data: public/demo/eden.json for
+   public/demo/eden.mp4 (or any other clip), through the app's own
    pipeline — the same tracker, lifting, smoothing and picture anchors
    the studio uses. It runs in a browser, on the dev server's origin, so
    /mediapipe and /models resolve:
@@ -8,8 +8,8 @@
      npx esbuild scripts/hero-data.ts --bundle --format=iife --outfile=/tmp/hero-data.js
      # then, with `next dev` running on :3000, in Playwright (or DevTools):
      #   page.goto("http://localhost:3000/"); page.addScriptTag({ path: "/tmp/hero-data.js" });
-     #   json = await page.evaluate(() => window.__heroData("/demo/alice.mp4", 30));
-     #   fs.writeFileSync("public/demo/alice.json", json);
+     #   json = await page.evaluate(() => window.__heroData("/demo/eden.mp4", 30));
+     #   fs.writeFileSync("public/demo/eden.json", json);
 
    Cut the clip first (ffmpeg -ss … -t … -an -c:v libx264 -crf 25); keep
    it short, the JSON is ~25 KB per second at 30 fps.
