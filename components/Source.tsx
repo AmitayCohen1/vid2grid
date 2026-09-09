@@ -14,10 +14,12 @@ interface Props {
   mode?: "upload" | "record";
   /** Told when a clip is chosen (true) or put back (false). */
   onFraming?: (framing: boolean) => void;
+  /** What confirming the framed clip does; "Create dance" unless told otherwise. */
+  confirmLabel?: string;
 }
 
 /** Get a clip in: drop/choose a file, or record one from the webcam. */
-export default function Source({ onFile, busy, mode = "upload", onFraming }: Props) {
+export default function Source({ onFile, busy, mode = "upload", onFraming, confirmLabel = "Create dance" }: Props) {
   const [selection, setSelection] = useState<{ file: File; url: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => () => { if (selection) URL.revokeObjectURL(selection.url); }, [selection]);
@@ -31,12 +33,12 @@ export default function Source({ onFile, busy, mode = "upload", onFraming }: Pro
   return (
     <div className={`flex flex-col gap-3 ${selection ? "source-framing" : ""}`}>
       {error && <p role="alert" className="inline-error">{error}</p>}
-      {selection ? <ClipPreview file={selection.file} url={selection.url} onBack={() => setSelection(null)} onConfirm={(crop, pick) => onFile(selection.file, isFullCrop(crop) ? undefined : crop, pick ?? undefined)} /> : mode === "upload" ? <Upload onFile={choose} busy={busy} /> : <Record onFile={choose} busy={busy} />}
+      {selection ? <ClipPreview file={selection.file} url={selection.url} confirmLabel={confirmLabel} onBack={() => setSelection(null)} onConfirm={(crop, pick) => onFile(selection.file, isFullCrop(crop) ? undefined : crop, pick ?? undefined)} /> : mode === "upload" ? <Upload onFile={choose} busy={busy} /> : <Record onFile={choose} busy={busy} />}
     </div>
   );
 }
 
-function ClipPreview({ file, url, onBack, onConfirm }: { file: File; url: string; onBack: () => void; onConfirm: (crop: Crop, pick: PersonPick | null) => void }) {
+function ClipPreview({ file, url, confirmLabel, onBack, onConfirm }: { file: File; url: string; confirmLabel: string; onBack: () => void; onConfirm: (crop: Crop, pick: PersonPick | null) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [crop, setCrop] = useState<Crop>(FULL_CROP);
   const [pick, setPick] = useState<PersonPick | null>(null);
@@ -47,7 +49,7 @@ function ClipPreview({ file, url, onBack, onConfirm }: { file: File; url: string
         <div className="clip-file"><strong title={file.name}>{file.name}</strong><span>{(file.size / 1024 / 1024).toFixed(1)} MB</span></div>
       </>}>
       {error ? <p role="alert" className="inline-error">{error}</p> : <p className="dialog-note">Only the framed region is tracked. Drag the box, scroll to zoom, or press <em>Fit to dancer</em>. Several people? Pause on them and click the one to follow.</p>}
-      <div className="dialog-actions clip-actions"><button className="btn primary" disabled={!!error} onClick={() => onConfirm(crop, pick)}>Create movement score <ArrowRight size={17} /></button><button className="btn" onClick={onBack}>Choose another</button></div>
+      <div className="dialog-actions clip-actions"><button className="btn primary" disabled={!!error} onClick={() => onConfirm(crop, pick)}>{confirmLabel} <ArrowRight size={17} /></button><button className="btn" onClick={onBack}>Choose another</button></div>
     </CropEditor>
   </div>;
 }
@@ -155,7 +157,7 @@ function Record({ onFile, busy }: Props) {
         ) : (
           <button className="btn" onClick={stop}>Stop &amp; preview</button>
         )}
-        <span className="text-muted-foreground">Keep your whole body in frame. You can review the recording before creating a score.</span>
+        <span className="text-muted-foreground">Keep your whole body in frame. You can review the recording before creating a dance.</span>
       </div>
     </div>
   );

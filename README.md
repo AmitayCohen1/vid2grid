@@ -1,23 +1,23 @@
 # vid2grid
 
-A short video of one dancer → a **grid-snapped, playable 3D score**.
+A short video of one dancer → a **grid-snapped, playable 3D dance**.
 
 Upload (or record from the webcam) a clip. The pose tracker runs entirely in your
 browser, spells every body segment as a direction on the sphere — azimuth and
 elevation in the dancer's own frame, the Eshkol-Wachman idea — and snaps it to a
-discrete grid. **The snapped score is the truth; the raw track is the evidence.**
+discrete grid. **The snapped dance is the truth; the raw track is the evidence.**
 Play it back on a 3D stage, read every limb in Laban / Eshkol-Wachman terms, and
 see when the notation changes.
 
-Or **go live**: with the camera as the source the score is written as you move —
+Or **go live**: with the camera as the source the dance is written as you move —
 the figure, the grid and your cast follow you in real time, and when you finish
-the take is kept as an ordinary score, recording included. Live, each stage of
+the take is kept as an ordinary dance, recording included. Live, each stage of
 the pipeline runs causally (`lib/live.ts`): the body is re-measured as frames
 arrive, the smoother is the same One-Euro filter, and a new direction shows once
 it has held for the dwell — there is no back-dating, so the live figure runs a
-few frames behind the offline score. On Finish the take is resampled onto the
+few frames behind the offline dance. On Finish the take is resampled onto the
 fixed frame rate and re-read by the whole-clip pipeline; that result is the
-score, not what the stage showed live.
+dance, not what the stage showed live.
 
 There is also an **objects** view after Forsythe/OSU's *Synchronous Objects*: the
 video annotated with traces, alignment lines between limbs, movement density,
@@ -35,13 +35,13 @@ npm test          # engine regression checks
 The opening studio includes three authored movement studies, so you can explore
 the stage without supplying a video. Studies are synthetic poses, not captured
 performances. Playback supports 0.25×–2× speed, looping, frame stepping, and a
-keyboard-accessible playhead. The home screen is a real demo: a clip and a character dancing its score side by
+keyboard-accessible playhead. The home screen is a real demo: a clip and a character performing its dance side by
 side (`public/demo`, regenerated with `scripts/hero-data.ts`) and the cast; the header offers a way
-back to the studio once it has been open. New score opens a dialog to upload, record, go live, import, or choose an example.
+back to the studio once it has been open. New dance opens a dialog to upload, record, go live, import, or choose an example.
 The Dancer tab chooses how the movement reads: **Smooth** drives the figure from
 the tracked motion (true to the video — best for watching and sharing), **Stepped**
-from the grid-snapped score (what the notation reads). It is display only: the
-score, the notation, and every export stay snapped either way. The translucent
+from the grid-snapped dance (what the notation reads). It is display only: the
+dance, the notation, and every export stay snapped either way. The translucent
 ghost shows whichever track is not on stage.
 **Beats** overlays the clip's pulse on the playhead and the notation roll —
 `lib/tempo.ts` derives it from the movement itself (no audio), and it is always
@@ -58,7 +58,7 @@ keeps to them for the whole clip, forwards and backwards from that moment
 (`lib/follow.ts` carries identity frame to frame by nearest hips, with a jump
 limit scaled to body size). Without a pick, the biggest body is followed; *Fit to
 dancer* honours the pick too. Canceling analysis restores the
-previous score. The studio is one header (brand, project, view
+previous dance. The studio is one header (brand, project, view
 tabs, actions) over the stage, with a permanent settings sidebar on the right —
 Dancer, Movement grid, and Cast tabs, with Simple / Balanced / Detailed grid
 presets and optional advanced tuning. It is always open, so every change is
@@ -66,27 +66,32 @@ visible on the stage while playback keeps running; it collapses to an icon rail
 (Escape, or the chevron) and below 1100px the open panel floats over the stage.
 Notation and Save use focused dialogs; on phones, dialogs become bottom sheets.
 
-**Cast** pins dancers onto the shared stage, and each one takes *choreographic
-devices* (`lib/devices.ts`): a **delay** (they wait in their first pose, then
-start), a **speed**, **mirror** (the audience's mirror image), and **reverse**
-(retrograde). **Add canon** adds copies of the current dancer entering one
-after another, a chosen number of beats apart, so the timeline stretches to
-the last voice. In **Compare**, the character and the whole cast can dance
-*inside the recording* (Dancer → In the video): the tracker's 2D landmarks and
-metres-per-pixel put each figure beside the person at their scale, feet on
-their floor, with no camera calibration; the "Beside" slider moves the
-character and a cast member's X moves them relative to the person.
+**Add dancer** (header button, or the Cast tab) puts more people on the shared
+stage in one dialog: *who* (a character, a custom VRM, or the skeleton) and
+*what they dance* — this dance again, alone or several entering a chosen number
+of beats apart (a canon); another video, tracked off screen (`lib/clip.ts`)
+while the dance on the stage stays as it is; a saved dance; or an example. The
+Cast tab is the roster: the lead first, then a card per dancer that reads as one
+line and opens to its *choreographic devices* (`lib/devices.ts`) — an
+**entrance** delay (they wait in their first pose, then start), a **speed**,
+**mirror** (the audience's mirror image), **reverse** (retrograde) — plus its
+placement, size and look. The timeline stretches to the last dancer. In
+**Compare**, the character and the whole cast can dance *inside the recording*
+(Dancer → In the video): the tracker's 2D landmarks and metres-per-pixel put
+each figure beside the person at their scale, feet on their floor, with no
+camera calibration; the "Beside" slider moves the character and a cast member's
+Across moves them relative to the person.
 
 Video imports accept clips up to 120 seconds / 250 MB; 5–30 seconds remains ideal.
-Score imports validate the full pose sequence before opening it. Tracking gaps
+Dance imports validate the full pose sequence before opening it. Tracking gaps
 preserve the original video timestamps and appear as low-confidence frames.
 Smoothing and depth reconstruction are available for video analyses; imported
-scores retain their baked smoothing while the grid remains editable.
+dances retain their baked smoothing while the grid remains editable.
 
 If your environment blocks Turbopack's internal worker port, the supported
 alternative is `npm run build -- --webpack`.
 
-Nothing leaves the browser: no upload, no backend, no database. Scores can be
+Nothing leaves the browser: no upload, no backend, no database. Dances can be
 exported/imported as JSON and the last one is kept in localStorage.
 
 ## How it works
@@ -107,7 +112,7 @@ video ─► MediaPipe Pose (33 landmarks, 2D + rough 3D)     lib/tracker.ts
 - **Body-local space**: x = dancer's right, y = up, z = dancer's forward.
   Azimuth 0 = forward, 90 = right; elevation +90 = up.
 - **The grid** is a setting (default 22.5° az / 22.5° el, facing 45°). Change it
-  and the whole score re-snaps instantly. Laban's 8 directions × 3 levels and
+  and the whole dance re-snaps instantly. Laban's 8 directions × 3 levels and
   E-W's 45° units are read off the grid.
 - **Stage frame** (three.js): x = audience's right, y = up, z = towards the
   audience/camera. Facing 0 = towards the camera.

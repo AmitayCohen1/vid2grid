@@ -429,15 +429,35 @@ html { scroll-behavior: smooth; }
 .insp-btn:disabled { opacity: .4; cursor: not-allowed; }
 
 /* cast rows */
-.insp-cast { display: flex; flex-direction: column; gap: 6px; list-style: none; margin: 0; padding: 0; }
-.insp-cast-member { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--background); }
-.insp-cast-member .insp-row { grid-template-columns: 30px minmax(0, 1fr) 58px; }
-.insp-cast-member .insp-num { background: var(--card); }
-.insp-cast-head { display: flex; align-items: center; gap: 8px; height: 30px; margin-bottom: 4px; }
-.insp-cast-name { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; font-size: 11.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.insp-cast-name .mono { font-size: 10px; color: var(--muted-foreground); }
-.insp-cast-actions { display: flex; gap: 2px; }
-.insp-cast-actions .insp-icon { width: 22px; height: 22px; }
+/* The cast roster: the lead first, then a card per added dancer. A card reads
+   as one line (thumb, name, what they do) and opens to its timing, placement and look. */
+.cast-list { display: flex; flex-direction: column; gap: 5px; list-style: none; margin: 0; padding: 0; }
+.cast-card { border: 1px solid var(--border); border-radius: 8px; background: var(--background); }
+.cast-card.is-lead { border-style: dashed; }
+.cast-card details > summary { list-style: none; cursor: pointer; user-select: none; }
+.cast-card details > summary::-webkit-details-marker { display: none; }
+.cast-head { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 5px 7px 5px 6px; }
+.cast-card details[open] > .cast-head { border-bottom: 1px solid var(--border); }
+.cast-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cast-title strong { display: flex; align-items: baseline; gap: 6px; font-size: 11.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cast-title strong .mono { font-size: 10px; color: var(--muted-foreground); }
+.cast-title small { font-size: 10px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cast-chevron { flex-shrink: 0; color: var(--muted-foreground); transition: transform .15s; }
+.cast-card details[open] .cast-chevron { transform: rotate(180deg); }
+.cast-body { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px 8px; }
+.cast-body .insp-row { grid-template-columns: 56px minmax(0, 1fr) 58px; }
+.cast-body .insp-num { background: var(--card); }
+.cast-actions { display: flex; align-items: center; gap: 4px; padding-bottom: 6px; }
+.cast-actions .insp-btn[aria-pressed="true"] { background: var(--n-brand-soft); border-color: var(--n-brand); color: var(--n-brand); }
+.cast-actions .insp-icon { width: 22px; height: 22px; }
+.cast-spacer { flex: 1; }
+.cast-group { font-size: 9.5px; font-weight: 600; letter-spacing: .9px; text-transform: uppercase; color: var(--muted-foreground); padding: 6px 0 1px; }
+.cast-add { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 6px; padding: 9px 10px; text-align: left; border: 1px dashed var(--n-brand); border-radius: 8px; background: var(--n-brand-soft); color: var(--n-brand); transition: background .15s; }
+.cast-add:hover { background: color-mix(in srgb, var(--n-brand) 22%, transparent); }
+.cast-add > svg { flex-shrink: 0; }
+.cast-add > span { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cast-add strong { font-size: 11.5px; font-weight: 600; }
+.cast-add small { font-size: 10px; line-height: 1.4; color: var(--muted-foreground); }
 .insp-thumb { display: grid; place-items: center; width: 24px; height: 30px; border-radius: 4px; overflow: hidden; border: 1px solid var(--border); background: var(--card); color: var(--muted-foreground); flex-shrink: 0; }
 .insp-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .insp-drawing { aspect-ratio: 16 / 9; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
@@ -597,6 +617,26 @@ html { scroll-behavior: smooth; }
 .analysis-progress progress { width: 100%; height: 8px; accent-color: var(--n-brand); border-radius: 9px; overflow: hidden; }
 .analysis-progress progress::-webkit-progress-bar { background: var(--muted); }
 .analysis-progress progress::-webkit-progress-value { background: var(--n-brand); }
+/* Add a dancer: who (a character select), then what they dance. The inspector
+   kit is reused at dialog size. */
+.add-dancer { --insp-h: 32px; display: flex; flex-direction: column; gap: 22px; }
+.add-dancer .insp-tiles { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.add-dancer .insp-tiles > * { font-size: 11px; }
+.add-step { display: flex; flex-direction: column; gap: 12px; }
+.add-step > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.add-step .dialog-tabs { margin-bottom: 0; }
+.add-step .dialog-tabs button:disabled { opacity: .4; cursor: not-allowed; }
+.add-step-value { font-size: 12px; color: var(--n-brand); font-weight: 500; }
+.add-this { display: flex; flex-direction: column; gap: 6px; }
+.add-this .insp-row { grid-template-columns: 90px minmax(0, 1fr); font-size: 12px; }
+.add-this .insp-slider { grid-template-columns: 90px minmax(0, 1fr) 82px; }
+.add-this .insp-label { font-size: 12px; }
+.add-this .insp-seg { max-width: 220px; }
+.add-this .insp-note { font-size: 12px; line-height: 1.6; padding-top: 6px; }
+.add-this .dialog-primary { margin-top: 12px; }
+.add-video .dialog-note { margin-bottom: 14px; }
+.add-dancer .import-score-flow > p, .add-dancer > div > .dialog-note { font-size: 13px; color: var(--muted-foreground); line-height: 1.7; }
+@media (max-width: 640px) { .add-dancer .insp-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .save-score-form { display: flex; flex-direction: column; gap: 24px; }
 .save-summary { display: flex; align-items: center; gap: 16px; background: var(--n-brand-soft); padding: 20px; border-radius: 12px; }
 .save-summary > svg { color: var(--n-brand); flex-shrink: 0; }

@@ -94,7 +94,7 @@ const VideoPane = forwardRef<HTMLVideoElement, Props>(function VideoPane({ src, 
           onError={onError}
         />
       ) : (
-        <div className="video-placeholder"><Film size={23} strokeWidth={1.2} /><span>A score without a camera.</span><small>This study has no source video.<br />Explore its movement on the stage.</small></div>
+        <div className="video-placeholder"><Film size={23} strokeWidth={1.2} /><span>A dance without a camera.</span><small>This study has no source video.<br />Explore its movement on the stage.</small></div>
       )}
       <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none" />
     </div>

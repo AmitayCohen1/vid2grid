@@ -12,14 +12,14 @@ const SITE = "https://vid2grid.vercel.app";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
   title: { default: "vid2grid — Movement has a language", template: "%s — vid2grid" },
-  description: "Film a phrase, read it back: a short video of one dancer becomes a grid-snapped, playable 3D score in Labanotation and Eshkol-Wachman terms.",
+  description: "Film a phrase, read it back: a short video of one dancer becomes a grid-snapped, playable 3D dance in Labanotation and Eshkol-Wachman terms.",
   applicationName: "Movement Languages",
   openGraph: {
     type: "website",
     siteName: "Movement Languages",
     url: SITE,
     title: "vid2grid — Movement has a language",
-    description: "A short video of one dancer becomes a grid-snapped, playable 3D score.",
+    description: "A short video of one dancer becomes a grid-snapped, playable 3D dance.",
   },
 };
 

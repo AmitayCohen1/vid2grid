@@ -107,7 +107,7 @@ export default function HeroDuet({ avatarUrl, children }: { avatarUrl: string; c
   const stageRight = castWidth ? castWidth + GUTTER : 0;
 
   return (
-    <div ref={boxRef} className="duet" style={{ height: rect?.h }} aria-label="A dancer on video with the tracking drawn over them, and a character dancing the same score on the stage beside">
+    <div ref={boxRef} className="duet" style={{ height: rect?.h }} aria-label="A dancer on video with the tracking drawn over them, and a character performing the same dance on the stage beside">
       {rect && (
         <div className="duet-picture" style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}>
           <video ref={videoRef} className="duet-video" src="/demo/alice.mp4" poster="/demo/alice.jpg" muted loop autoPlay playsInline preload="auto"

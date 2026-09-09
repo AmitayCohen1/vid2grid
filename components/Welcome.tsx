@@ -12,7 +12,7 @@ const HeroDuet = dynamic(() => import("./HeroDuet"), { ssr: false, loading: () =
 const STEPS = [
   { n: "01", title: "Film", text: "One dancer, a still camera, a short clip. Or go live." },
   { n: "02", title: "Read", text: "Every limb becomes a direction on a grid. Laban and Eshkol–Wachman, re-snapped as you tune it." },
-  { n: "03", title: "Compose", text: "Put a character on it, build a cast, export the score. Nothing leaves your device." },
+  { n: "03", title: "Compose", text: "Put a character on it, build a cast, export the dance. Nothing leaves your device." },
 ];
 
 const DEFAULT = AVATAR_PRESETS.find((a) => a.label === "Shibu") ?? AVATAR_PRESETS[0];
@@ -31,9 +31,9 @@ export default function Welcome({ onStart, onDemo }: { onStart: () => void; onDe
         <div className="hero-text">
           <h1>Movement has<br />a language.</h1>
           <div className="hero-side">
-            <p>A video of one dancer becomes a playable 3D score. Tracked in your browser. Nothing uploaded.</p>
+            <p>A video of one dancer becomes a playable 3D dance. Tracked in your browser. Nothing uploaded.</p>
             <div className="hero-actions">
-              <button className="cta" onClick={onStart}>Create a score</button>
+              <button className="cta" onClick={onStart}>Create a dance</button>
               <button className="cta ghost" onClick={() => onDemo("reach", avatar.url)}>Try an example <ArrowUpRight size={15} /></button>
             </div>
           </div>

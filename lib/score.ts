@@ -230,8 +230,8 @@ export function serializeScore(s: Score): string {
 
 export function parseScore(text: string): Score {
   let value: unknown;
-  try { value = JSON.parse(text); } catch { throw new Error("This file is not valid JSON. Choose an exported vid2grid score."); }
-  const fail = (): never => { throw new Error("This score is incomplete or invalid. Choose a complete vid2grid JSON export."); };
+  try { value = JSON.parse(text); } catch { throw new Error("This file is not valid JSON. Choose an exported vid2grid dance."); }
+  const fail = (): never => { throw new Error("This dance is incomplete or invalid. Choose a complete vid2grid JSON export."); };
   if (!value || typeof value !== "object") return fail();
   const s = value as Score;
   const finite = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n);

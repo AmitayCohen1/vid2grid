@@ -23,9 +23,9 @@ export default function LiveBar({ elapsed, keyframes, ready, finishing, onFinish
       <span className="transport-time mono text-muted-foreground">
         <span className="text-foreground">{elapsed.toFixed(1)}</span> s <span className="transport-detail">· {ready ? `${keyframes} keyframes` : "finding you…"}{left < 15 ? ` · ${Math.ceil(left)} s left` : ""}</span>
       </span>
-      <span className="live-hint">{ready ? "The stage follows you; the cast dances along. Finish to keep the take as a score." : "Step back until your whole body is in frame."}</span>
+      <span className="live-hint">{ready ? "The stage follows you; the cast dances along. Finish to keep the take as a dance." : "Step back until your whole body is in frame."}</span>
       <button className="btn timeline-toggle" onClick={onDiscard} disabled={finishing}><Trash2 size={16} /><span>Discard</span></button>
-      <button className="btn primary" onClick={onFinish} disabled={!ready || elapsed < 1 || finishing} title={ready ? "End the take and open it as a score" : "Wait until you are tracked"}>
+      <button className="btn primary" onClick={onFinish} disabled={!ready || elapsed < 1 || finishing} title={ready ? "End the take and open it as a dance" : "Wait until you are tracked"}>
         <Check size={17} />{finishing ? "Finishing…" : "Finish take"}
       </button>
     </div>

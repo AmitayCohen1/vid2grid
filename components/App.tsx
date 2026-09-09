@@ -3,16 +3,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
-import { ArrowLeft, Box, Check, CircleHelp, Download, Film, Grid2X2, Moon, PanelRightClose, Plus, ScanLine, SlidersHorizontal, Sun, X, PersonStanding, Users, List, Activity, ImageDown, RotateCcw } from "lucide-react";
+import { ArrowLeft, Box, Check, CircleHelp, Download, Film, Grid2X2, Moon, PanelRightClose, Plus, ScanLine, SlidersHorizontal, Sun, X, PersonStanding, Users, UserPlus, List, Activity, ImageDown, RotateCcw } from "lucide-react";
 import Dialog from "./Dialog";
 import NewScore from "./NewScore";
 import SaveScore from "./SaveScore";
 import Welcome from "./Welcome";
 import { createDemo, type DemoPhrase } from "@/lib/demo";
 import { DEFAULT_AVATAR_URL } from "@/lib/avatars";
-import CastPanel, { type CastMember, type CastPatch } from "./Cast";
+import CastPanel, { type CastMember, type CastPatch, type Lead } from "./Cast";
+import AddDancer, { type AddProgress, type Look } from "./AddDancer";
+import CharacterGrid, { lookLabel } from "./CharacterGrid";
 import type { StageCastMember } from "./Stage";
-import { NO_DEVICES, clipTime, memberSpan, mirrorBody, mirrorPose, placePose, sanitizeDevices, scaleBody, scalePose } from "@/lib/devices";
+import { type Devices, NO_DEVICES, clipTime, memberSpan, mirrorBody, mirrorPose, placePose, sanitizeDevices, scaleBody, scalePose } from "@/lib/devices";
 import { imageToWorld, videoAnchors } from "@/lib/invideo";
 import { idbGet, idbSet } from "@/lib/store";
 import VideoPane from "./VideoPane";
@@ -24,8 +26,9 @@ import { Chips, Colour, Note, NumSlider, Section, Seg, Switch } from "./Inspecto
 import Objects, { DEFAULT_OBJECTS, Drawing, type ObjectsHandle, type ObjectsOptions } from "./Objects";
 import { DEFAULT_TRACE_STYLE, TRACE_GROUPS, TRACE_PRESETS, type TraceStyle } from "@/lib/traces";
 import { DEFAULT_GRID, type GridConfig } from "@/lib/grid";
-import { DEFAULT_SMOOTH, type LiftMode, type Score, type SmoothConfig, type SourceInfo, frameAt, measureBody, parseScore, rawPoses, serializeScore, smoothPoses, snapPoses } from "@/lib/score";
-import { fillGaps, getLandmarker, trackVideo, type TrackedFrame } from "@/lib/tracker";
+import { DEFAULT_SMOOTH, type LiftMode, type Score, type SmoothConfig, type SourceInfo, buildScore, frameAt, measureBody, parseScore, rawPoses, serializeScore, smoothPoses, snapPoses } from "@/lib/score";
+import { fillGaps, getLandmarker, trackVideo } from "@/lib/tracker";
+import { type Analysis, checkDuration, nobodyFound, resolveDuration, trackFile } from "@/lib/clip";
 import { LiveCapture } from "@/lib/capture";
 import { type LiveFrame, LiveScore, resampleLive } from "@/lib/live";
 import { type Crop, cropPixels, isFullCrop } from "@/lib/crop";
@@ -53,11 +56,6 @@ const Stage = dynamic(() => import("./Stage"), {
 });
 const VideoStage = dynamic(() => import("./VideoStage"), { ssr: false });
 
-interface Analysis {
-  tracked: TrackedFrame[];
-  source: SourceInfo;
-}
-
 export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -65,7 +63,9 @@ export default function App() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState({ done: 0, total: 1 });
   const [error, setError] = useState<string | null>(null);
-  const [modal, setModal] = useState<"new" | "save" | "details" | "help" | "compare" | null>(null);
+  const [modal, setModal] = useState<"new" | "save" | "details" | "help" | "compare" | "add" | "look" | null>(null);
+  /** The cast member whose look is being changed. */
+  const [lookFor, setLookFor] = useState<string | null>(null);
   const [newMode, setNewMode] = useState<"upload" | "import" | "live">("upload");
   const [settingsTab, setSettingsTab] = useState<"dancer" | "grid" | "cast" | "traces">("dancer");
   const [settingsOpen, setSettingsOpen] = useState(true);
@@ -150,7 +150,7 @@ export default function App() {
     if (!blob) { setToast("Nothing to save yet."); return; }
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${(source?.name ?? "score").replace(/\.[^.]+$/, "")}-traces.png`;
+    a.download = `${(source?.name ?? "dance").replace(/\.[^.]+$/, "")}-traces.png`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
     setToast("Picture saved.");
@@ -221,46 +221,95 @@ export default function App() {
     return () => clearTimeout(id);
   }, [cast]);
 
-  /** The current dancer as a cast member, placed `x` metres across. */
-  const member = useCallback((x: number, devices = NO_DEVICES): CastMember | null => score ? {
-    id: crypto.randomUUID(),
-    name: score.source.name.replace(/\.[^.]+$/, ""),
-    score,
-    avatarUrl: avatar ? avatarUrl : null,
-    x, z: 0, rot: 0,
-    ...devices,
-    size,
-  } : null, [score, avatar, avatarUrl, size]);
-  const addToCast = useCallback(() => {
+  /** Slots across the stage not yet taken, nearest the centre first: −1, 1, −2, 2 … metres. */
+  const freeSlots = (taken: number[], n: number): number[] => {
+    const out: number[] = [];
+    for (let k = 1; out.length < n; k++) for (const x of [-k, k]) if (out.length < n && !taken.some((t) => Math.abs(t - x) < 0.5)) out.push(x);
+    return out;
+  };
+  /** Put dancers on the stage: each a dance, a look and its devices, in the free slots nearest the centre. */
+  const addMembers = useCallback((specs: { score: Score; look: Look; devices?: Partial<Devices> }[]) => {
     setCast((c) => {
-      // Alternate new dancers left/right of centre so they don't stack —
-      // starting on the left, since the character stands to the right in the video.
-      const slot = c.length + 1;
-      const m = member(Math.ceil(slot / 2) * 1.0 * (slot % 2 ? -1 : 1));
-      return m ? [...c, m] : c;
+      const slots = freeSlots(c.map((m) => m.x), specs.length);
+      return [...c, ...specs.map((sp, i) => ({
+        id: crypto.randomUUID(),
+        name: lookLabel(sp.look.avatarUrl, sp.look.avatarName),
+        score: sp.score,
+        avatarUrl: sp.look.avatarUrl,
+        x: slots[i], z: 0, rot: 0,
+        ...NO_DEVICES, ...sp.devices,
+      }))];
     });
-  }, [member]);
-  /** A canon: the current dancer again, `voices − 1` times, each entering `gap` seconds after the last, in a line to the left. */
-  const addCanon = useCallback((voices: number, gap: number) => {
-    setCast((c) => {
-      const copies: CastMember[] = [];
-      for (let k = 1; k < voices; k++) {
-        const m = member(-k * 1.0, { ...NO_DEVICES, delay: Math.round(k * gap * 100) / 100 });
-        if (m) copies.push(m);
-      }
-      return [...c, ...copies];
-    });
-  }, [member]);
+  }, []);
+  const showCast = useCallback(() => { setModal(null); setError(null); setSettingsTab("cast"); setSettingsOpen(true); }, []);
+  /** This dance again: one more dancer, or several entering `gapBeats` apart (a canon). */
+  const addThis = useCallback((look: Look, count: number, gapBeats: number) => {
+    if (!score) return;
+    const gap = gapBeats * 60 / bpm;
+    addMembers(Array.from({ length: count }, (_, k) => ({ score, look, devices: { size, delay: Math.round((k + 1) * gap * 100) / 100 } })));
+    showCast();
+    setToast(count > 1 ? `${count} dancers added${gap > 0 ? `, entering ${gap.toFixed(2)} s apart` : ", in unison"}.` : `${lookLabel(look.avatarUrl, look.avatarName)} is on the stage.`);
+  }, [score, bpm, size, addMembers, showCast]);
+  const addSaved = useCallback((file: File, look: Look) => {
+    if (file.size > 25 * 1024 * 1024) { setError("Choose a dance smaller than 25 MB."); return; }
+    file.text().then((t) => {
+      const sc = parseScore(t);
+      addMembers([{ score: sc, look }]);
+      showCast();
+      setToast(`${lookLabel(look.avatarUrl, look.avatarName)} is on the stage, dancing ${sc.source.name}.`);
+    }).catch((e) => { setError(e instanceof Error ? e.message : "Could not open this dance."); });
+  }, [addMembers, showCast]);
+  const addExample = useCallback((phrase: DemoPhrase, look: Look) => {
+    const sc = createDemo(phrase);
+    addMembers([{ score: sc, look }]);
+    showCast();
+    setToast(`${lookLabel(look.avatarUrl, look.avatarName)} is on the stage, dancing ${sc.source.name}.`);
+  }, [addMembers, showCast]);
+  /* Another video for a new dancer: tracked off screen, the dance on the stage untouched. */
+  const [addProgress, setAddProgress] = useState<AddProgress | null>(null);
+  const addAbortRef = useRef<AbortController | null>(null);
+  const addFile = useCallback(async (file: File, look: Look, crop?: Crop, follow?: PersonPick) => {
+    addAbortRef.current?.abort();
+    const ac = new AbortController();
+    addAbortRef.current = ac;
+    setError(null);
+    setAddProgress({ stage: "loading", done: 0, total: 1 });
+    try {
+      const a = await trackFile(file, {
+        fps: SAMPLE_FPS, crop, follow, signal: ac.signal,
+        onTracking: () => setAddProgress({ stage: "tracking", done: 0, total: 1 }),
+        onProgress: (done, total) => setAddProgress({ stage: "tracking", done, total }),
+      });
+      if (ac.signal.aborted) return;
+      const sc = buildScore(fillGaps(a.tracked, a.source.fps), a.source, grid, smooth, lift);
+      addMembers([{ score: sc, look }]);
+      showCast();
+      setToast(`${lookLabel(look.avatarUrl, look.avatarName)} is on the stage, dancing ${file.name}.`);
+    } catch (e) {
+      if (ac.signal.aborted) return;
+      setError(describeError(e));
+    } finally {
+      if (addAbortRef.current === ac) { addAbortRef.current = null; setAddProgress(null); }
+    }
+  }, [grid, smooth, lift, addMembers, showCast]);
+  const cancelAdd = useCallback(() => { addAbortRef.current?.abort(); addAbortRef.current = null; setAddProgress(null); }, []);
+  useEffect(() => () => { addAbortRef.current?.abort(); }, []);
   const duplicateCast = useCallback((id: string) => {
     setCast((c) => {
       const m = c.find((d) => d.id === id);
-      return m ? [...c, { ...m, id: crypto.randomUUID(), x: m.x + 0.9 }] : c;
+      return m ? [...c, { ...m, id: crypto.randomUUID(), x: freeSlots(c.map((d) => d.x), 1)[0] }] : c;
     });
   }, []);
   const removeCast = useCallback((id: string) => setCast((c) => c.filter((d) => d.id !== id)), []);
   const updateCast = useCallback((id: string, patch: CastPatch) => {
     setCast((c) => c.map((d) => (d.id === id ? { ...d, ...patch } : d)));
   }, []);
+  const setMemberLook = useCallback((id: string, avatarUrl: string | null, customName?: string) => {
+    updateCast(id, { avatarUrl, name: lookLabel(avatarUrl, customName) });
+  }, [updateCast]);
+  const lookMember = lookFor ? cast.find((m) => m.id === lookFor) ?? null : null;
+  const lead: Lead | null = score ? { name: lookLabel(avatar ? avatarUrl : null, avatarName), dance: score.source.name.replace(/\.[^.]+$/, ""), avatarUrl: avatar ? avatarUrl : null } : null;
+  const usedLooks = [avatar ? avatarUrl : null, ...cast.map((m) => m.avatarUrl)];
 
   // The stage clock runs to the longest dancer (delay and speed included); shorter ones hold their last pose.
   const stageDuration = useMemo(
@@ -356,9 +405,7 @@ export default function App() {
       // MediaRecorder webm files often report Infinity; force the duration to resolve.
       if (!isFinite(video.duration)) await resolveDuration(video, ac.signal);
       if (ac.signal.aborted) return;
-      if (!Number.isFinite(video.duration) || video.duration < 1 || video.duration > 120) {
-        throw new Error("Choose a clip between 1 and 120 seconds. A 5–30 second phrase works best.");
-      }
+      checkDuration(video.duration);
       video.pause();
       // On a first visit the tracker is still downloading; keep "preparing" up until it is here,
       // rather than a progress bar stuck at 0%.
@@ -378,7 +425,7 @@ export default function App() {
       });
       if (ac.signal.aborted) return;
       const detected = tracked.filter((f) => f.extraction).length;
-      if (!detected) throw new Error(pendingFollow ? "The dancer you chose was never seen clearly. Pick them again on a frame where their whole body is in view." : crop ? "No person detected inside the framed region. Try a wider crop, or Fit to dancer." : "No person detected in this clip. Try a clip with your whole body in frame.");
+      if (!detected) throw nobodyFound(!!pendingFollow, !!crop);
       const px = crop ? cropPixels(crop, video.videoWidth, video.videoHeight) : { w: video.videoWidth, h: video.videoHeight };
       setAnalysis({
         tracked,
@@ -389,7 +436,7 @@ export default function App() {
       setPhase("ready");
       if (previousRef.current?.src) URL.revokeObjectURL(previousRef.current.src);
       previousRef.current = null;
-      setModal(null); setView("score"); setToast("Your score is ready. Press Play to explore the movement.");
+      setModal(null); setView("score"); setToast("Your dance is ready. Press Play to explore the movement.");
     } catch (e) {
       if (ac.signal.aborted) return; // superseded by a newer clip
       setError(describeError(e));
@@ -422,7 +469,7 @@ export default function App() {
       setLive({ capture, stream });
       setPhase("live");
       setModal(null);
-      setToast("You're live. Move — the score is written as you go.");
+      setToast("You're live. Move — the dance is written as you go.");
     }).catch((e) => {
       if (liveRef.current === capture) liveRef.current = null;
       setError(e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError")
@@ -458,7 +505,7 @@ export default function App() {
     const seen = tracked.filter((f) => f.extraction).length;
     if (result.duration < 1 || seen < SAMPLE_FPS) {
       restorePrevious();
-      setError("That take was too short to score. Go live again and dance for at least a second in full view.");
+      setError("That take was too short. Go live again and dance for at least a second in full view.");
       setModal("new"); setNewMode("live"); setPhase("error");
       return;
     }
@@ -469,7 +516,7 @@ export default function App() {
     setAnalysis({ tracked, source: { name, duration: tracked.length / SAMPLE_FPS, fps: SAMPLE_FPS, width: result.width, height: result.height } });
     setTime(0); timeRef.current = 0;
     setPhase("ready"); setView("score");
-    setToast("Take kept. The whole score has been re-read from it — press Play to explore.");
+    setToast("Take kept. The whole dance has been re-read from it — press Play to explore.");
   }, [restorePrevious]);
   // The capture reports reaching its limit; the take is finished from here, with the current handlers.
   useEffect(() => { if (limitHit) void finishLive(); }, [limitHit, finishLive]);
@@ -561,10 +608,10 @@ export default function App() {
     a.download = `${name.replace(/[\\/:*?"<>|]/g, "-")}.vid2grid.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    setModal(null); setToast("Score download started. Reopen it from New score → Open score.");
+    setModal(null); setToast("Dance download started. Reopen it from New dance → Open dance.");
   };
   const importJson = (file: File) => {
-    if (file.size > 25 * 1024 * 1024) { setError("Choose a score smaller than 25 MB."); return; }
+    if (file.size > 25 * 1024 * 1024) { setError("Choose a dance smaller than 25 MB."); return; }
     file.text().then((t) => {
       const sc = parseScore(t);
       abortRef.current?.abort();
@@ -572,9 +619,9 @@ export default function App() {
       previousRef.current = null;
       if (src) URL.revokeObjectURL(src);
       setSrc(null); setAnalysis(null); setImported(sc); setGrid(sc.grid); setSmooth(sc.smooth); setLift(sc.lift); setHome(false); timeRef.current = 0;
-      setTime(0); setPlaying(false); setPhase("ready"); setError(null); setModal(null); setToast("Score opened. Press Play to explore it.");
+      setTime(0); setPlaying(false); setPhase("ready"); setError(null); setModal(null); setToast("Dance opened. Press Play to explore it.");
       setView((v) => (v === "duet" ? "score" : v)); // duet needs a video
-    }).catch((e) => { setError(e instanceof Error ? e.message : "Could not import this score."); });
+    }).catch((e) => { setError(e instanceof Error ? e.message : "Could not open this dance."); });
   };
 
   const loadDemo = (phrase: DemoPhrase, avatarPresetUrl?: string) => {
@@ -634,7 +681,7 @@ export default function App() {
           <span className="brand-descriptor">MOVEMENT<br />LANGUAGES</span>
         </button>
         {!welcome && <>
-          <span className="project-chip" title={source?.name ?? undefined}>{live ? "Live take" : source?.name ?? "Creating your score"}</span>
+          <span className="project-chip" title={source?.name ?? undefined}>{live ? "Live take" : source?.name ?? "Creating your dance"}</span>
           <nav className="seg view-tabs" aria-label="Choose a view">
             <button aria-pressed={view === "score"} onClick={() => setView("score")}><Box size={18} />3D stage</button>
             <button aria-pressed={view === "duet"} onClick={() => src || live ? setView("duet") : openModal("compare")}><Film size={18} />Compare</button>
@@ -642,13 +689,14 @@ export default function App() {
           </nav>
         </>}
         <div className="header-actions">
+          {!welcome && <button className="btn" disabled={busy || !!live} onClick={() => openModal("add")} title="Put another dancer on the stage"><UserPlus size={17} /><span className="tool-label">Add dancer</span></button>}
           {!welcome && <button className="btn" disabled={!score} onClick={() => openModal("details")}><List size={17} /><span className="tool-label">Notation</span></button>}
           <button className="btn" onClick={() => openModal("help")}><CircleHelp size={17} /><span className="help-label">Help</span></button>
           {welcome ? <>
             {studioSeen && score && <button className="btn" onClick={() => setHome(false)}><ArrowLeft size={17} />Back to studio</button>}
-            <button className="btn" onClick={() => openNew("import")}>Open score</button>
+            <button className="btn" onClick={() => openNew("import")}>Open dance</button>
           </> : <>
-            <button className="btn" onClick={() => openNew()} disabled={busy || !!live}><Plus size={17} /><span className="tool-label">New score</span></button>
+            <button className="btn" onClick={() => openNew()} disabled={busy || !!live}><Plus size={17} /><span className="tool-label">New dance</span></button>
             <button className="btn primary" onClick={() => openModal("save")} disabled={!score}><Download size={17} /><span className="tool-label">Save</span></button>
           </>}
         </div>
@@ -686,7 +734,7 @@ export default function App() {
             </div>
             <div className="sidebar-content">
               {(tab === "dancer" || tab === "grid") && <Controls panel={tab} grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis || !!live} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} motion={motion} onMotion={setMotion} size={size} onSize={setSize} inVideo={inVideo} onInVideo={setInVideo} beside={beside} onBeside={setBeside} selfDelay={selfDelay} onSelfDelay={setSelfDelay} />}
-              {tab === "cast" && <CastPanel cast={cast} canAdd={!!score} beat={60 / bpm} onAdd={() => { addToCast(); setToast("Dancer added to your cast."); }} onCanon={(voices, gap) => { addCanon(voices, gap); setToast(`Canon added: ${voices} voices, ${gap.toFixed(2)} s apart.`); }} onDuplicate={duplicateCast} onRemove={removeCast} onUpdate={updateCast} />}
+              {tab === "cast" && <CastPanel lead={lead} cast={cast} beat={60 / bpm} onAdd={() => openModal("add")} onEditLead={() => setSettingsTab("dancer")} onLook={(id) => { setLookFor(id); openModal("look"); }} onDuplicate={duplicateCast} onRemove={removeCast} onUpdate={updateCast} />}
               {tab === "traces" && score && <>
                 <Section title="Traces">
                   <Switch label="Movement trails" hint="Follow the traced joints through space." checked={objects.traces} onChange={(traces) => setObjects({ ...objects, traces })} />
@@ -749,21 +797,34 @@ export default function App() {
         {score && !live && <footer className="studio-timeline"><Timeline score={score} total={stageDuration} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} onStep={step} selected={selected} onSelect={setSelected} speed={speed} onSpeed={setSpeed} loop={loop} onLoop={() => setLoop((l) => !l)} tempo={tempo} bpm={bpm} onBpm={onBpm} /></footer>}
       </>}
 
-      <Dialog open={modal === "new"} title={busy ? "Creating your score" : "Start a new score"} description={busy ? "Your video is being processed on this device." : "A video, a recording, or a saved score. Choose where to begin."} onClose={closeNew} locked={busy}>
+      <Dialog open={modal === "new"} title={busy ? "Creating your dance" : "Start a new dance"} description={busy ? "Your video is being processed on this device." : "A video, a recording, or a saved dance. Choose where to begin."} onClose={closeNew} locked={busy}>
         {error && <p className="inline-error" role="alert">{error}</p>}
         <NewScore initialMode={newMode} onFile={onFile} onImport={importJson} onDemo={loadDemo} onLive={startLive} busy={busy} progress={progress} loading={phase === "loading"} onCancel={cancelTracking} />
       </Dialog>
-      <Dialog open={modal === "save"} title="Save your movement" description="Download a reusable copy of the current dancer’s score." onClose={() => setModal(null)}>
+      <Dialog open={modal === "save"} title="Save your movement" description="Download a reusable copy of this dance." onClose={() => setModal(null)}>
         {score && <SaveScore key={score.source.name} score={score} onSave={exportJson} />}
       </Dialog>
       <Dialog open={modal === "details"} title="Read the movement" description="Directions for the current frame. Select a limb to highlight it on the stage." onClose={() => setModal(null)} wide>
         {snappedPose && rawPose && <><div className="notation-scroll"><BoneTable snapped={snappedPose} raw={rawPose} selected={selected} onSelect={(id) => { setSelected(id); setModal(null); setView("score"); }} /></div><p className="dialog-note">Grid: snapped angles. Laban: direction and level. E-W: Eshkol–Wachman units. Raw: the tracked angles before snapping.</p></>}
       </Dialog>
-      <Dialog open={modal === "compare"} title="Compare needs a video" description="This score contains movement data, but no original recording." onClose={() => setModal(null)}>
-        <div className="empty-dialog"><Film size={35} /><p>Create a score from your own video to watch the recording and 3D dancer together.</p><button className="btn primary" onClick={() => openNew()}>Choose a video</button><button className="btn" onClick={() => setModal(null)}>Back to the stage</button></div>
+      <Dialog open={modal === "add"} title="Add a dancer" description="Who they are, and what they dance. They join the stage beside you, sharing the clock." onClose={() => { if (!addProgress) { setModal(null); setError(null); } }} locked={!!addProgress}>
+        {error && <p className="inline-error" role="alert">{error}</p>}
+        <AddDancer hasDance={!!score} danceName={source ? source.name.replace(/\.[^.]+$/, "") : null} beat={60 / bpm} usedLooks={usedLooks} progress={addProgress} onAddThis={addThis} onAddFile={addFile} onAddSaved={addSaved} onAddExample={addExample} onCancel={cancelAdd} />
+      </Dialog>
+      <Dialog open={modal === "look"} title="Change the look" description={lookMember ? `${lookMember.name}, dancing ${lookMember.score.source.name.replace(/\.[^.]+$/, "")}.` : undefined} onClose={() => setModal(null)}>
+        {lookMember && <div className="add-dancer">
+          <CharacterGrid avatar={!!lookMember.avatarUrl} avatarUrl={lookMember.avatarUrl ?? DEFAULT_AVATAR_URL} avatarName={lookMember.avatarUrl?.startsWith("blob:") ? lookMember.name : null}
+            onAvatar={(on) => setMemberLook(lookMember.id, on ? (lookMember.avatarUrl ?? DEFAULT_AVATAR_URL) : null)}
+            onAvatarPreset={(url) => setMemberLook(lookMember.id, url)}
+            onAvatarFile={(f) => setMemberLook(lookMember.id, URL.createObjectURL(f), f.name.replace(/\.vrm$/i, ""))} />
+          <button className="btn primary dialog-primary" onClick={() => setModal(null)}>Done</button>
+        </div>}
+      </Dialog>
+      <Dialog open={modal === "compare"} title="Compare needs a video" description="This dance contains movement data, but no original recording." onClose={() => setModal(null)}>
+        <div className="empty-dialog"><Film size={35} /><p>Create a dance from your own video to watch the recording and 3D dancer together.</p><button className="btn primary" onClick={() => openNew()}>Choose a video</button><button className="btn" onClick={() => setModal(null)}>Back to the stage</button></div>
       </Dialog>
       <Dialog open={modal === "help"} title="A quick tour" description="From a video to a movement you can explore." onClose={() => setModal(null)}>
-        <div className="help-steps"><div><Film size={23} /><span><strong>1. Create a score</strong><p>Choose or record a short video and tap Create movement score, or go live and dance in front of the camera. Or open an example to try things out.</p></span></div><div><Box size={23} /><span><strong>2. Explore the phrase</strong><p>Press Play. Drag the dancer to rotate the view. Compare shows your source video; Traces reveals movement paths.</p></span></div><div><SlidersHorizontal size={23} /><span><strong>3. Make it yours</strong><p>The panel on the right changes the dancer, movement detail, and cast as you watch. Notation explains the selected frame. Save downloads the current dancer’s score.</p></span></div></div>
+        <div className="help-steps"><div><Film size={23} /><span><strong>1. Create a dance</strong><p>Choose or record a short video and tap Create dance, or go live and dance in front of the camera. Or open an example to try things out.</p></span></div><div><Box size={23} /><span><strong>2. Explore the phrase</strong><p>Press Play. Drag the dancer to rotate the view. Compare shows your source video; Traces reveals movement paths.</p></span></div><div><SlidersHorizontal size={23} /><span><strong>3. Make it yours</strong><p>The panel on the right changes the dancer and the movement detail as you watch. Add dancer puts more people on the stage: a character doing this dance, a canon, another video, or a saved dance. Notation explains the selected frame. Save downloads the current dance.</p></span></div></div>
         <div className="help-shortcuts"><span><kbd>Space</kbd> Play / pause</span><span><kbd>←</kbd><kbd>→</kbd> Step frames</span></div>
         <div className="dialog-footer"><span>Appearance</span><ThemeToggle /></div><button className="btn primary dialog-primary" onClick={() => setModal(null)}>Got it</button>
       </Dialog>
@@ -773,19 +834,6 @@ export default function App() {
 }
 
 const emptySubscribe = () => () => {};
-
-/** MediaRecorder webm files report an Infinite duration until seeked past the end; make it resolve. */
-function resolveDuration(video: HTMLVideoElement, signal?: AbortSignal): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const cleanup = () => { clearTimeout(timeout); video.removeEventListener("durationchange", done); signal?.removeEventListener("abort", aborted); };
-    const done = () => { if (Number.isFinite(video.duration)) { cleanup(); video.currentTime = 0; resolve(); } };
-    const aborted = () => { cleanup(); reject(new DOMException("Cancelled", "AbortError")); };
-    const timeout = setTimeout(() => { cleanup(); reject(new Error("Could not read this clip’s duration. Try exporting it as MP4.")); }, 10000);
-    video.addEventListener("durationchange", done);
-    signal?.addEventListener("abort", aborted, { once: true });
-    video.currentTime = 1e101;
-  });
-}
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
