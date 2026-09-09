@@ -104,25 +104,54 @@ function landmarksToBuffer(image: Landmark[]): Float32Array {
   return buf;
 }
 
+/**
+ * Seek and wait until the frame at `t` can actually be read. `seeked` alone
+ * is not enough: mobile browsers (iOS Safari in particular) fire it before
+ * the frame is decoded, and a grab then sees black — "no person detected"
+ * on a perfectly good clip. So after the seek we also wait for
+ * HAVE_CURRENT_DATA, polling because the matching events are unreliable on
+ * a hidden element.
+ */
 function seek(video: HTMLVideoElement, t: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) { reject(new DOMException("Cancelled", "AbortError")); return; }
     if (Math.abs(video.currentTime - t) < 1e-5 && video.readyState >= 2) { resolve(); return; }
-    const onSeeked = () => { cleanup(); resolve(); };
+    let poll: ReturnType<typeof setTimeout> | null = null;
+    const ready = () => {
+      if (video.readyState >= 2) { cleanup(); resolve(); return; }
+      poll = setTimeout(ready, 16);
+    };
+    const onSeeked = () => { video.removeEventListener("seeked", onSeeked); ready(); };
     const onError = () => { cleanup(); reject(new Error("video seek failed")); };
     const onAbort = () => { cleanup(); reject(new DOMException("Cancelled", "AbortError")); };
     const timeout = setTimeout(() => { cleanup(); reject(new Error("The video stopped responding. Try a shorter MP4 clip.")); }, 10000);
     const cleanup = () => {
       clearTimeout(timeout);
+      if (poll) clearTimeout(poll);
       video.removeEventListener("seeked", onSeeked);
       video.removeEventListener("error", onError);
       signal?.removeEventListener("abort", onAbort);
     };
-    video.addEventListener("seeked", onSeeked, { once: true });
+    video.addEventListener("seeked", onSeeked);
     video.addEventListener("error", onError, { once: true });
     signal?.addEventListener("abort", onAbort, { once: true });
     video.currentTime = t;
   });
+}
+
+/**
+ * iOS Safari hands a black frame to canvas and WebGL until a video has
+ * played at least once, however it was seeked. A muted, inline video may
+ * play without a gesture, so nudge it once before grabbing frames; where
+ * that is refused (Low Power Mode) we carry on and hope for the best.
+ */
+async function wakeDecoder(video: HTMLVideoElement): Promise<void> {
+  try {
+    await video.play();
+  } catch {
+    return;
+  }
+  video.pause();
 }
 
 /** Everyone the model found on one frame, each person once. */
@@ -183,6 +212,8 @@ export async function trackVideo(video: HTMLVideoElement, opts: TrackOptions): P
   const aspect = src.width / src.height;
   const frames: Candidate[][] = [];
   const times: number[] = [];
+  await wakeDecoder(video);
+  if (opts.signal?.aborted) throw new DOMException("aborted", "AbortError");
   const base = clock + 1;
   for (let i = 0; i < total; i++) {
     if (opts.signal?.aborted) throw new DOMException("aborted", "AbortError");
@@ -229,9 +260,17 @@ export async function liveDetector(): Promise<LiveDetector> {
  * Everyone in the video's current frame, as image-landmark buffers
  * normalised to the full frame — for choosing who to follow. The video
  * should be paused on the frame of interest.
+ *
+ * Loading the tracker can take a long while on a first visit over a slow
+ * connection, and the caller may be gone by then: honour `signal`, and
+ * never hand the model an element with no picture (a detached video whose
+ * source was revoked) — on a cold start that would be the tracker's very
+ * first inference, and it sours the ones that follow.
  */
-export async function detectPeople(video: HTMLVideoElement): Promise<Float32Array[]> {
+export async function detectPeople(video: HTMLVideoElement, signal?: AbortSignal): Promise<Float32Array[]> {
   const lm = await getLandmarker();
+  if (signal?.aborted) throw new DOMException("Cancelled", "AbortError");
+  if (!video.isConnected || !video.videoWidth || !video.videoHeight || video.readyState < 2) return [];
   clock += 1;
   return candidatesOf(lm.detectForVideo(video, clock)).map((c) => c.buf);
 }

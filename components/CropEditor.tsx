@@ -59,7 +59,9 @@ export default function CropEditor({ src, crop, onChange, pick, onPick, onMeta, 
   const [fitting, setFitting] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  useEffect(() => () => abortRef.current?.abort(), []);
+  /** Person detection outlives the editor otherwise: on a first visit the tracker may still be downloading when the clip is confirmed. */
+  const peopleAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => { abortRef.current?.abort(); peopleAbort.current?.abort(); }, []);
 
   /* ---------- who is in the paused frame ---------- */
   const [people, setPeople] = useState<Anchor[]>([]);
@@ -73,17 +75,21 @@ export default function CropEditor({ src, crop, onChange, pick, onPick, onMeta, 
     // Let the seek settle: a burst of scrubbing only detects on the last frame.
     setTimeout(async () => {
       if (run !== peopleRun.current || fittingRef.current) return;
+      peopleAbort.current?.abort();
+      const ac = new AbortController();
+      peopleAbort.current = ac;
       try {
-        const found = await detectPeople(v);
-        if (run !== peopleRun.current || !v.paused) return;
+        const found = await detectPeople(v, ac.signal);
+        if (ac.signal.aborted || run !== peopleRun.current || !v.paused) return;
         setPeople(found.map((b) => anchorOf(b)).filter((a): a is Anchor => !!a));
       } catch (e) {
+        if (ac.signal.aborted) return;
         // The boxes are a convenience; tracking itself reports a broken tracker.
         console.warn("detectPeople failed", e);
       }
     }, 120);
   }, []);
-  const clearPeople = () => { peopleRun.current++; setPeople([]); };
+  const clearPeople = () => { peopleRun.current++; peopleAbort.current?.abort(); setPeople([]); };
 
   /* ---------- pointer: move and resize ---------- */
   const drag = useRef<{ handle: Handle | "move"; start: Crop; x: number; y: number } | null>(null);

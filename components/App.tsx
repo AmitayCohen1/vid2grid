@@ -25,7 +25,7 @@ import Objects, { DEFAULT_OBJECTS, Drawing, type ObjectsHandle, type ObjectsOpti
 import { DEFAULT_TRACE_STYLE, TRACE_GROUPS, TRACE_PRESETS, type TraceStyle } from "@/lib/traces";
 import { DEFAULT_GRID, type GridConfig } from "@/lib/grid";
 import { DEFAULT_SMOOTH, type LiftMode, type Score, type SmoothConfig, type SourceInfo, frameAt, measureBody, parseScore, rawPoses, serializeScore, smoothPoses, snapPoses } from "@/lib/score";
-import { fillGaps, trackVideo, type TrackedFrame } from "@/lib/tracker";
+import { fillGaps, getLandmarker, trackVideo, type TrackedFrame } from "@/lib/tracker";
 import { LiveCapture } from "@/lib/capture";
 import { type LiveFrame, LiveScore, resampleLive } from "@/lib/live";
 import { type Crop, cropPixels, isFullCrop } from "@/lib/crop";
@@ -360,6 +360,10 @@ export default function App() {
         throw new Error("Choose a clip between 1 and 120 seconds. A 5–30 second phrase works best.");
       }
       video.pause();
+      // On a first visit the tracker is still downloading; keep "preparing" up until it is here,
+      // rather than a progress bar stuck at 0%.
+      await getLandmarker();
+      if (ac.signal.aborted) return;
       setPhase("tracking");
       const fps = SAMPLE_FPS;
       const total = Math.floor(video.duration * fps);
