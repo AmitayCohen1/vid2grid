@@ -13,6 +13,8 @@ import { DEFAULT_AVATAR_URL } from "@/lib/avatars";
 import CastPanel, { type CastMember, type CastPatch, type Lead } from "./Cast";
 import AddDancer, { type AddProgress, type Look } from "./AddDancer";
 import CharacterGrid, { lookLabel } from "./CharacterGrid";
+import { useAvatarLoading } from "./Avatar";
+import { AVATAR_PRESETS, avatarFile } from "@/lib/avatars";
 import type { StageCastMember } from "./Stage";
 import { type Devices, NO_DEVICES, clipTime, memberSpan, mirrorBody, mirrorPose, placePose, sanitizeDevices, scaleBody, scalePose } from "@/lib/devices";
 import { imageToWorld, videoAnchors } from "@/lib/invideo";
@@ -310,6 +312,13 @@ export default function App() {
   const lookMember = lookFor ? cast.find((m) => m.id === lookFor) ?? null : null;
   const lead: Lead | null = score ? { name: lookLabel(avatar ? avatarUrl : null, avatarName), dance: score.source.name.replace(/\.[^.]+$/, ""), avatarUrl: avatar ? avatarUrl : null } : null;
   const usedLooks = [avatar ? avatarUrl : null, ...cast.map((m) => m.avatarUrl)];
+  // Characters on their way: the stick figure dances meanwhile, this says who is coming.
+  const avatarLoads = useAvatarLoading();
+  const dressing = avatarLoads.length ? (() => {
+    const names = avatarLoads.map((l) => AVATAR_PRESETS.find((a) => avatarFile(a.url) === l.url)?.label ?? "character");
+    const done = avatarLoads.reduce((n, l) => n + l.done, 0), total = avatarLoads.reduce((n, l) => n + l.total, 0);
+    return { text: names.length === 1 ? `Dressing ${names[0]}` : `Dressing ${names.length} characters`, pct: total ? Math.round(done / total * 100) : null };
+  })() : null;
 
   // The stage clock runs to the longest dancer (delay and speed included); shorter ones hold their last pose.
   const stageDuration = useMemo(
@@ -719,6 +728,7 @@ export default function App() {
               <div className="stage-empty"><Activity size={35} /><span>{live ? "Looking for you. Step back so your whole body is in the picture." : "Your movement will appear here."}</span></div>}
             {view !== "objects" && <div className="stage-legend"><span><i className="bg-limb-l" />Left side</span><span><i className="bg-limb-r" />Right side</span><span className="stage-help">Drag to rotate · Pinch or scroll to zoom</span></div>}
             {selected && view !== "objects" && <button className="selected-limb" onClick={() => setSelected(null)}>{selected} · selected <X size={15} /></button>}
+            {dressing && view !== "objects" && <div className="stage-dressing" role="status"><span className="status-dot" />{dressing.text}{dressing.pct !== null && <b>{dressing.pct}%</b>}</div>}
           </section>
           <aside className={`settings-sidebar ${settingsOpen ? "" : "is-rail"}`} aria-label="Studio settings">
             {settingsOpen ? <>

@@ -1,6 +1,6 @@
 {
   "name": "vid2grid",
-  "description": "A short video of one dancer \u2192 a grid-snapped, playable 3D score.",
+  "description": "A short video of one dancer → a grid-snapped, playable 3D score.",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -31,6 +31,7 @@
     "@types/three": "^0.185.4",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4",
     "tsx": "^4.23.13",
     "typescript": "^5"

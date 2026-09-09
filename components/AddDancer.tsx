@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowUpRight, FileUp, Film, Play, Repeat, UserPlus } from "lucide-react";
 import CharacterGrid, { lookLabel } from "./CharacterGrid";
+import { preloadAvatar } from "./Avatar";
 import Source from "./Source";
 import { Note, NumSlider, Row, Seg } from "./Inspector";
 import { AVATAR_PRESETS, DEFAULT_AVATAR_URL } from "@/lib/avatars";
@@ -51,6 +52,8 @@ export default function AddDancer({ hasDance, danceName, beat, usedLooks, progre
   /** A clip is chosen and being framed: the picture takes the dialog. */
   const [framing, setFraming] = useState(false);
   const who = lookLabel(look.avatarUrl, look.avatarName);
+  // The suggested look is the likely pick: have it on its way while the dialog is read.
+  useEffect(() => { if (look.avatarUrl) preloadAvatar(look.avatarUrl); }, [look.avatarUrl]);
 
   if (progress) {
     const percent = Math.min(100, Math.round(progress.done / Math.max(1, progress.total) * 100));

@@ -1,8 +1,13 @@
 // Copies the MediaPipe WASM runtime out of node_modules and fetches the pose
-// model into public/, so the tracker is fully self-hosted. Runs on postinstall.
+// model and the preset characters into public/, so everything is self-hosted.
+// Characters are then shrunk for the web (scripts/optimize-vrm.mjs): a VRoid
+// sample is 10–20 MB of mostly 2048² textures, a quarter of that after.
+// Runs on postinstall. Files are served immutable (next.config.ts), so a
+// changed character needs a new file name.
 import { cpSync, existsSync, mkdirSync, writeFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { optimizeFile } from "./optimize-vrm.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const wasmSrc = join(root, "node_modules/@mediapipe/tasks-vision/wasm");
@@ -57,4 +62,6 @@ for (const [file, url] of AVATARS) {
   } else {
     console.log("[assets] avatar present:", file);
   }
+  const [before, after] = await optimizeFile(dst);
+  if (after !== before) console.log(`[assets] avatar shrunk: ${file} ${(before / 1e6).toFixed(1)} MB → ${(after / 1e6).toFixed(1)} MB`);
 }

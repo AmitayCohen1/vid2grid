@@ -501,6 +501,9 @@ html { scroll-behavior: smooth; }
 .flow-shell .stage-heading .mono { font-size: 10px; }
 .flow-shell .stage-legend { font-size: 11px; }
 .stage-empty { height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 15px; color: #a8adb8; font-size: 14px; }
+.stage-dressing { position: absolute; left: 18px; top: 16px; display: flex; align-items: center; gap: 8px; padding: 7px 11px; background: #1c1e24cc; color: #c3c7cf; border: 1px solid #2f333c; border-radius: 8px; font-size: 11px; pointer-events: none; backdrop-filter: blur(4px); }
+.stage-dressing b { font-weight: 500; color: #eef0f4; font-variant-numeric: tabular-nums; }
+.selected-limb:has(+ .stage-dressing), .stage-dressing ~ .selected-limb { top: 56px; }
 .selected-limb { position: absolute; left: 18px; top: 55px; display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #1c1e24; color: #eef0f4; border: 1px solid #4c515c; border-radius: 8px; font-size: 12px; }
 .flow-shell .studio-timeline { border-top: 1px solid var(--border); background: var(--card); padding: 12px 22px max(12px, env(safe-area-inset-bottom)); flex-shrink: 0; position: static; }
 .flow-shell .transport { gap: 8px; margin-bottom: 0; flex-wrap: wrap; }

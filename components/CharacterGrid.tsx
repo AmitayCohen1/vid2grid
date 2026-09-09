@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { Activity, Upload, User } from "lucide-react";
 import { AVATAR_PRESETS, turnSheet } from "@/lib/avatars";
+import { preloadAvatar } from "./Avatar";
 
 export interface LookProps {
   /** false = the stick figure. */
@@ -40,6 +41,7 @@ export default function CharacterGrid(p: LookProps) {
       {AVATAR_PRESETS.map((a) => (
         <button type="button" key={a.url} role="radio" aria-checked={p.avatar && !custom && p.avatarUrl === a.url} title={a.label}
           className={spin === a.url ? "is-picked" : undefined}
+          onPointerEnter={() => preloadAvatar(a.url)} onFocus={() => preloadAvatar(a.url)}
           onClick={() => pick(a.url)}>
           <span className="insp-tile-art">
             <Image src={a.portrait} alt="" width={120} height={160} sizes="80px" />
