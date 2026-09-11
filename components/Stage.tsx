@@ -5,6 +5,7 @@ import { Grid, OrbitControls } from "@react-three/drei";
 import { Suspense } from "react";
 import Figure, { GridSphere } from "./Figure";
 import Avatar from "./Avatar";
+import StageEnv from "./StageEnv";
 import type { Body } from "@/lib/fk";
 import type { Pose } from "@/lib/pose";
 import type { BoneId } from "@/lib/skeleton";
@@ -49,6 +50,7 @@ export default function Stage({ pose, raw, body, grid, motion, showRaw, avatar, 
       dpr={[1, 2]}
     >
       <color attach="background" args={["#0b0c0f"]} />
+      <StageEnv />
       <hemisphereLight args={["#ffffff", "#20232a", 0.9]} />
       <directionalLight position={[3, 5, 4]} intensity={1.1} />
       <directionalLight position={[-3, 2, -2]} intensity={0.4} />

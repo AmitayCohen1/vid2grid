@@ -12,7 +12,7 @@
    untracked bones (fingers, face) stay in rest pose.
    ------------------------------------------------------------------ */
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -22,6 +22,7 @@ import { forwardKinematics, type Body } from "@/lib/fk";
 import type { Pose } from "@/lib/pose";
 import type { JointId } from "@/lib/skeleton";
 import { DEFAULT_AVATAR_URL, avatarFile, avatarTint } from "@/lib/avatars";
+import { type FigureLook, type LookRig, buildLook, figureLook } from "@/lib/looks";
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -127,7 +128,7 @@ function fetchModel(file: string): Promise<ArrayBuffer> {
 
 /** Start downloading a look before it is needed (a hovered tile, a likely pick). */
 export function preloadAvatar(url: string): void {
-  if (typeof window === "undefined" || url.startsWith("blob:")) return;
+  if (typeof window === "undefined" || url.startsWith("blob:") || figureLook(url)) return;
   fetchModel(avatarFile(url)).catch(() => {});
 }
 
@@ -313,6 +314,20 @@ function retarget(rig: Rig, pose: Pose, body: Body) {
 }
 
 export default function Avatar({ pose, body, url = DEFAULT_AVATAR_URL, instanceKey = "" }: { pose: Pose; body: Body; url?: string; instanceKey?: string }) {
+  const look = figureLook(url);
+  if (look) return <LookFigure look={look} pose={pose} body={body} />;
+  return <VrmAvatar pose={pose} body={body} url={url} instanceKey={instanceKey} />;
+}
+
+/** A procedural look (lib/looks.ts): built at this body's bone lengths, placed every frame by forward kinematics. */
+function LookFigure({ look, pose, body }: { look: FigureLook; pose: Pose; body: Body }) {
+  const rig: LookRig = useMemo(() => buildLook(look, body), [look, body]);
+  useEffect(() => () => { rig.dispose(); }, [rig]);
+  useFrame(() => { rig.update(forwardKinematics(pose, body), pose.facing); });
+  return <primitive object={rig.group} />;
+}
+
+function VrmAvatar({ pose, body, url, instanceKey }: { pose: Pose; body: Body; url: string; instanceKey: string }) {
   const [loaded, setLoaded] = useState<{ url: string; rig: Rig } | null>(null);
   useEffect(() => {
     let alive = true;

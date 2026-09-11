@@ -39,7 +39,7 @@ export default function CharacterGrid(p: LookProps) {
         <span className="insp-tile-art"><Activity size={22} /></span><span>Skeleton</span>
       </button>
       {AVATAR_PRESETS.map((a) => (
-        <button type="button" key={a.url} role="radio" aria-checked={p.avatar && !custom && p.avatarUrl === a.url} title={a.label}
+        <button type="button" key={a.url} role="radio" aria-checked={p.avatar && !custom && p.avatarUrl === a.url} title={a.hint ? `${a.label} — ${a.hint}` : a.label}
           className={spin === a.url ? "is-picked" : undefined}
           onPointerEnter={() => preloadAvatar(a.url)} onFocus={() => preloadAvatar(a.url)}
           onClick={() => pick(a.url)}>

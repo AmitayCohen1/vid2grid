@@ -6,9 +6,20 @@
  *  saved members). Several presets may share one VRM file and differ only
  *  by `tint`: material-name substring → colour multiplied into that
  *  material's lit and shade colours when the rig loads (see Avatar.tsx).
- *  Such presets get a distinct `url` by fragment; `avatarFile` strips it. */
+ *  Such presets get a distinct `url` by fragment; `avatarFile` strips it.
+ *  Procedural looks (`look:` urls, lib/looks.ts) have no file at all. */
+import { FIGURE_LOOKS, lookUrl } from "./looks";
+
 export const DEFAULT_AVATAR_URL = "/models/avatar.vrm";
-export interface AvatarPreset { label: string; url: string; portrait: string; tint?: Record<string, string> }
+export interface AvatarPreset {
+  label: string;
+  url: string;
+  portrait: string;
+  tint?: Record<string, string>;
+  /** A procedural look (lib/looks.ts) rather than a VRM file: nothing to download. */
+  look?: boolean;
+  hint?: string;
+}
 export const AVATAR_PRESETS: AvatarPreset[] = [
   { label: "Hikari", url: DEFAULT_AVATAR_URL, portrait: "/avatars/avatar.png" },
   { label: "Seed-san", url: "/models/seed-san.vrm", portrait: "/avatars/seed-san.png" },
@@ -21,6 +32,8 @@ export const AVATAR_PRESETS: AvatarPreset[] = [
   { label: "Sora", url: "/models/hair-male.vrm", portrait: "/avatars/sora.png" },
   { label: "Kai", url: "/models/hair-male.vrm#kai", portrait: "/avatars/kai.png", tint: { Tops: "#4f7f5e", Hair: "#a0a0a8" } },
   { label: "Ren", url: "/models/hair-male.vrm#ren", portrait: "/avatars/ren.png", tint: { Tops: "#883a3a", Hair: "#e0b878" } },
+  // Built from the figure itself (lib/looks.ts): no file, no costume, only the pose.
+  ...FIGURE_LOOKS.map((l) => ({ label: l.label, url: lookUrl(l.id), portrait: `/avatars/look-${l.id}.png`, look: true, hint: l.hint })),
 ];
 
 /** The file behind a preset url (the fragment only tells presets apart). */

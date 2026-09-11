@@ -5,6 +5,7 @@ import { Suspense, useLayoutEffect, useRef, useState } from "react";
 import type { OrthographicCamera } from "three";
 import Figure from "./Figure";
 import Avatar from "./Avatar";
+import StageEnv from "./StageEnv";
 import type { StageCastMember } from "./Stage";
 
 interface Props {
@@ -55,6 +56,7 @@ export default function VideoStage({ aspect, metresAcross, figures }: Props) {
             dpr={[1, 2]}
           >
             <FitWidth metres={metresAcross} />
+            <StageEnv />
             <hemisphereLight args={["#ffffff", "#20232a", 0.9]} />
             <directionalLight position={[3, 5, 6]} intensity={1.1} />
             <directionalLight position={[-3, 2, 2]} intensity={0.4} />

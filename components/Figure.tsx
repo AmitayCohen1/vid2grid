@@ -49,13 +49,13 @@ export default function Figure({ pose, body, ghost = false, selected, onSelect }
         (Object.keys(J) as (keyof typeof J)[]).map((k) => (
           <mesh key={k} position={[J[k].x, J[k].y, J[k].z]}>
             <sphereGeometry args={[radius * 1.35, 12, 12]} />
-            <meshStandardMaterial color="#e8e9ec" />
+            <meshStandardMaterial color="#e8e9ec" envMapIntensity={0.4} />
           </mesh>
         ))}
       {!ghost && (
         <mesh position={[J.headTop.x, J.headTop.y + 0.02, J.headTop.z]}>
           <sphereGeometry args={[0.09, 16, 16]} />
-          <meshStandardMaterial color="#e8e9ec" />
+          <meshStandardMaterial color="#e8e9ec" envMapIntensity={0.4} />
         </mesh>
       )}
     </group>
@@ -77,7 +77,7 @@ function Segment({
   return (
     <mesh position={pos} quaternion={quat} onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}>
       <cylinderGeometry args={[radius, radius, length, 10]} />
-      <meshStandardMaterial color={color} transparent={ghost} opacity={ghost ? 0.35 : 1} roughness={0.6} />
+      <meshStandardMaterial color={color} transparent={ghost} opacity={ghost ? 0.35 : 1} roughness={0.6} envMapIntensity={0.4} />
     </mesh>
   );
 }
