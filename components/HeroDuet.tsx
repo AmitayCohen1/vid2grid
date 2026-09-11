@@ -8,7 +8,7 @@
    (poses, body, the tracker's 2D landmarks per frame — produced by
    scripts/hero-data.ts through lib/tracker → lib/score). The picture
    sits at the left with the landmarks drawn over it exactly as the
-   studio's Compare view does; beside it the studio Stage (grid floor,
+   studio's Side by side view does; beside it the studio Stage (grid floor,
    orbit) shows the character at the same instant. The <video>'s clock
    is the stage clock, exactly as in the studio.
    ------------------------------------------------------------------ */

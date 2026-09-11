@@ -19,7 +19,7 @@ interface Props {
   motion: "stepped" | "smooth"; onMotion: (m: "stepped" | "smooth") => void;
   /** Scale of the figure on stage and in the video; 1 = the tracked body. */
   size: number; onSize: (s: number) => void;
-  /** Compare view: the character and the cast drawn inside the recording, beside the person. */
+  /** Side by side and Video views: the character and the cast drawn inside the recording, beside the person. */
   inVideo: boolean; onInVideo: (b: boolean) => void;
   /** Metres to the person's screen-right the character stands in the video. */
   beside: number; onBeside: (m: number) => void;
@@ -49,11 +49,11 @@ export default function Controls(p: Props) {
       <Switch label={p.motion === "smooth" ? "Snapped ghost" : "Original ghost"}
         hint={p.motion === "smooth" ? "A translucent figure of the grid-snapped dance." : "A translucent figure before grid snapping."}
         checked={p.showRaw} onChange={p.onShowRaw} />
-      <Switch label="Tracking points" hint={p.canLift ? "Detected joints over the original video (Compare view)." : "Available when you add a video."}
+      <Switch label="Tracking points" hint={p.canLift ? "Detected joints over the original video." : "Available when you add a video."}
         checked={p.showOverlay} onChange={p.onShowOverlay} disabled={!p.canLift} />
     </Section>
     <Section title="In the video">
-      <Switch label="Dance in the video" hint={p.canLift ? "Compare view: the character and the cast inside the recording, at your scale, on your floor." : "Available when you add a video."}
+      <Switch label="Dance in the video" hint={p.canLift ? "The character and the cast inside the recording, at your scale, on your floor." : "Available when you add a video."}
         checked={p.inVideo} onChange={p.onInVideo} disabled={!p.canLift} />
       <NumSlider label="Beside" hint="Where the character stands: metres to your right on screen (negative = left, 0 = over you)" min={-3} max={3} step={0.1} decimals={1} unit="m" value={p.beside} disabled={!p.canLift || !p.inVideo} onChange={p.onBeside} />
       <NumSlider label="Delay" hint="The character runs this far behind you — an echo of yourself. 0 = in unison." min={0} max={4} step={0.05} decimals={2} unit="s" value={p.selfDelay} disabled={!p.canLift || !p.inVideo} onChange={p.onSelfDelay} />

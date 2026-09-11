@@ -112,7 +112,7 @@ export default function CastPanel({ lead, cast, beat, onAdd, onEditLead, onLook,
           <UserPlus size={18} />
           <span><strong>Add a dancer</strong><small>{cast.length === 0 ? "A character doing this dance, a canon, another video, or an example." : "Another character, another dance, or a canon."}</small></span>
         </button>
-        {cast.length === 0 && <Note>Everyone here shares the stage and the clock. In Compare view they dance inside your video, beside you.</Note>}
+        {cast.length === 0 && <Note>Everyone here shares the stage and the clock. In the Side by side and Video views they dance inside your video, beside you.</Note>}
       </Section>
     </>
   );

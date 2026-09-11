@@ -54,7 +54,7 @@ also where you **frame the dancer**: drag the box, drag its edges, scroll or use
 the Zoom slider, or press *Fit to dancer* (the tracker looks at a few frames and
 boxes everywhere the dancer was seen). Only the framed region is tracked and
 shown, so a small figure in a wide shot gets the model's full resolution and the
-video pane in Compare and Traces stays close up. When the paused frame holds
+video pane and the Traces stay close up. When the paused frame holds
 more than one person, each gets a *Follow* box: click a dancer and the tracker
 keeps to them for the whole clip, forwards and backwards from that moment. Click
 several (or *Follow all*) and every one becomes a dancer: the first is the dance
@@ -82,8 +82,11 @@ Cast tab is the roster: the lead first, then a card per dancer that reads as one
 line and opens to its *choreographic devices* (`lib/devices.ts`) — an
 **entrance** delay (they wait in their first pose, then start), a **speed**,
 **mirror** (the audience's mirror image), **reverse** (retrograde) — plus its
-placement, size and look. The timeline stretches to the last dancer. In
-**Compare**, the character and the whole cast can dance *inside the recording*
+placement, size and look. The timeline stretches to the last dancer. The studio
+has four views: **Side by side** (the video next to the stage, the default once
+there is a video), **Video** (the recording alone, with the characters inside
+it), **Stage** (the 3D dancer alone) and **Traces**. With a video on screen,
+the character and the whole cast can dance *inside the recording*
 (Dancer → In the video): the tracker's 2D landmarks and metres-per-pixel put
 each figure beside the person at their scale, feet on their floor, with no
 camera calibration; the "Beside" slider moves the character and a cast member's

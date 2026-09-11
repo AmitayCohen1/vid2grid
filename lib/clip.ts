@@ -1,7 +1,7 @@
 /* ------------------------------------------------------------------
    Getting a clip tracked when it is not the one on screen.
 
-   The studio's own clip plays in the Compare pane and is tracked from
+   The studio's own clip plays in the video pane and is tracked from
    that <video>. A dancer added from *another* video has no pane: a
    hidden <video> decodes it for the tracker, and the result is an
    ordinary analysis (frames + source) the cast can carry.
