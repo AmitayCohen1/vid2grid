@@ -26,6 +26,6 @@ export default function Dialog({ open, title, description, onClose, children, lo
   return <dialog ref={ref} className={`studio-dialog ${wide ? "dialog-wide" : ""}`} aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}
     onCancel={(e) => { e.preventDefault(); if (!locked) onClose(); }}
     onClick={(e) => { if (e.target === e.currentTarget && !locked) { const r = e.currentTarget.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) onClose(); } }}>
-    {open && <><div className="dialog-heading"><div><span className="eyebrow">VID2GRID STUDIO</span><h2 id={titleId}>{title}</h2>{description && <p id={descriptionId}>{description}</p>}</div>{!locked && <button className="icon-button" onClick={onClose} aria-label={`Close ${title}`}><X size={20} /></button>}</div><div className="dialog-content">{children}</div></>}
+    {open && <><div className="dialog-heading"><div><span className="eyebrow">VISUAL ELBOW STUDIO</span><h2 id={titleId}>{title}</h2>{description && <p id={descriptionId}>{description}</p>}</div>{!locked && <button className="icon-button" onClick={onClose} aria-label={`Close ${title}`}><X size={20} /></button>}</div><div className="dialog-content">{children}</div></>}
   </dialog>;
 }

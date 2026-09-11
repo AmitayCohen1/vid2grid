@@ -703,9 +703,9 @@ export default function App() {
   return (
     <div className={`app-shell flow-shell ${welcome ? "is-welcome" : "is-studio"}`}>
       <header className="app-header">
-        <button className="brand-lockup" disabled={busy || !!live} onClick={() => { setHome(true); setPlaying(false); }} aria-label="vid2grid home">
+        <button className="brand-lockup" disabled={busy || !!live} onClick={() => { setHome(true); setPlaying(false); }} aria-label="Visual Elbow home">
           <span className="brand-mark"><Grid2X2 size={21} strokeWidth={1.7} /></span>
-          <span className="brand-name">vid<span>2</span>grid</span>
+          <span className="brand-name">visual<span>elbow</span></span>
           <span className="brand-descriptor">MOVEMENT<br />LANGUAGES</span>
         </button>
         {!welcome && <>

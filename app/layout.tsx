@@ -11,14 +11,14 @@ const SITE = "https://vid2grid.vercel.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
-  title: { default: "vid2grid — Movement has a language", template: "%s — vid2grid" },
+  title: { default: "Visual Elbow — Movement has a language", template: "%s — Visual Elbow" },
   description: "Film a phrase, read it back: a short video of one dancer becomes a grid-snapped, playable 3D dance in Labanotation and Eshkol-Wachman terms.",
-  applicationName: "Movement Languages",
+  applicationName: "Visual Elbow",
   openGraph: {
     type: "website",
-    siteName: "Movement Languages",
+    siteName: "Visual Elbow",
     url: SITE,
-    title: "vid2grid — Movement has a language",
+    title: "Visual Elbow — Movement has a language",
     description: "A short video of one dancer becomes a grid-snapped, playable 3D dance.",
   },
 };

@@ -1,5 +1,7 @@
 # vid2grid
 
+`vid2grid` is the code name; the product is **Visual Elbow** ([@visualelbow](https://www.instagram.com/visualelbow) on Instagram). Every user-visible string says Visual Elbow; identifiers, storage keys and the `.vid2grid.json` file extension keep the code name.
+
 A short video of a dancer — or a few — → a **grid-snapped, playable 3D dance**.
 
 Upload (or record from the webcam) a clip. The pose tracker runs entirely in your
