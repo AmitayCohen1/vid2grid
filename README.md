@@ -73,6 +73,28 @@ visible on the stage while playback keeps running; it collapses to an icon rail
 (Escape, or the chevron) and below 1100px the open panel floats over the stage.
 Notation and Save use focused dialogs; on phones, dialogs become bottom sheets.
 
+**Looks.** Besides the VRM characters (and their colourways: a load-time tint
+on the top, `AVATAR_PRESETS[].tint`), seven looks are built from the figure
+itself — Mannequin, Ebony, Robot, Brass, Glass, Sapphire and Notation
+(`lib/looks.ts`): primitives sized to the dancer's own bone lengths and placed
+every frame by forward kinematics, so nothing is downloaded and there is no
+costume, only the pose. The Notation look draws every limb as an arrow in its
+side colour. Their portraits come from `scripts/look-portraits.ts`.
+
+**Kinesphere** (Dancer tab → Overlays) draws Laban's icosahedron around the
+dancer at their reach — the door, table and wheel planes — with every
+movement-grid cell as a dot on its surface and each core segment's snapped
+direction lit from the centre in its side colour (the selected limb in gold).
+It turns with the dancer and always reads the snapped track.
+
+**Dance along** (New dance → Live, when a dance is on the stage): the dance
+plays beside you while you dance to the camera, mirrored by default the way you
+copy someone on a screen, and every frame scores your snapped limbs against its
+snapped frames — the best frame within 0.3 s counts, so being a little early or
+late is fine (`lib/match.ts`). The live bar shows the running match and a bar
+per limb; finishing the take opens a report (overall, per limb, longest run in
+step, whether you ran ahead or behind) and keeps the take as a dance.
+
 **Add dancer** (header button, or the Cast tab) puts more people on the shared
 stage in one dialog: *who* (a character, a custom VRM, or the skeleton) and
 *what they dance* — this dance again, alone or several entering a chosen number
@@ -103,6 +125,12 @@ alternative is `npm run build -- --webpack`.
 
 Nothing leaves the browser: no upload, no backend, no database. Dances can be
 exported/imported as JSON and the last one is kept in localStorage.
+
+**Formations** (Cast tab): a shape — line, column, diagonal, V, circle, two
+lines, cluster — at a spacing, facing the audience, the centre or outward, with
+you first and the cast in order. Cue formations along the stage clock and
+everyone walks (eased) from one into the next over a chosen number of seconds;
+while cues exist they place everyone, the lead included (`lib/formations.ts`).
 
 ## How it works
 

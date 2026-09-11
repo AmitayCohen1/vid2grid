@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
-import { ArrowLeft, Box, Check, CircleHelp, Columns2, Download, Film, Grid2X2, Moon, PanelRightClose, Plus, ScanLine, SlidersHorizontal, Sun, X, PersonStanding, Users, UserPlus, List, Activity, ImageDown, RotateCcw } from "lucide-react";
+import { ArrowLeft, Box, Check, CircleHelp, Columns2, Download, Film, Grid2X2, Moon, PanelRightClose, Plus, ScanLine, SlidersHorizontal, Sun, X, PersonStanding, Users, UserPlus, List, Activity, ImageDown, RotateCcw, Target } from "lucide-react";
 import Dialog from "./Dialog";
-import NewScore from "./NewScore";
+import NewScore, { type DanceAlongChoice } from "./NewScore";
 import SaveScore from "./SaveScore";
 import Welcome from "./Welcome";
 import { createDemo, type DemoPhrase } from "@/lib/demo";
@@ -34,6 +34,8 @@ import { fillGaps, getLandmarker, trackPeople } from "@/lib/tracker";
 import { type Analysis, checkDuration, nobodyFound, offsetBetween, resolveDuration, trackFile } from "@/lib/clip";
 import { LiveCapture } from "@/lib/capture";
 import { type LiveFrame, LiveScore, resampleLive } from "@/lib/live";
+import { CORE_BONES, DEFAULT_MATCH, type FrameMatch, type MatchSummary, MatchTracker, grade, matchAt } from "@/lib/match";
+import { BONE } from "@/lib/skeleton";
 import { type Crop, cropPixels, isFullCrop } from "@/lib/crop";
 import type { PersonPick } from "@/lib/follow";
 import { describeError } from "@/lib/errors";
@@ -69,7 +71,7 @@ export default function App() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState({ done: 0, total: 1 });
   const [error, setError] = useState<string | null>(null);
-  const [modal, setModal] = useState<"new" | "save" | "details" | "help" | "compare" | "add" | "look" | null>(null);
+  const [modal, setModal] = useState<"new" | "save" | "details" | "help" | "compare" | "add" | "look" | "report" | null>(null);
   /** The cast member whose look is being changed. */
   const [lookFor, setLookFor] = useState<string | null>(null);
   const [newMode, setNewMode] = useState<"upload" | "import" | "live">("upload");
@@ -96,6 +98,13 @@ export default function App() {
   const [liveOverlay, setLiveOverlay] = useState<Float32Array | null>(null);
   const [finishing, setFinishing] = useState(false);
   const [limitHit, setLimitHit] = useState(false);
+  /** Dance-along: the dance being copied plays beside the live dancer and every frame is scored against it (lib/match.ts). */
+  const [along, setAlong] = useState<{ target: Score; look: string | null; mirror: boolean } | null>(null);
+  const alongRef = useRef<{ target: Score; mirror: boolean; step: number; tracker: MatchTracker } | null>(null);
+  const [matchNow, setMatchNow] = useState<FrameMatch | null>(null);
+  const [matchMean, setMatchMean] = useState(0);
+  /** The report of the last dance-along take. */
+  const [report, setReport] = useState<{ summary: MatchSummary; dance: string } | null>(null);
 
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -380,6 +389,14 @@ export default function App() {
     const pose = scalePose(placePose(m.mirror ? mirrorPose(p) : p, placements?.[i + 1] ?? m), m.size);
     return { id: m.id, pose, body: scaleBody(m.mirror ? mirrorBody(m.score.body) : m.score.body, m.size), avatarUrl: m.avatarUrl };
   }), [cast, time, motion, placements]);
+  // Dance-along: the target dances beside the live dancer — mirrored when they copy it as a mirror — and holds its last pose when it ends.
+  const alongMember: StageCastMember | null = useMemo(() => {
+    if (!along || !live) return null;
+    const track = motion === "smooth" ? along.target.raw : along.target.frames;
+    const p = track[frameAt(along.target, time)];
+    return { id: "dance-along", pose: placePose(along.mirror ? mirrorPose(p) : p, { x: 1.3, z: 0, rot: 0 }), body: along.mirror ? mirrorBody(along.target.body) : along.target.body, avatarUrl: along.look };
+  }, [along, live, motion, time]);
+  const shownCast = useMemo(() => (alongMember ? [alongMember, ...stageCast] : stageCast), [alongMember, stageCast]);
 
   /* ---------- figures inside the video ---------- */
 
@@ -506,8 +523,15 @@ export default function App() {
 
   /* ---------- a live take ---------- */
 
-  const startLive = useCallback(() => {
+  const startLive = useCallback((choice: DanceAlongChoice | null = null) => {
     abortRef.current?.abort();
+    // Dance-along: the dance on the stage becomes the target, in a look nobody is wearing.
+    if (choice && score) {
+      const tracker = new MatchTracker();
+      alongRef.current = { target: score, mirror: choice.mirror, step: Math.max(grid.azStep, grid.elStep), tracker };
+      setAlong({ target: score, look: freshLook([avatar ? avatarUrl : null, ...cast.map((m) => m.avatarUrl)]).avatarUrl, mirror: choice.mirror });
+    } else { alongRef.current = null; setAlong(null); }
+    setMatchNow(null); setMatchMean(0);
     if (!previousRef.current) previousRef.current = { analysis, imported, src, time: timeRef.current, home };
     if (src && src !== previousRef.current.src) URL.revokeObjectURL(src);
     setSrc(null); setAnalysis(null); setImported(null); setVideoEl(null);
@@ -519,7 +543,15 @@ export default function App() {
     const capture: LiveCapture = new LiveCapture({
       engine,
       fps: SAMPLE_FPS,
-      onFrame: (frame, image, t) => { setLiveFrame(frame); setLiveOverlay(image); timeRef.current = t; setTime(t); },
+      onFrame: (frame, image, t) => {
+        setLiveFrame(frame); setLiveOverlay(image); timeRef.current = t; setTime(t);
+        const a = alongRef.current;
+        if (a && frame) {
+          const m = matchAt(frame.snapped, a.target, t, { ...DEFAULT_MATCH, step: a.step, mirror: a.mirror });
+          if (m) { a.tracker.push(m, t); setMatchMean(a.tracker.summary().score); }
+          setMatchNow(m);
+        }
+      },
       onLimit: () => setLimitHit(true),
       onError: (e) => { capture.cancel(); liveRef.current = null; setLive(null); setError(describeError(e)); setPhase("error"); setModal("new"); },
     });
@@ -529,7 +561,7 @@ export default function App() {
       setLive({ capture, stream });
       setPhase("live");
       setModal(null);
-      setToast("You're live. Move — the dance is written as you go.");
+      setToast(choice ? "You're live. Dance along — every limb is scored against the dance beside you." : "You're live. Move — the dance is written as you go.");
     }).catch((e) => {
       if (liveRef.current === capture) liveRef.current = null;
       setError(e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError")
@@ -537,7 +569,7 @@ export default function App() {
         : describeError(e));
       setPhase("error");
     });
-  }, [analysis, imported, src, home, grid, smooth, lift]);
+  }, [analysis, imported, src, home, grid, smooth, lift, score, avatar, avatarUrl, cast]);
 
   const restorePrevious = useCallback(() => {
     const previous = previousRef.current;
@@ -551,6 +583,7 @@ export default function App() {
     liveRef.current?.cancel();
     liveRef.current = null;
     setLive(null); setLiveFrame(null); setLiveOverlay(null); setFinishing(false);
+    alongRef.current = null; setAlong(null); setMatchNow(null);
     restorePrevious();
   }, [restorePrevious]);
 
@@ -560,6 +593,10 @@ export default function App() {
     liveRef.current = null;
     setFinishing(true);
     const result = await capture.stop();
+    // A dance-along ends with its report; the take is kept like any other.
+    const a = alongRef.current;
+    const summary = a && a.tracker.frames > 0 ? { summary: a.tracker.summary(), dance: a.target.source.name.replace(/\.[^.]+$/, "") } : null;
+    alongRef.current = null; setAlong(null); setMatchNow(null);
     setLive(null); setLiveFrame(null); setLiveOverlay(null); setFinishing(false); setLimitHit(false);
     const tracked = resampleLive(result.samples, SAMPLE_FPS, result.duration);
     const seen = tracked.filter((f) => f.extraction).length;
@@ -576,7 +613,8 @@ export default function App() {
     setAnalysis({ tracked, source: { name, duration: tracked.length / SAMPLE_FPS, fps: SAMPLE_FPS, width: result.width, height: result.height } });
     setTime(0); timeRef.current = 0;
     setPhase("ready"); setView("both");
-    setToast("Take kept. The whole dance has been re-read from it — press Play to explore.");
+    if (summary) { setReport(summary); setModal("report"); }
+    setToast(summary ? `Take kept. You matched ${Math.round(summary.summary.score * 100)}% of ${summary.dance}.` : "Take kept. The whole dance has been re-read from it — press Play to explore.");
   }, [restorePrevious]);
   // The capture reports reaching its limit; the take is finished from here, with the current handlers.
   useEffect(() => { if (limitHit) void finishLive(); }, [limitHit, finishLive]);
@@ -779,7 +817,7 @@ export default function App() {
           <section className={`stage-panel ${view === "video" ? "stage-hidden" : ""}`} aria-label={view === "objects" ? "Movement traces" : "3D movement stage"}>
             <div className="stage-heading"><span className="mono">{motion === "smooth" ? "SMOOTH" : `${grid.azStep}° GRID`}</span></div>
             {view === "objects" && score ? <Objects ref={objectsRef} score={score} overlays={overlays} video={analysis ? videoEl : null} frame={fi} options={objects} style={traceStyle} /> :
-              (snappedPose && curBody) || stageCast.length ? <Stage pose={stagePose} raw={stageRaw} body={stageBody} grid={grid} motion={motion} showRaw={showRaw} kinesphere={kinesphere} avatar={avatar} avatarUrl={avatarUrl} cast={stageCast} selected={selected} onSelect={setSelected} /> :
+              (snappedPose && curBody) || shownCast.length ? <Stage pose={stagePose} raw={stageRaw} body={stageBody} grid={grid} motion={motion} showRaw={showRaw} kinesphere={kinesphere} avatar={avatar} avatarUrl={avatarUrl} cast={shownCast} selected={selected} onSelect={setSelected} /> :
               <div className="stage-empty"><Activity size={35} /><span>{live ? "Looking for you. Step back so your whole body is in the picture." : "Your movement will appear here."}</span></div>}
             {view !== "objects" && <div className="stage-legend"><span><i className="bg-limb-l" />Left side</span><span><i className="bg-limb-r" />Right side</span><span className="stage-help">Drag to rotate · Pinch or scroll to zoom</span></div>}
             {selected && view !== "objects" && <button className="selected-limb" onClick={() => setSelected(null)}>{selected} · selected <X size={15} /></button>}
@@ -858,13 +896,13 @@ export default function App() {
             )}
           </aside>
         </main>
-        {live && <footer className="studio-timeline"><LiveBar elapsed={time} keyframes={liveFrame?.keyframes ?? 0} ready={!!liveFrame} finishing={finishing} onFinish={finishLive} onDiscard={discardLive} /></footer>}
+        {live && <footer className="studio-timeline"><LiveBar elapsed={time} keyframes={liveFrame?.keyframes ?? 0} ready={!!liveFrame} finishing={finishing} match={along ? { now: matchNow, mean: matchMean, over: time > along.target.source.duration + DEFAULT_MATCH.window } : null} onFinish={finishLive} onDiscard={discardLive} /></footer>}
         {score && !live && <footer className="studio-timeline"><Timeline score={score} total={stageDuration} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} onStep={step} selected={selected} onSelect={setSelected} speed={speed} onSpeed={setSpeed} loop={loop} onLoop={() => setLoop((l) => !l)} tempo={tempo} bpm={bpm} onBpm={onBpm} /></footer>}
       </>}
 
       <Dialog open={modal === "new"} title={busy ? "Creating your dance" : "Start a new dance"} description={busy ? "Your video is being processed on this device." : "A video, a recording, or a saved dance. Choose where to begin."} onClose={closeNew} locked={busy}>
         {error && <p className="inline-error" role="alert">{error}</p>}
-        <NewScore initialMode={newMode} onFile={onFile} onImport={importJson} onDemo={loadDemo} onLive={startLive} busy={busy} progress={progress} loading={phase === "loading"} onCancel={cancelTracking} />
+        <NewScore initialMode={newMode} onFile={onFile} onImport={importJson} onDemo={loadDemo} onLive={startLive} danceName={score && !live ? score.source.name.replace(/\.[^.]+$/, "") : null} busy={busy} progress={progress} loading={phase === "loading"} onCancel={cancelTracking} />
       </Dialog>
       <Dialog open={modal === "save"} title="Save your movement" description="Download a reusable copy of this dance." onClose={() => setModal(null)}>
         {score && <SaveScore key={score.source.name} score={score} onSave={exportJson} />}
@@ -883,6 +921,20 @@ export default function App() {
             onAvatarPreset={(url) => setMemberLook(lookMember.id, url)}
             onAvatarFile={(f) => setMemberLook(lookMember.id, URL.createObjectURL(f), f.name.replace(/\.vrm$/i, ""))} />
           <button className="btn primary dialog-primary" onClick={() => setModal(null)}>Done</button>
+        </div>}
+      </Dialog>
+      <Dialog open={modal === "report"} title="How you did" description={report ? `Dancing along to ${report.dance}. The take is kept as a dance of its own.` : undefined} onClose={() => setModal(null)}>
+        {report && <div className="along-report">
+          <div className="along-score"><b>{Math.round(report.summary.score * 100)}%</b><span>{grade(report.summary.score)}</span></div>
+          <div className="along-limbs">
+            {CORE_BONES.map((id) => <div key={id}><span>{BONE[id].label}</span><i><b style={{ width: `${Math.round(report.summary.bones[id] * 100)}%` }} /></i><span>{Math.round(report.summary.bones[id] * 100)}%</span></div>)}
+          </div>
+          <div className="along-facts">
+            <span><Target size={12} /> Longest run in step: {report.summary.streak.toFixed(1)} s</span>
+            <span>{Math.abs(report.summary.lag) < 0.05 ? "Right on time" : report.summary.lag > 0 ? `You ran about ${report.summary.lag.toFixed(2)} s behind` : `You ran about ${(-report.summary.lag).toFixed(2)} s ahead`}</span>
+            <span>{report.summary.frames} frames scored</span>
+          </div>
+          <button className="btn primary dialog-primary" onClick={() => setModal(null)}>Explore the take</button>
         </div>}
       </Dialog>
       <Dialog open={modal === "compare"} title="This view needs a video" description="This dance contains movement data, but no original recording." onClose={() => setModal(null)}>

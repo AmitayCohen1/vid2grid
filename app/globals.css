@@ -825,3 +825,24 @@ kbd { border: 1px solid var(--border); background: var(--background); border-rad
 .cue-head { display: flex; align-items: center; gap: 6px; font-size: 11px; padding-bottom: 2px; }
 .cue-head strong { font-weight: 600; }
 .cue-head .mono { color: var(--muted-foreground); font-size: 10px; }
+
+/* Dance-along: the option in the Live tab, the meter on the live bar, the report. */
+.along-box { display: flex; flex-direction: column; gap: 2px; margin: 10px 0; padding: 6px 10px; border: 1px dashed var(--border); border-radius: 8px; }
+.along-meter { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; }
+.along-meter b { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 3.2ch; }
+.along-meter small { font-size: 10px; color: var(--muted-foreground); white-space: nowrap; }
+.along-bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; }
+.along-bars i { display: block; width: 4px; border-radius: 1px; background: var(--muted-foreground); opacity: .55; transition: height .12s; }
+.along-bars i.is-good { background: var(--n-brand); opacity: 1; }
+.along-report { display: grid; gap: 12px; }
+.along-score { display: flex; align-items: baseline; gap: 12px; }
+.along-score b { font-size: 44px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+.along-score span { font-size: 15px; }
+.along-limbs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; }
+.along-limbs > div { display: grid; grid-template-columns: 90px 1fr 3.5ch; align-items: center; gap: 8px; font-size: 11px; }
+.along-limbs > div > span:first-child { color: var(--muted-foreground); }
+.along-limbs > div > i { display: block; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.along-limbs > div > i > b { display: block; height: 100%; background: var(--n-brand); }
+.along-limbs > div > span:last-child { font-variant-numeric: tabular-nums; text-align: right; }
+.along-facts { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 11px; color: var(--muted-foreground); }
+.along-facts > span { display: inline-flex; align-items: center; gap: 5px; }
