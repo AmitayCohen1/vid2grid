@@ -174,15 +174,27 @@ export function nextAnchor(anchors: (Anchor | null)[], last: Anchor, gap = 0): n
   return assign([{ last, prev: null, gap, sig: last.sig ?? null }], anchors)[0];
 }
 
+/** Above this many tracks the exhaustive search gives way to greedy matching (n! grows fast). */
+const EXHAUSTIVE_MAX = 6;
+
 /**
  * Give each track at most one candidate, and each candidate at most one
  * track, at the least total cost — a track goes unmatched only when every
- * body in reach is a better fit for someone else. Small enough (≤ 4 of
- * each) to try every assignment.
+ * body in reach is a better fit for someone else. Every assignment is
+ * tried for a handful of tracks; a crowd is matched greedily, cheapest
+ * pair first.
  */
 export function assign(tracks: Track[], anchors: (Anchor | null)[], taken: boolean[] = []): number[] {
   const costs = tracks.map((t) => anchors.map((a, i) => (a && !taken[i] ? trackCost(t, a) : Infinity)));
   const best = new Array<number>(tracks.length).fill(-1);
+  if (tracks.length > EXHAUSTIVE_MAX) {
+    const pairs: [number, number, number][] = [];
+    costs.forEach((row, k) => row.forEach((c, i) => { if (Number.isFinite(c)) pairs.push([c, k, i]); }));
+    pairs.sort((a, b) => a[0] - b[0]);
+    const usedI = new Set<number>();
+    for (const [, k, i] of pairs) if (best[k] < 0 && !usedI.has(i)) { best[k] = i; usedI.add(i); }
+    return best;
+  }
   let bestTotal = Infinity;
   const pick = new Array<number>(tracks.length).fill(-1);
   const used = new Array<boolean>(anchors.length).fill(false);

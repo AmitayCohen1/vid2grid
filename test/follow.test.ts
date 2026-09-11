@@ -168,3 +168,11 @@ test("followPeople survives one dancer being lost while the other stays", () => 
     assert.equal(ta[f], f >= 8 && f < 12 ? -1 : 0, `frame ${f}: A`);
   }
 });
+
+test("assign copes with a crowd (greedy past the exhaustive limit) and keeps bodies exclusive", () => {
+  const tracks: Track[] = [], bodies: Anchor[] = [];
+  for (let k = 0; k < 10; k++) { tracks.push(track(A(0.05 + k * 0.1, 0.5, 0.2))); bodies.push(A(0.06 + k * 0.1, 0.5, 0.2)); }
+  const out = assign(tracks, bodies.slice().reverse());
+  assert.equal(new Set(out).size, 10, "all distinct");
+  out.forEach((i, k) => assert.equal(i, 9 - k, `track ${k}`));
+});

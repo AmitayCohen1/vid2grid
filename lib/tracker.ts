@@ -14,7 +14,7 @@ import { torsoSignature } from "./appearance";
  * How many people the model looks for per frame — and the most that can be
  * followed as dancers (see ./follow). A solo clip costs nothing extra.
  */
-export const MAX_PEOPLE = 4;
+export const MAX_PEOPLE = 10;
 
 let landmarkerPromise: Promise<PoseLandmarker> | null = null;
 /** MediaPipe demands strictly increasing timestamps for the life of the graph, across clips. */

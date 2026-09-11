@@ -61,7 +61,7 @@ clip, each with a dance of their own. `lib/follow.ts` carries identity frame to
 frame by the cheapest continuation — near where each person was heading, about
 the same size, dressed the same (a torso colour signature, `lib/appearance.ts`)
 — assigned jointly so two dancers are never the same body, with a jump limit
-scaled to body size. Up to four. Without a pick, the biggest body is followed;
+scaled to body size. Up to ten. Without a pick, the biggest body is followed;
 *Fit to dancer* honours the picks too. Canceling analysis restores the
 previous dance. The studio is one header (brand, project, view
 tabs, actions) over the stage, with a permanent settings sidebar on the right —
