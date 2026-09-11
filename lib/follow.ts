@@ -1,12 +1,15 @@
 /* ------------------------------------------------------------------
-   Follow: keep to one person when the frame holds several.
+   Follow: keep to the same people when the frame holds several.
 
    The tracker detects everyone in the frame; this module decides which
-   detection is *the dancer* on every frame. A person is summarised by an
-   Anchor — where their hips are and how big they look — and identity is
-   carried frame to frame by nearest anchor, with a jump limit scaled by
-   body size so a bystander standing still doesn't steal the track when
-   the dancer is briefly missed.
+   detection is which dancer on every frame. A person is summarised by
+   an Anchor — where their hips are, how big they look and, when the
+   tracker sampled it, the colour of their clothes — and identity is
+   carried frame to frame by the cheapest continuation: near where they
+   were heading, about the same size, dressed the same. With several
+   dancers the frame is assigned jointly, so two of them can never be
+   the same body, and a jump limit scaled by body size keeps a bystander
+   standing still from stealing a track when a dancer is briefly missed.
 
    All coordinates are fractions of the tracked frame (the crop, when
    there is one). Nothing here touches MediaPipe or the DOM.
@@ -22,6 +25,8 @@ export interface Anchor {
   size: number;
   /** Bounding box of the visible landmarks. */
   box: { x: number; y: number; w: number; h: number };
+  /** Colour signature of the torso (see ./appearance), when the tracker sampled one. */
+  sig?: Float32Array;
 }
 
 /** A point in the clip the user tapped to say "this one", as fractions of the *full* video frame. */
@@ -110,57 +115,175 @@ export const MAX_JUMP = 0.6;
 export const JUMP_GROWTH = 0.12;
 /** Farthest the reach ever grows, as a multiple of size, so a lost dancer never adopts someone across the room. */
 export const MAX_REACH = 1.2;
+/** How much of last frame's motion is expected to continue, and the farthest that carries, as a multiple of size. */
+const MOMENTUM = 0.6, MAX_LEAD = 0.5;
+/** Weight of the clothes: a wholly different colour costs this much, about a body-length of distance. */
+const APPEARANCE = 1.0;
+/** Cost of leaving a track unmatched on a frame — above any in-reach match, so a body is only given up to someone who fits better. */
+const MISS = 3;
+
+/** A person being followed: where they were, where they were before that, and what they wear on average. */
+export interface Track {
+  last: Anchor;
+  prev: Anchor | null;
+  /** Frames since they were last seen. */
+  gap: number;
+  /** Running mean of the signatures matched so far. */
+  sig: Float32Array | null;
+}
+
+/** Where a track is expected next: a little of its last motion carried on, when it was seen on consecutive frames. */
+export function expected(t: Track): { x: number; y: number } {
+  if (!t.prev || t.gap > 0) return t.last;
+  let dx = (t.last.x - t.prev.x) * MOMENTUM, dy = (t.last.y - t.prev.y) * MOMENTUM;
+  const d = Math.hypot(dx, dy), cap = MAX_LEAD * t.last.size;
+  if (d > cap) { dx *= cap / d; dy *= cap / d; }
+  return { x: t.last.x + dx, y: t.last.y + dy };
+}
+
+/** Histogram intersection distance, 0 (same) .. 1 (nothing in common). */
+export function sigDistance(a: Float32Array, b: Float32Array): number {
+  let common = 0;
+  for (let i = 0; i < a.length && i < b.length; i++) common += Math.min(a[i], b[i]);
+  return 1 - common;
+}
+
+/**
+ * How badly `a` continues the track: distance from where it was heading in
+ * body sizes, a change in size (someone twice as big is almost certainly
+ * someone else) and, when both wear a signature, a change of clothes.
+ * Infinity when out of reach — and the reach grows with every frame missed.
+ */
+export function trackCost(t: Track, a: Anchor): number {
+  const reach = Math.min(MAX_REACH, MAX_JUMP + JUMP_GROWTH * t.gap) * t.last.size + 0.01;
+  const e = expected(t);
+  const d = Math.hypot(a.x - e.x, a.y - e.y);
+  if (d > reach) return Infinity;
+  const ratio = a.size / t.last.size;
+  if (ratio < 0.4 || ratio > 2.5) return Infinity;
+  let cost = d / t.last.size + Math.abs(Math.log(ratio)) * 0.5;
+  if (t.sig && a.sig) cost += APPEARANCE * sigDistance(t.sig, a.sig);
+  return cost;
+}
 
 /**
  * Which candidate continues `last` after `gap` frames without a sighting.
- * Nearest by hips within the reach, penalised by a change in size (someone
- * twice as big is almost certainly someone else). -1 when nobody fits.
+ * -1 when nobody fits. (One track, no history: what the live follower uses.)
  */
 export function nextAnchor(anchors: (Anchor | null)[], last: Anchor, gap = 0): number {
-  const reach = Math.min(MAX_REACH, MAX_JUMP + JUMP_GROWTH * gap) * last.size + 0.01;
-  let best = -1, bestCost = Infinity;
-  anchors.forEach((a, i) => {
-    if (!a) return;
-    const d = Math.hypot(a.x - last.x, a.y - last.y);
-    if (d > reach) return;
-    const ratio = a.size / last.size;
-    if (ratio < 0.4 || ratio > 2.5) return;
-    const cost = d / last.size + Math.abs(Math.log(ratio)) * 0.5;
-    if (cost < bestCost) { bestCost = cost; best = i; }
-  });
+  return assign([{ last, prev: null, gap, sig: last.sig ?? null }], anchors)[0];
+}
+
+/**
+ * Give each track at most one candidate, and each candidate at most one
+ * track, at the least total cost — a track goes unmatched only when every
+ * body in reach is a better fit for someone else. Small enough (≤ 4 of
+ * each) to try every assignment.
+ */
+export function assign(tracks: Track[], anchors: (Anchor | null)[], taken: boolean[] = []): number[] {
+  const costs = tracks.map((t) => anchors.map((a, i) => (a && !taken[i] ? trackCost(t, a) : Infinity)));
+  const best = new Array<number>(tracks.length).fill(-1);
+  let bestTotal = Infinity;
+  const pick = new Array<number>(tracks.length).fill(-1);
+  const used = new Array<boolean>(anchors.length).fill(false);
+  const walk = (k: number, total: number) => {
+    if (total >= bestTotal) return;
+    if (k === tracks.length) { bestTotal = total; best.splice(0, best.length, ...pick); return; }
+    costs[k].forEach((c, i) => {
+      if (!Number.isFinite(c) || used[i]) return;
+      used[i] = true; pick[k] = i;
+      walk(k + 1, total + c);
+      used[i] = false;
+    });
+    pick[k] = -1;
+    walk(k + 1, total + MISS);
+  };
+  walk(0, 0);
   return best;
+}
+
+/** Fold a matched signature into a track's running mean. */
+function learn(t: Track, a: Anchor): Float32Array | null {
+  if (!a.sig) return t.sig;
+  if (!t.sig) return Float32Array.from(a.sig);
+  const out = new Float32Array(t.sig.length);
+  for (let i = 0; i < out.length; i++) out[i] = t.sig[i] * 0.9 + a.sig[i] * 0.1;
+  return out;
+}
+
+/** Where each of several dancers was picked: a frame and the candidate on it. */
+export interface Seed { frame: number; index: number }
+
+/**
+ * Follow several people at once through every frame. Each seed is one
+ * dancer, fixed to that candidate on that frame; from there the dancer
+ * is walked forward to the end and backward to the start, with every
+ * frame assigned jointly so no two dancers are ever the same body.
+ * Returns, per seed, the chosen candidate index per frame (-1 when not
+ * seen).
+ *
+ * Going backward, a dancer whose seed is later than the frame keeps the
+ * body the forward walk gave them there, so a dancer picked late in the
+ * clip cannot take a body that already belongs to someone.
+ *
+ * With `reseedAfter`, a dancer missing that many frames adopts the
+ * biggest unclaimed body in view instead (forward only) — right for "the
+ * main person" with no pick, since a solo dancer who leaves the frame and
+ * returns elsewhere is still the dancer; wrong for a deliberate pick,
+ * which must never drift onto a bystander.
+ */
+export function followPeople(frames: (Anchor | null)[][], seeds: Seed[], opts: { reseedAfter?: number } = {}): number[][] {
+  const n = frames.length;
+  const out = seeds.map(() => new Array<number>(n).fill(-1));
+  if (!n || !seeds.length) return out;
+  const valid = seeds.map((s) => !!frames[s.frame]?.[s.index]);
+  const walk = (step: 1 | -1, pinned: number[][] | null) => {
+    const tracks = new Map<number, Track>();
+    const from = step > 0 ? 0 : n - 1;
+    for (let f = from; f >= 0 && f < n; f += step) {
+      const taken: boolean[] = [];
+      // Bodies already spoken for: seeds on this very frame, and (walking back) forward results of later seeds.
+      const forced = new Map<number, number>();
+      seeds.forEach((s, k) => {
+        if (!valid[k]) return;
+        if (s.frame === f) { forced.set(k, s.index); taken[s.index] = true; }
+        else if (pinned && (step > 0 ? s.frame > f : s.frame < f)) { const i = pinned[k][f]; if (i >= 0) taken[i] = true; }
+      });
+      const active = [...tracks.keys()].filter((k) => !forced.has(k));
+      const chosen = assign(active.map((k) => tracks.get(k)!), frames[f], taken);
+      active.forEach((k, j) => {
+        const t = tracks.get(k)!;
+        let i = chosen[j];
+        if (i < 0 && step > 0 && opts.reseedAfter !== undefined && t.gap >= opts.reseedAfter) {
+          i = largestAnchor(frames[f].map((a, q) => (taken[q] || chosen.includes(q) ? null : a)));
+        }
+        out[k][f] = i;
+        if (i >= 0) { const a = frames[f][i]!; tracks.set(k, { last: a, prev: t.gap ? null : t.last, gap: 0, sig: learn(t, a) }); }
+        else t.gap++;
+      });
+      forced.forEach((i, k) => {
+        const a = frames[f][i]!;
+        out[k][f] = i;
+        tracks.set(k, { last: a, prev: null, gap: 0, sig: a.sig ? Float32Array.from(a.sig) : null });
+      });
+    }
+  };
+  // Forward first, then backward with the forward results pinned for seeds the backward walk hasn't reached.
+  walk(1, null);
+  const forward = out.map((o) => o.slice());
+  walk(-1, forward);
+  // Each frame belongs to the walk that started from the seed's side of it.
+  seeds.forEach((s, k) => { for (let f = s.frame; f < n; f++) out[k][f] = forward[k][f]; });
+  return out;
 }
 
 /**
  * Assign one candidate per frame to the person chosen at `start`, walking
- * forward and backward from there and carrying their last known anchor
- * across frames where nobody matched. Returns the chosen index per frame,
- * -1 where the person was not seen.
- *
- * With `reseedAfter`, once the person has been missing that many frames
- * the biggest body in view is adopted instead (forward only) — right for
- * "the main person" with no pick, since a solo dancer who leaves the frame
- * and returns elsewhere is still the dancer; wrong for a deliberate pick,
- * which must never drift onto a bystander.
+ * forward and backward from there. Returns the chosen index per frame,
+ * -1 where the person was not seen. See `followPeople` for `reseedAfter`.
  */
-export function followPerson(frames: (Anchor | null)[][], start: { frame: number; index: number }, opts: { reseedAfter?: number } = {}): number[] {
-  const out = new Array<number>(frames.length).fill(-1);
-  if (!frames.length) return out;
-  const origin = frames[start.frame]?.[start.index];
-  if (!origin) return out;
-  out[start.frame] = start.index;
-  const walk = (step: 1 | -1) => {
-    let last = origin, gap = 0;
-    for (let f = start.frame + step; f >= 0 && f < frames.length; f += step) {
-      let i = nextAnchor(frames[f], last, gap);
-      if (i < 0 && step > 0 && opts.reseedAfter !== undefined && gap >= opts.reseedAfter) i = largestAnchor(frames[f]);
-      out[f] = i;
-      if (i >= 0) { last = frames[f][i]!; gap = 0; } else gap++;
-    }
-  };
-  walk(1);
-  walk(-1);
-  return out;
+export function followPerson(frames: (Anchor | null)[][], start: Seed, opts: { reseedAfter?: number } = {}): number[] {
+  return followPeople(frames, [start], opts)[0];
 }
 
 /**
@@ -169,7 +292,7 @@ export function followPerson(frames: (Anchor | null)[][], start: { frame: number
  * within `window` of it (the detector may have missed them on that exact
  * frame). Null when no one was there.
  */
-export function locatePick(frames: (Anchor | null)[][], pick: { x: number; y: number }, frame: number, window = 8): { frame: number; index: number } | null {
+export function locatePick(frames: (Anchor | null)[][], pick: { x: number; y: number }, frame: number, window = 8): Seed | null {
   for (let d = 0; d <= window; d++) {
     for (const f of d === 0 ? [frame] : [frame - d, frame + d]) {
       if (f < 0 || f >= frames.length) continue;

@@ -10,11 +10,34 @@
 import { type Crop, cropPixels } from "./crop";
 import type { PersonPick } from "./follow";
 import type { SourceInfo } from "./score";
-import { getLandmarker, trackVideo, type TrackedFrame } from "./tracker";
+import { getLandmarker, trackPeople, type TrackedFrame } from "./tracker";
 
 export interface Analysis {
   tracked: TrackedFrame[];
   source: SourceInfo;
+}
+
+function median(xs: number[]): number {
+  if (!xs.length) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  return s[s.length >> 1];
+}
+
+/**
+ * Where a second person tracked from the same clip stands relative to the
+ * first, in stage metres: the difference of their typical positions. Every
+ * dance is centred on its own typical position when smoothed (see
+ * smoothPoses), so this is what puts two people from one clip back where
+ * they were beside each other.
+ */
+export function offsetBetween(lead: TrackedFrame[], other: TrackedFrame[]): { x: number; z: number } {
+  const at = (frames: TrackedFrame[]) => {
+    const poses = frames.flatMap((f) => (f.extraction ? [f.extraction.pose] : []));
+    return { x: median(poses.map((p) => p.x)), z: median(poses.map((p) => p.z)) };
+  };
+  const a = at(lead), b = at(other);
+  const round = (n: number) => Math.round(n * 100) / 100;
+  return { x: round(b.x - a.x), z: round(b.z - a.z) };
 }
 
 export const MIN_CLIP = 1, MAX_CLIP = 120;
@@ -62,7 +85,8 @@ function loadMetadata(video: HTMLVideoElement, signal?: AbortSignal): Promise<vo
 export interface TrackFileOptions {
   fps: number;
   crop?: Crop;
-  follow?: PersonPick;
+  /** People to follow, one dancer each; the biggest body when empty. */
+  follow?: PersonPick[];
   signal?: AbortSignal;
   /** Called once the tracker is loaded and frames start being read. */
   onTracking?: () => void;
@@ -71,9 +95,10 @@ export interface TrackFileOptions {
 
 /**
  * Track a video file off screen. Same pipeline as the studio's clip —
- * duration rule, crop, person to follow — with nothing shown.
+ * duration rule, crop, people to follow — with nothing shown. One
+ * analysis per dancer followed (at least one).
  */
-export async function trackFile(file: File, opts: TrackFileOptions): Promise<Analysis> {
+export async function trackFile(file: File, opts: TrackFileOptions): Promise<Analysis[]> {
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
   video.muted = true;
@@ -92,13 +117,15 @@ export async function trackFile(file: File, opts: TrackFileOptions): Promise<Ana
     await getLandmarker();
     if (opts.signal?.aborted) throw new DOMException("Cancelled", "AbortError");
     opts.onTracking?.();
-    const tracked = await trackVideo(video, {
+    const people = await trackPeople(video, {
       fps: opts.fps, crop: opts.crop, follow: opts.follow, signal: opts.signal,
       onProgress: (done, total) => opts.onProgress?.(done, total),
     });
-    if (!tracked.some((f) => f.extraction)) throw nobodyFound(!!opts.follow, !!opts.crop);
+    const seen = people.filter((tracked) => tracked.some((f) => f.extraction));
+    if (!seen.length) throw nobodyFound(!!opts.follow?.length, !!opts.crop);
     const px = opts.crop ? cropPixels(opts.crop, video.videoWidth, video.videoHeight) : { w: video.videoWidth, h: video.videoHeight };
-    return { tracked, source: { name: file.name, duration: video.duration, fps: opts.fps, width: px.w, height: px.h, crop: opts.crop } };
+    const source: SourceInfo = { name: file.name, duration: video.duration, fps: opts.fps, width: px.w, height: px.h, crop: opts.crop };
+    return seen.map((tracked) => ({ tracked, source }));
   } finally {
     video.removeAttribute("src");
     video.load();

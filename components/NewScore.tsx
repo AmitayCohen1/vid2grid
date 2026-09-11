@@ -8,7 +8,7 @@ import type { Crop } from "@/lib/crop";
 import type { PersonPick } from "@/lib/follow";
 
 export default function NewScore({ onFile, onImport, onDemo, onLive, busy, progress, loading, onCancel, initialMode = "upload" }: {
-  onFile: (f: File, crop?: Crop, follow?: PersonPick) => void; onImport: (f: File) => void; onDemo: (p: DemoPhrase) => void;
+  onFile: (f: File, crop?: Crop, follow?: PersonPick[]) => void; onImport: (f: File) => void; onDemo: (p: DemoPhrase) => void;
   /** Open the studio on the camera and score the movement as it happens. */
   onLive: () => void;
   busy: boolean; progress: { done: number; total: number }; loading: boolean; onCancel: () => void;

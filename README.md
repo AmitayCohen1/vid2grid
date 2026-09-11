@@ -1,6 +1,6 @@
 # vid2grid
 
-A short video of one dancer → a **grid-snapped, playable 3D dance**.
+A short video of a dancer — or a few — → a **grid-snapped, playable 3D dance**.
 
 Upload (or record from the webcam) a clip. The pose tracker runs entirely in your
 browser, spells every body segment as a direction on the sphere — azimuth and
@@ -53,11 +53,16 @@ the Zoom slider, or press *Fit to dancer* (the tracker looks at a few frames and
 boxes everywhere the dancer was seen). Only the framed region is tracked and
 shown, so a small figure in a wide shot gets the model's full resolution and the
 video pane in Compare and Traces stays close up. When the paused frame holds
-more than one person, each gets a *Follow* box: click the dancer and the tracker
-keeps to them for the whole clip, forwards and backwards from that moment
-(`lib/follow.ts` carries identity frame to frame by nearest hips, with a jump
-limit scaled to body size). Without a pick, the biggest body is followed; *Fit to
-dancer* honours the pick too. Canceling analysis restores the
+more than one person, each gets a *Follow* box: click a dancer and the tracker
+keeps to them for the whole clip, forwards and backwards from that moment. Click
+several (or *Follow all*) and every one becomes a dancer: the first is the dance
+you edit, the others join the cast standing where they stood beside them in the
+clip, each with a dance of their own. `lib/follow.ts` carries identity frame to
+frame by the cheapest continuation — near where each person was heading, about
+the same size, dressed the same (a torso colour signature, `lib/appearance.ts`)
+— assigned jointly so two dancers are never the same body, with a jump limit
+scaled to body size. Up to four. Without a pick, the biggest body is followed;
+*Fit to dancer* honours the picks too. Canceling analysis restores the
 previous dance. The studio is one header (brand, project, view
 tabs, actions) over the stage, with a permanent settings sidebar on the right —
 Dancer, Movement grid, and Cast tabs, with Simple / Balanced / Detailed grid
@@ -130,5 +135,8 @@ The wasm runtime and `pose_landmarker_full.task` are self-hosted under `public/`
 - Monocular depth is the weak point (a limb pointing at the camera is ambiguous).
   Upgrade paths: a GPU worker running a temporal mesh model (WHAM / GVHMR /
   SAM 3D Body class) writing the same JSON, or two phones for triangulation.
-- One dancer, still camera, whole body in frame.
+- Still camera, whole bodies in frame. Several dancers are followed by position
+  and clothing, which holds up while they stay apart or pass briefly; partnering,
+  lifts and matching costumes can still swap two tracks, and there is no
+  fix-up tool yet to say "from here, these two are swapped".
 - No persistence beyond localStorage/JSON; Neon + Blob when sharing is wanted.

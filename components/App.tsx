@@ -11,7 +11,7 @@ import Welcome from "./Welcome";
 import { createDemo, type DemoPhrase } from "@/lib/demo";
 import { DEFAULT_AVATAR_URL } from "@/lib/avatars";
 import CastPanel, { type CastMember, type CastPatch, type Lead } from "./Cast";
-import AddDancer, { type AddProgress, type Look } from "./AddDancer";
+import AddDancer, { type AddProgress, type Look, freshLook } from "./AddDancer";
 import CharacterGrid, { lookLabel } from "./CharacterGrid";
 import { useAvatarLoading } from "./Avatar";
 import { AVATAR_PRESETS, avatarFile } from "@/lib/avatars";
@@ -29,8 +29,8 @@ import Objects, { DEFAULT_OBJECTS, Drawing, type ObjectsHandle, type ObjectsOpti
 import { DEFAULT_TRACE_STYLE, TRACE_GROUPS, TRACE_PRESETS, type TraceStyle } from "@/lib/traces";
 import { DEFAULT_GRID, type GridConfig } from "@/lib/grid";
 import { DEFAULT_SMOOTH, type LiftMode, type Score, type SmoothConfig, type SourceInfo, buildScore, frameAt, measureBody, parseScore, rawPoses, serializeScore, smoothPoses, snapPoses } from "@/lib/score";
-import { fillGaps, getLandmarker, trackVideo } from "@/lib/tracker";
-import { type Analysis, checkDuration, nobodyFound, resolveDuration, trackFile } from "@/lib/clip";
+import { fillGaps, getLandmarker, trackPeople } from "@/lib/tracker";
+import { type Analysis, checkDuration, nobodyFound, offsetBetween, resolveDuration, trackFile } from "@/lib/clip";
 import { LiveCapture } from "@/lib/capture";
 import { type LiveFrame, LiveScore, resampleLive } from "@/lib/live";
 import { type Crop, cropPixels, isFullCrop } from "@/lib/crop";
@@ -77,7 +77,8 @@ export default function App() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   /** Region of the clip being tracked, chosen in the preview; the analysis records its own once done. */
   const [pendingCrop, setPendingCrop] = useState<Crop | null>(null);
-  const [pendingFollow, setPendingFollow] = useState<PersonPick | null>(null);
+  /** People to follow in the clip being tracked, one dancer each: the first is the lead, the rest join the cast. */
+  const [pendingFollow, setPendingFollow] = useState<PersonPick[]>([]);
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
   const [imported, setImported] = useState<Score | null>(null);
   const [grid, setGrid] = useState<GridConfig>(DEFAULT_GRID);
@@ -229,20 +230,32 @@ export default function App() {
     for (let k = 1; out.length < n; k++) for (const x of [-k, k]) if (out.length < n && !taken.some((t) => Math.abs(t - x) < 0.5)) out.push(x);
     return out;
   };
-  /** Put dancers on the stage: each a dance, a look and its devices, in the free slots nearest the centre. */
-  const addMembers = useCallback((specs: { score: Score; look: Look; devices?: Partial<Devices> }[]) => {
+  /**
+   * Put dancers on the stage: each a dance, its devices and a look (a
+   * character nobody is wearing, when none is given). Each takes a free
+   * slot nearest the centre — or, given a place, stands that far from the
+   * group's origin: the stage centre, where the lead is, or the first free
+   * slot. People tracked from one clip stand where they stood in it.
+   */
+  const addMembers = useCallback((specs: { score: Score; look?: Look; devices?: Partial<Devices>; place?: { x: number; z: number } }[], origin: "centre" | "slot" = "slot") => {
     setCast((c) => {
       const slots = freeSlots(c.map((m) => m.x), specs.length);
-      return [...c, ...specs.map((sp, i) => ({
-        id: crypto.randomUUID(),
-        name: lookLabel(sp.look.avatarUrl, sp.look.avatarName),
-        score: sp.score,
-        avatarUrl: sp.look.avatarUrl,
-        x: slots[i], z: 0, rot: 0,
-        ...NO_DEVICES, ...sp.devices,
-      }))];
+      const base = origin === "centre" ? 0 : slots[0];
+      const worn: (string | null)[] = [avatar ? avatarUrl : null, ...c.map((m) => m.avatarUrl), ...specs.map((sp) => sp.look?.avatarUrl ?? null)];
+      return [...c, ...specs.map((sp, i) => {
+        const look = sp.look ?? freshLook(worn);
+        if (!sp.look) worn.push(look.avatarUrl);
+        return {
+          id: crypto.randomUUID(),
+          name: lookLabel(look.avatarUrl, look.avatarName),
+          score: sp.score,
+          avatarUrl: look.avatarUrl,
+          x: sp.place ? base + sp.place.x : slots[i], z: sp.place?.z ?? 0, rot: 0,
+          ...NO_DEVICES, ...sp.devices,
+        };
+      })];
     });
-  }, []);
+  }, [avatar, avatarUrl]);
   const showCast = useCallback(() => { setModal(null); setError(null); setSettingsTab("cast"); setSettingsOpen(true); }, []);
   /** This dance again: one more dancer, or several entering `gapBeats` apart (a canon). */
   const addThis = useCallback((look: Look, count: number, gapBeats: number) => {
@@ -270,23 +283,27 @@ export default function App() {
   /* Another video for a new dancer: tracked off screen, the dance on the stage untouched. */
   const [addProgress, setAddProgress] = useState<AddProgress | null>(null);
   const addAbortRef = useRef<AbortController | null>(null);
-  const addFile = useCallback(async (file: File, look: Look, crop?: Crop, follow?: PersonPick) => {
+  const addFile = useCallback(async (file: File, look: Look, crop?: Crop, follow?: PersonPick[]) => {
     addAbortRef.current?.abort();
     const ac = new AbortController();
     addAbortRef.current = ac;
     setError(null);
     setAddProgress({ stage: "loading", done: 0, total: 1 });
     try {
-      const a = await trackFile(file, {
+      const people = await trackFile(file, {
         fps: SAMPLE_FPS, crop, follow, signal: ac.signal,
         onTracking: () => setAddProgress({ stage: "tracking", done: 0, total: 1 }),
         onProgress: (done, total) => setAddProgress({ stage: "tracking", done, total }),
       });
       if (ac.signal.aborted) return;
-      const sc = buildScore(fillGaps(a.tracked, a.source.fps), a.source, grid, smooth, lift);
-      addMembers([{ score: sc, look }]);
+      // The first wears the chosen look and takes a free slot; the others stand where they stood beside them in the clip.
+      addMembers(people.map((a, k) => ({
+        score: buildScore(fillGaps(a.tracked, a.source.fps), a.source, grid, smooth, lift),
+        look: k ? undefined : look,
+        place: k ? offsetBetween(people[0].tracked, a.tracked) : { x: 0, z: 0 },
+      })));
       showCast();
-      setToast(`${lookLabel(look.avatarUrl, look.avatarName)} is on the stage, dancing ${file.name}.`);
+      setToast(people.length > 1 ? `${people.length} dancers are on the stage, dancing ${file.name}.` : `${lookLabel(look.avatarUrl, look.avatarName)} is on the stage, dancing ${file.name}.`);
     } catch (e) {
       if (ac.signal.aborted) return;
       setError(describeError(e));
@@ -368,7 +385,7 @@ export default function App() {
 
   /* ---------- getting a clip in ---------- */
 
-  const onFile = useCallback((file: File, crop?: Crop, follow?: PersonPick) => {
+  const onFile = useCallback((file: File, crop?: Crop, follow?: PersonPick[]) => {
     if (!file.type.startsWith("video/") && !/\.(mp4|mov|webm|m4v|ogv)$/i.test(file.name)) {
       setError("Choose a video file, such as MP4, MOV, or WebM.");
       return;
@@ -391,7 +408,7 @@ export default function App() {
     setModal("new");
     fileNameRef.current = file.name;
     setPendingCrop(crop && !isFullCrop(crop) ? crop : null);
-    setPendingFollow(follow ?? null);
+    setPendingFollow(follow ?? []);
     setSrc(URL.createObjectURL(file));
   }, [src, analysis, imported, home]);
   const fileNameRef = useRef("clip");
@@ -425,33 +442,35 @@ export default function App() {
       const total = Math.floor(video.duration * fps);
       setProgress({ done: 0, total });
       const crop = pendingCrop ?? undefined;
-      const tracked = await trackVideo(video, {
+      const people = await trackPeople(video, {
         fps,
         crop,
-        follow: pendingFollow ?? undefined,
+        follow: pendingFollow,
         signal: ac.signal,
         onProgress: (done, total) => setProgress({ done, total }),
       });
       if (ac.signal.aborted) return;
-      const detected = tracked.filter((f) => f.extraction).length;
-      if (!detected) throw nobodyFound(!!pendingFollow, !!crop);
+      const [tracked, ...others] = people;
+      if (!tracked.some((f) => f.extraction)) throw nobodyFound(pendingFollow.length > 0, !!crop);
       const px = crop ? cropPixels(crop, video.videoWidth, video.videoHeight) : { w: video.videoWidth, h: video.videoHeight };
-      setAnalysis({
-        tracked,
-        source: { name: fileNameRef.current, duration: video.duration, fps, width: px.w, height: px.h, crop },
-      });
+      const source: SourceInfo = { name: fileNameRef.current, duration: video.duration, fps, width: px.w, height: px.h, crop };
+      setAnalysis({ tracked, source });
+      // The other people picked join the cast, standing where they stood beside the lead in the clip.
+      const extras = others.filter((t) => t.some((f) => f.extraction));
+      if (extras.length) addMembers(extras.map((t) => ({ score: buildScore(fillGaps(t, fps), source, grid, smooth, lift), place: offsetBetween(tracked, t) })), "centre");
       video.currentTime = 0;
       setTime(0);
       setPhase("ready");
       if (previousRef.current?.src) URL.revokeObjectURL(previousRef.current.src);
       previousRef.current = null;
-      setModal(null); setView("score"); setToast("Your dance is ready. Press Play to explore the movement.");
+      setModal(null); setView("score");
+      setToast(extras.length ? `Your dance is ready, with ${extras.length} more ${extras.length > 1 ? "dancers" : "dancer"} from the clip in the cast. Press Play to explore the movement.` : "Your dance is ready. Press Play to explore the movement.");
     } catch (e) {
       if (ac.signal.aborted) return; // superseded by a newer clip
       setError(describeError(e));
       setPhase("error");
     }
-  }, [analysis, pendingCrop, pendingFollow]);
+  }, [analysis, pendingCrop, pendingFollow, grid, smooth, lift, addMembers]);
 
   /* ---------- a live take ---------- */
 
@@ -490,7 +509,7 @@ export default function App() {
 
   const restorePrevious = useCallback(() => {
     const previous = previousRef.current;
-    setSrc(previous?.src ?? null); setAnalysis(previous?.analysis ?? null); setImported(previous?.imported ?? null); setPendingCrop(null);
+    setSrc(previous?.src ?? null); setAnalysis(previous?.analysis ?? null); setImported(previous?.imported ?? null); setPendingCrop(null); setPendingFollow([]);
     timeRef.current = previous?.time ?? 0; setTime(timeRef.current);
     setPhase(previous?.analysis || previous?.imported ? "ready" : "idle");
     setHome(previous?.home ?? true); setError(null); setModal(null); previousRef.current = null;

@@ -27,7 +27,8 @@ interface Props {
   /** Another video being tracked for the new dancer. */
   progress: AddProgress | null;
   onAddThis: (look: Look, count: number, gapBeats: number) => void;
-  onAddFile: (file: File, look: Look, crop?: Crop, follow?: PersonPick) => void;
+  /** Another clip, with the people to follow in it: the first wears the look, the rest get fresh ones. */
+  onAddFile: (file: File, look: Look, crop?: Crop, follow?: PersonPick[]) => void;
   onAddSaved: (file: File, look: Look) => void;
   onAddExample: (phrase: DemoPhrase, look: Look) => void;
   onCancel: () => void;
@@ -36,7 +37,7 @@ interface Props {
 type Mode = "this" | "video" | "saved" | "example";
 
 /** The first bundled character nobody on the stage is wearing yet. */
-function freshLook(used: (string | null)[]): Look {
+export function freshLook(used: (string | null)[]): Look {
   const preset = AVATAR_PRESETS.find((a) => !used.includes(a.url));
   return { avatarUrl: preset?.url ?? DEFAULT_AVATAR_URL, avatarName: null };
 }
@@ -61,7 +62,7 @@ export default function AddDancer({ hasDance, danceName, beat, usedLooks, progre
     return <div className="analysis-progress" role="status" aria-live="polite">
       <span className="progress-orbit"><span className="status-dot" /><span>{loading ? "…" : `${percent}%`}</span></span>
       <h3>{loading ? "Reading the video" : "Finding the movement"}</h3>
-      <p>{loading ? "Getting the clip and the tracker ready." : `Following the dancer frame by frame. ${who} joins the stage when it’s done.`}</p>
+      <p>{loading ? "Getting the clip and the tracker ready." : `Following the dancers frame by frame. ${who} joins the stage when it’s done.`}</p>
       <progress max={100} value={loading ? undefined : percent} aria-label="Tracking progress" />
       <span className="subtle">Keep this tab open. Everything stays on your device.</span>
       <button className="btn" onClick={onCancel}>Cancel</button>

@@ -7,11 +7,12 @@
 import { FilesetResolver, PoseLandmarker } from "@mediapipe/tasks-vision";
 import { extractPose, type Extraction, type Landmark } from "./pose";
 import { type Crop, FULL_CROP, cropPixels, fitCropToPoints, isFullCrop } from "./crop";
-import { type Anchor, type PersonPick, anchorOf, dedupeAnchors, followPerson, largestAnchor, locatePick } from "./follow";
+import { type Anchor, type PersonPick, type Seed, anchorOf, dedupeAnchors, followPeople, followPerson, largestAnchor, locatePick } from "./follow";
+import { torsoSignature } from "./appearance";
 
 /**
- * How many people the model looks for per frame. Every one of them is a
- * candidate for *the dancer* (see ./follow); a solo clip costs nothing extra.
+ * How many people the model looks for per frame — and the most that can be
+ * followed as dancers (see ./follow). A solo clip costs nothing extra.
  */
 export const MAX_PEOPLE = 4;
 
@@ -67,14 +68,42 @@ export interface TrackOptions {
   fps: number;
   /** Region of the frame to track (fractions); the rest of the frame is never seen. Default: the whole frame. */
   crop?: Crop;
-  /** Who to follow when several people are in frame, as a tap on the full frame. Default: the biggest body. */
-  follow?: PersonPick;
+  /** Who to follow when several people are in frame, as taps on the full frame — one dancer each. Default: the biggest body. */
+  follow?: PersonPick[];
   signal?: AbortSignal;
   onProgress?: (done: number, total: number, frame: TrackedFrame) => void;
 }
 
 /** Longest side of the frame handed to the model; the model itself works at 256 px. */
 const MAX_FRAME_SIDE = 1280;
+/** Longest side of the copy the clothes are sampled from: a torso is a few dozen pixels, plenty for a colour. */
+const SWATCH_SIDE = 96;
+
+/**
+ * A small copy of what the model saw, for reading colours off it (see
+ * ./appearance). One draw and one readback per frame, far cheaper than
+ * the inference beside it.
+ */
+function swatch(width: number, height: number) {
+  const scale = Math.min(1, SWATCH_SIDE / Math.max(width, height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(width * scale));
+  canvas.height = Math.max(1, Math.round(height * scale));
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  return {
+    width: canvas.width,
+    height: canvas.height,
+    read: (src: CanvasImageSource): Uint8ClampedArray | null => {
+      if (!ctx) return null;
+      try {
+        ctx.drawImage(src, 0, 0, canvas.width, canvas.height);
+        return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      } catch {
+        return null; // a tainted source; the follow simply goes without colours
+      }
+    },
+  };
+}
 
 /**
  * What the model sees: the video itself for a full-frame crop, otherwise a
@@ -162,12 +191,17 @@ export interface Candidate {
   anchor: Anchor | null;
 }
 
-function candidatesOf(res: { landmarks: unknown[]; worldLandmarks: unknown[] }): Candidate[] {
+/** The frame's pixels, when clothes are to be read: an RGBA buffer and its size. */
+type Pixels = { data: Uint8ClampedArray; width: number; height: number } | null;
+
+function candidatesOf(res: { landmarks: unknown[]; worldLandmarks: unknown[] }, pixels: Pixels = null): Candidate[] {
   const out: Candidate[] = [];
   for (let k = 0; k < Math.min(res.landmarks.length, res.worldLandmarks.length); k++) {
     const image = res.landmarks[k] as Landmark[];
     const buf = landmarksToBuffer(image);
-    out.push({ world: res.worldLandmarks[k] as Landmark[], image, buf, anchor: anchorOf(buf) });
+    const anchor = anchorOf(buf);
+    if (anchor && pixels) anchor.sig = torsoSignature(pixels.data, pixels.width, pixels.height, buf) ?? undefined;
+    out.push({ world: res.worldLandmarks[k] as Landmark[], image, buf, anchor });
   }
   return dedupeAnchors(out.map((c) => c.anchor)).map((k) => out[k]);
 }
@@ -178,38 +212,49 @@ function pickInCrop(pick: PersonPick, crop: Crop): PersonPick {
 }
 
 /**
- * Decide who the dancer is on every frame: the person under the pick
- * (followed forwards and backwards from that moment), or, with no pick,
- * the biggest body on the first frame with anyone in it, followed from
- * there. Returns the chosen candidate index per frame, -1 for none.
+ * Decide who the dancers are on every frame: one per pick (each followed
+ * forwards and backwards from the moment it was made, jointly so no two
+ * are ever the same body), or, with no pick, the biggest body on the
+ * first frame with anyone in it, followed from there. Returns, per
+ * dancer, the chosen candidate index per frame, -1 for none.
  */
-function chooseDancer(frames: Candidate[][], fps: number, pick?: PersonPick): number[] {
+function chooseDancers(frames: Candidate[][], fps: number, picks: PersonPick[]): number[][] {
   const anchors = frames.map((f) => f.map((c) => c.anchor));
-  if (pick) {
-    const frame = Math.max(0, Math.min(frames.length - 1, Math.round(pick.t * fps)));
-    const start = locatePick(anchors, pick, frame, Math.ceil(fps / 2));
-    if (!start) throw new Error("Couldn't find the dancer you chose at that moment. Pick them again on a frame where their whole body is clear, or widen the crop.");
-    return followPerson(anchors, start);
+  if (picks.length) {
+    const seeds: Seed[] = picks.map((pick) => {
+      const frame = Math.max(0, Math.min(frames.length - 1, Math.round(pick.t * fps)));
+      const start = locatePick(anchors, pick, frame, Math.ceil(fps / 2));
+      if (!start) throw new Error(picks.length > 1 ? "Couldn't find one of the dancers you chose at that moment. Pick them again on a frame where their whole body is clear, or widen the crop."
+        : "Couldn't find the dancer you chose at that moment. Pick them again on a frame where their whole body is clear, or widen the crop.");
+      return start;
+    });
+    // Two taps on the same body are one dancer.
+    const unique = seeds.filter((s, k) => !seeds.slice(0, k).some((o) => o.frame === s.frame && o.index === s.index));
+    return followPeople(anchors, unique);
   }
   const frame = anchors.findIndex((a) => largestAnchor(a) >= 0);
-  if (frame < 0) return frames.map(() => -1);
+  if (frame < 0) return [frames.map(() => -1)];
   // No pick: the main person. Lost for a second, we take whoever is biggest now.
-  return followPerson(anchors, { frame, index: largestAnchor(anchors[frame]) }, { reseedAfter: Math.round(fps) });
+  return [followPerson(anchors, { frame, index: largestAnchor(anchors[frame]) }, { reseedAfter: Math.round(fps) })];
 }
 
 /**
  * Run the tracker over the whole video. Every frame is detected first
- * (everyone in it), then one person is followed through them — so a pick
- * made mid-clip carries backwards to the start. Frames where the dancer
- * was not seen yield `extraction: null`.
+ * (everyone in it), then the dancers are followed through them — so a
+ * pick made mid-clip carries backwards to the start. One list of frames
+ * per dancer (one per pick, or just the one with no picks), in the order
+ * picked; frames where that dancer was not seen yield `extraction: null`.
  */
-export async function trackVideo(video: HTMLVideoElement, opts: TrackOptions): Promise<TrackedFrame[]> {
+export async function trackPeople(video: HTMLVideoElement, opts: TrackOptions): Promise<TrackedFrame[][]> {
   const lm = await getLandmarker();
   const duration = video.duration;
   const total = Math.max(1, Math.floor(duration * opts.fps));
   const crop = opts.crop ?? FULL_CROP;
   const src = frameSource(video, crop);
   const aspect = src.width / src.height;
+  const picks = (opts.follow ?? []).slice(0, MAX_PEOPLE).map((p) => pickInCrop(p, crop));
+  // Clothes only matter with more than one dancer to tell apart.
+  const sw = picks.length > 1 ? swatch(src.width, src.height) : null;
   const frames: Candidate[][] = [];
   const times: number[] = [];
   await wakeDecoder(video);
@@ -222,7 +267,10 @@ export async function trackVideo(video: HTMLVideoElement, opts: TrackOptions): P
     if (opts.signal?.aborted) throw new DOMException("aborted", "AbortError");
     const ts = Math.max(base + Math.round(t * 1000), clock + 1);
     clock = ts;
-    const found = candidatesOf(lm.detectForVideo(src.grab(), ts));
+    const picture = src.grab();
+    const res = lm.detectForVideo(picture, ts);
+    const data = sw && res.landmarks.length > 1 ? sw.read(picture) : null;
+    const found = candidatesOf(res, data && sw ? { data, width: sw.width, height: sw.height } : null);
     frames.push(found);
     times.push(t);
     // Progress shows whoever is biggest for now; identity is settled once every frame is in.
@@ -230,11 +278,15 @@ export async function trackVideo(video: HTMLVideoElement, opts: TrackOptions): P
     const c = big >= 0 ? found[big] : null;
     opts.onProgress?.(i + 1, total, c ? { extraction: extractPose(c.world, c.image, t, aspect), image: c.buf } : { extraction: null, image: null });
   }
-  const chosen = chooseDancer(frames, opts.fps, opts.follow && pickInCrop(opts.follow, crop));
-  return frames.map((found, i) => {
+  return chooseDancers(frames, opts.fps, picks).map((chosen) => frames.map((found, i) => {
     const c = chosen[i] >= 0 ? found[chosen[i]] : null;
     return c ? { extraction: extractPose(c.world, c.image, times[i], aspect), image: c.buf } : { extraction: null, image: null };
-  });
+  }));
+}
+
+/** One dancer: the first pick, or the biggest body. See `trackPeople`. */
+export async function trackVideo(video: HTMLVideoElement, opts: Omit<TrackOptions, "follow"> & { follow?: PersonPick }): Promise<TrackedFrame[]> {
+  return (await trackPeople(video, { ...opts, follow: opts.follow ? [opts.follow] : undefined }))[0];
 }
 
 /**
@@ -289,16 +341,17 @@ export function fillGaps(frames: TrackedFrame[], fps: number): Extraction[] {
 }
 
 /**
- * Find the dancer: detect on frames spread over the clip and return a crop
+ * Find the dancers: detect on frames spread over the clip and return a crop
  * around everywhere they were seen, padded so a stretched arm still fits.
- * With a pick, the picked person is followed through the samples (taken
- * densely enough to keep hold of them); without one, the biggest body on
+ * With picks, the picked people are followed through the samples (taken
+ * densely enough to keep hold of them); without any, the biggest body on
  * each sample counts. Null when nobody was found.
  */
-export async function fitCropToDancer(video: HTMLVideoElement, opts: { follow?: PersonPick; samples?: number; margin?: number; signal?: AbortSignal } = {}): Promise<Crop | null> {
+export async function fitCropToDancer(video: HTMLVideoElement, opts: { follow?: PersonPick[]; samples?: number; margin?: number; signal?: AbortSignal } = {}): Promise<Crop | null> {
   const lm = await getLandmarker();
   const duration = Number.isFinite(video.duration) ? video.duration : 0;
-  const samples = Math.max(1, opts.samples ?? (opts.follow ? Math.min(240, Math.ceil(duration * FIT_FOLLOW_FPS)) : 8));
+  const picks = opts.follow ?? [];
+  const samples = Math.max(1, opts.samples ?? (picks.length ? Math.min(240, Math.ceil(duration * FIT_FOLLOW_FPS)) : 8));
   const fps = samples / Math.max(duration, 1e-3);
   const wasPlaying = !video.paused;
   const t0 = video.currentTime;
@@ -319,12 +372,12 @@ export async function fitCropToDancer(video: HTMLVideoElement, opts: { follow?: 
     }
   }
   const seen: number[] = [];
-  if (opts.follow) {
+  if (picks.length) {
     const anchors = frames.map((f) => f.map((c) => c.anchor));
     // Samples sit at (i + 0.5) / fps, so the one nearest the pick is floor(t * fps).
-    const start = locatePick(anchors, opts.follow, Math.max(0, Math.min(samples - 1, Math.floor(opts.follow.t * fps))), 2);
-    if (!start) return null;
-    followPerson(anchors, start).forEach((k, i) => { if (k >= 0) seen.push(...frames[i][k].buf); });
+    const seeds = picks.map((p) => locatePick(anchors, p, Math.max(0, Math.min(samples - 1, Math.floor(p.t * fps))), 2)).filter((s): s is Seed => !!s);
+    if (!seeds.length) return null;
+    for (const chosen of followPeople(anchors, seeds)) chosen.forEach((k, i) => { if (k >= 0) seen.push(...frames[i][k].buf); });
   } else {
     for (const f of frames) {
       const big = largestAnchor(f.map((c) => c.anchor));

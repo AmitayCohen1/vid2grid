@@ -8,8 +8,8 @@ import type { PersonPick } from "@/lib/follow";
 import { recorderMime } from "@/lib/capture";
 
 interface Props {
-  /** The chosen clip, the region of it to track (absent = the whole frame), and who to follow (absent = the biggest body). */
-  onFile: (file: File, crop?: Crop, follow?: PersonPick) => void;
+  /** The chosen clip, the region of it to track (absent = the whole frame), and who to follow, one dancer each (empty = the biggest body). */
+  onFile: (file: File, crop?: Crop, follow?: PersonPick[]) => void;
   busy: boolean;
   mode?: "upload" | "record";
   /** Told when a clip is chosen (true) or put back (false). */
@@ -33,23 +33,23 @@ export default function Source({ onFile, busy, mode = "upload", onFraming, confi
   return (
     <div className={`flex flex-col gap-3 ${selection ? "source-framing" : ""}`}>
       {error && <p role="alert" className="inline-error">{error}</p>}
-      {selection ? <ClipPreview file={selection.file} url={selection.url} confirmLabel={confirmLabel} onBack={() => setSelection(null)} onConfirm={(crop, pick) => onFile(selection.file, isFullCrop(crop) ? undefined : crop, pick ?? undefined)} /> : mode === "upload" ? <Upload onFile={choose} busy={busy} /> : <Record onFile={choose} busy={busy} />}
+      {selection ? <ClipPreview file={selection.file} url={selection.url} confirmLabel={confirmLabel} onBack={() => setSelection(null)} onConfirm={(crop, picks) => onFile(selection.file, isFullCrop(crop) ? undefined : crop, picks)} /> : mode === "upload" ? <Upload onFile={choose} busy={busy} /> : <Record onFile={choose} busy={busy} />}
     </div>
   );
 }
 
-function ClipPreview({ file, url, confirmLabel, onBack, onConfirm }: { file: File; url: string; confirmLabel: string; onBack: () => void; onConfirm: (crop: Crop, pick: PersonPick | null) => void }) {
+function ClipPreview({ file, url, confirmLabel, onBack, onConfirm }: { file: File; url: string; confirmLabel: string; onBack: () => void; onConfirm: (crop: Crop, picks: PersonPick[]) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [crop, setCrop] = useState<Crop>(FULL_CROP);
-  const [pick, setPick] = useState<PersonPick | null>(null);
+  const [picks, setPicks] = useState<PersonPick[]>([]);
   return <div className="clip-preview">
-    <CropEditor src={url} crop={crop} onChange={setCrop} pick={pick} onPick={setPick} onError={() => setError("This video cannot be played. Try an MP4 or WebM file.")} onMeta={(v) => { if (Number.isFinite(v.duration) && (v.duration < 1 || v.duration > 120)) setError("Choose a clip between 1 and 120 seconds."); }}
+    <CropEditor src={url} crop={crop} onChange={setCrop} picks={picks} onPicks={setPicks} onError={() => setError("This video cannot be played. Try an MP4 or WebM file.")} onMeta={(v) => { if (Number.isFinite(v.duration) && (v.duration < 1 || v.duration > 120)) setError("Choose a clip between 1 and 120 seconds."); }}
       head={<>
         <div className="flow-steps"><span>1. Choose video</span><ArrowRight size={14} /><strong>2. Frame the dancer</strong></div>
         <div className="clip-file"><strong title={file.name}>{file.name}</strong><span>{(file.size / 1024 / 1024).toFixed(1)} MB</span></div>
       </>}>
-      {error ? <p role="alert" className="inline-error">{error}</p> : <p className="dialog-note">Only the framed region is tracked. Drag the box, scroll to zoom, or press <em>Fit to dancer</em>. Several people? Pause on them and click the one to follow.</p>}
-      <div className="dialog-actions clip-actions"><button className="btn primary" disabled={!!error} onClick={() => onConfirm(crop, pick)}>{confirmLabel} <ArrowRight size={17} /></button><button className="btn" onClick={onBack}>Choose another</button></div>
+      {error ? <p role="alert" className="inline-error">{error}</p> : <p className="dialog-note">Only the framed region is tracked. Drag the box, scroll to zoom, or press <em>Fit to dancer</em>. Several people? Pause on them and click each one to follow — every dancer you click gets a dance of their own.</p>}
+      <div className="dialog-actions clip-actions"><button className="btn primary" disabled={!!error} onClick={() => onConfirm(crop, picks)}>{picks.length > 1 ? `${confirmLabel} · ${picks.length} dancers` : confirmLabel} <ArrowRight size={17} /></button><button className="btn" onClick={onBack}>Choose another</button></div>
     </CropEditor>
   </div>;
 }
@@ -66,7 +66,7 @@ function Upload({ onFile, busy }: Props) {
       <span className="upload-icon"><UploadCloud size={23} strokeWidth={1.5} /></span>
       <div className="upload-title">Drop your video here <span>or browse files</span></div>
       <div className="upload-formats mono">MP4, MOV, WEBM · UP TO 250 MB</div>
-      <div className="upload-hint">5–30 seconds is ideal. One dancer, full body, still camera.</div>
+      <div className="upload-hint">5–30 seconds is ideal. Full bodies, still camera. One dancer or a few.</div>
       <input aria-label="Choose a video" type="file" accept="video/*" className="sr-only" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.currentTarget.value = ""; }} />
     </label>
   );
