@@ -102,6 +102,7 @@ export default function App() {
   const timeRef = useRef(0);
   const [selected, setSelected] = useState<BoneId | null>(null);
   const [showRaw, setShowRaw] = useState(true);
+  const [kinesphere, setKinesphere] = useState(false);
   const [avatar, setAvatar] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(DEFAULT_AVATAR_URL);
   const [avatarName, setAvatarName] = useState<string | null>(null);
@@ -749,7 +750,7 @@ export default function App() {
           <section className={`stage-panel ${view === "video" ? "stage-hidden" : ""}`} aria-label={view === "objects" ? "Movement traces" : "3D movement stage"}>
             <div className="stage-heading"><span className="mono">{motion === "smooth" ? "SMOOTH" : `${grid.azStep}° GRID`}</span></div>
             {view === "objects" && score ? <Objects ref={objectsRef} score={score} overlays={overlays} video={analysis ? videoEl : null} frame={fi} options={objects} style={traceStyle} /> :
-              (snappedPose && curBody) || stageCast.length ? <Stage pose={stagePose} raw={stageRaw} body={stageBody} grid={grid} motion={motion} showRaw={showRaw} avatar={avatar} avatarUrl={avatarUrl} cast={stageCast} selected={selected} onSelect={setSelected} /> :
+              (snappedPose && curBody) || stageCast.length ? <Stage pose={stagePose} raw={stageRaw} body={stageBody} grid={grid} motion={motion} showRaw={showRaw} kinesphere={kinesphere} avatar={avatar} avatarUrl={avatarUrl} cast={stageCast} selected={selected} onSelect={setSelected} /> :
               <div className="stage-empty"><Activity size={35} /><span>{live ? "Looking for you. Step back so your whole body is in the picture." : "Your movement will appear here."}</span></div>}
             {view !== "objects" && <div className="stage-legend"><span><i className="bg-limb-l" />Left side</span><span><i className="bg-limb-r" />Right side</span><span className="stage-help">Drag to rotate · Pinch or scroll to zoom</span></div>}
             {selected && view !== "objects" && <button className="selected-limb" onClick={() => setSelected(null)}>{selected} · selected <X size={15} /></button>}
@@ -768,7 +769,7 @@ export default function App() {
               <button className="insp-icon" onClick={() => setSettingsOpen(false)} aria-label="Collapse settings" title="Collapse settings (Esc)"><PanelRightClose size={15} /></button>
             </div>
             <div className="sidebar-content">
-              {(tab === "dancer" || tab === "grid") && <Controls panel={tab} grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis || !!live} showRaw={showRaw} onShowRaw={setShowRaw} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} motion={motion} onMotion={setMotion} size={size} onSize={setSize} inVideo={inVideo} onInVideo={setInVideo} beside={beside} onBeside={setBeside} selfDelay={selfDelay} onSelfDelay={setSelfDelay} />}
+              {(tab === "dancer" || tab === "grid") && <Controls panel={tab} grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis || !!live} showRaw={showRaw} onShowRaw={setShowRaw} kinesphere={kinesphere} onKinesphere={setKinesphere} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} motion={motion} onMotion={setMotion} size={size} onSize={setSize} inVideo={inVideo} onInVideo={setInVideo} beside={beside} onBeside={setBeside} selfDelay={selfDelay} onSelfDelay={setSelfDelay} />}
               {tab === "cast" && <CastPanel lead={lead} cast={cast} beat={60 / bpm} onAdd={() => openModal("add")} onEditLead={() => setSettingsTab("dancer")} onLook={(id) => { setLookFor(id); openModal("look"); }} onDuplicate={duplicateCast} onRemove={removeCast} onUpdate={updateCast} />}
               {tab === "traces" && score && <>
                 <Section title="Traces">

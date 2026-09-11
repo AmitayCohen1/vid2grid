@@ -12,6 +12,7 @@ interface Props {
   grid: GridConfig; smooth: SmoothConfig;
   onGrid: (g: GridConfig) => void; onSmooth: (s: SmoothConfig) => void;
   showRaw: boolean; onShowRaw: (b: boolean) => void;
+  kinesphere: boolean; onKinesphere: (b: boolean) => void;
   avatar: boolean; onAvatar: (b: boolean) => void; avatarUrl: string; avatarName: string | null;
   onAvatarFile: (f: File) => void; onAvatarPreset: (url: string) => void;
   showOverlay: boolean; onShowOverlay: (b: boolean) => void;
@@ -49,6 +50,8 @@ export default function Controls(p: Props) {
       <Switch label={p.motion === "smooth" ? "Snapped ghost" : "Original ghost"}
         hint={p.motion === "smooth" ? "A translucent figure of the grid-snapped dance." : "A translucent figure before grid snapping."}
         checked={p.showRaw} onChange={p.onShowRaw} />
+      <Switch label="Kinesphere" hint="Laban's icosahedron around the dancer, with the movement grid on its surface. Each limb's current direction is lit from the centre."
+        checked={p.kinesphere} onChange={p.onKinesphere} />
       <Switch label="Tracking points" hint={p.canLift ? "Detected joints over the original video." : "Available when you add a video."}
         checked={p.showOverlay} onChange={p.onShowOverlay} disabled={!p.canLift} />
     </Section>

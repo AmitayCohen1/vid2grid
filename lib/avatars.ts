@@ -32,6 +32,13 @@ export const AVATAR_PRESETS: AvatarPreset[] = [
   { label: "Sora", url: "/models/hair-male.vrm", portrait: "/avatars/sora.png" },
   { label: "Kai", url: "/models/hair-male.vrm#kai", portrait: "/avatars/kai.png", tint: { Tops: "#4f7f5e", Hair: "#a0a0a8" } },
   { label: "Ren", url: "/models/hair-male.vrm#ren", portrait: "/avatars/ren.png", tint: { Tops: "#883a3a", Hair: "#e0b878" } },
+  // Colourways: the same files as above with a tint on the top (multiply only darkens, so it works on the light ones).
+  { label: "Momo", url: "/models/avatar.vrm#momo", portrait: "/avatars/momo.png", tint: { Tops: "#f0836e" } },
+  { label: "Mizu", url: "/models/avatar.vrm#mizu", portrait: "/avatars/mizu.png", tint: { Tops: "#7cc0e8" } },
+  { label: "Sumire", url: "/models/vroid-a.vrm#sumire", portrait: "/avatars/sumire.png", tint: { Tops: "#b7a3e3" } },
+  { label: "Hana", url: "/models/vroid-b.vrm#hana", portrait: "/avatars/hana.png", tint: { Tops: "#ff9d55" } },
+  { label: "Ao", url: "/models/vroid-c.vrm#ao", portrait: "/avatars/ao.png", tint: { Tops: "#7c9fd0" } },
+  { label: "Beni", url: "/models/shibu.vrm#beni", portrait: "/avatars/beni.png", tint: { Tops: "#d46f6f" } },
   // Built from the figure itself (lib/looks.ts): no file, no costume, only the pose.
   ...FIGURE_LOOKS.map((l) => ({ label: l.label, url: lookUrl(l.id), portrait: `/avatars/look-${l.id}.png`, look: true, hint: l.hint })),
 ];

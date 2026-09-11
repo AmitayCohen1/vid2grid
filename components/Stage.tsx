@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import Figure, { GridSphere } from "./Figure";
 import Avatar from "./Avatar";
 import StageEnv from "./StageEnv";
+import Kinesphere from "./Kinesphere";
 import type { Body } from "@/lib/fk";
 import type { Pose } from "@/lib/pose";
 import type { BoneId } from "@/lib/skeleton";
@@ -32,6 +33,8 @@ interface Props {
    *  what the stage shows. */
   motion: "stepped" | "smooth";
   showRaw: boolean;
+  /** Laban's icosahedron around the current dancer, the grid on its surface, the notation lit. */
+  kinesphere?: boolean;
   avatar: boolean;
   avatarUrl: string;
   cast: StageCastMember[];
@@ -39,7 +42,7 @@ interface Props {
   onSelect: (id: BoneId | null) => void;
 }
 
-export default function Stage({ pose, raw, body, grid, motion, showRaw, avatar, avatarUrl, cast, selected, onSelect }: Props) {
+export default function Stage({ pose, raw, body, grid, motion, showRaw, kinesphere = false, avatar, avatarUrl, cast, selected, onSelect }: Props) {
   const smooth = motion === "smooth" && !!raw;
   const shown = smooth ? raw : pose;      // the figure people watch
   const ghost = smooth ? pose : raw;      // the other one, behind it
@@ -81,6 +84,8 @@ export default function Stage({ pose, raw, body, grid, motion, showRaw, avatar, 
             <Figure pose={shown} body={body} selected={selected} onSelect={onSelect} />
           )}
           {showRaw && ghost && <Figure pose={ghost} body={body} ghost />}
+          {/* The kinesphere reads the snapped pose whatever the figure is drawn from: it is the notation. */}
+          {kinesphere && pose && <Kinesphere pose={pose} body={body} grid={grid} selected={selected} />}
           {/* The sphere always compares the true snapped/raw pair, whichever is on stage. */}
           {selected && pose && raw && <GridSphere pose={pose} raw={raw} body={body} bone={selected} grid={grid} />}
         </>
