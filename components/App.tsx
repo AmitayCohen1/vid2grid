@@ -18,6 +18,7 @@ import { AVATAR_PRESETS, avatarFile } from "@/lib/avatars";
 import type { StageCastMember } from "./Stage";
 import { type Devices, NO_DEVICES, clipTime, memberSpan, mirrorBody, mirrorPose, placePose, sanitizeDevices, scaleBody, scalePose } from "@/lib/devices";
 import { imageToWorld, videoAnchors } from "@/lib/invideo";
+import { type Cue, DEFAULT_TRANSITION, placementsAt, sanitizeCues } from "@/lib/formations";
 import { idbGet, idbSet } from "@/lib/store";
 import VideoPane from "./VideoPane";
 import Timeline from "./Timeline";
@@ -53,6 +54,8 @@ type View = "both" | "video" | "score" | "objects";
 const SAMPLE_FPS = 30;
 const LS_KEY = "vid2grid:last-score";
 const CAST_KEY = "vid2grid:cast";
+const CUES_KEY = "vid2grid:formations";
+const NO_PLACE = { x: 0, z: 0, rot: 0 };
 const Stage = dynamic(() => import("./Stage"), {
   ssr: false,
   loading: () => <div role="status" className="grid h-full place-items-center text-xs text-white/60">Preparing the stage…</div>,
@@ -113,6 +116,9 @@ export default function App() {
   const [traceStyle, setTraceStyle] = useState<TraceStyle>(DEFAULT_TRACE_STYLE);
   const objectsRef = useRef<ObjectsHandle>(null);
   const [cast, setCast] = useState<CastMember[]>([]);
+  /** Formations: where everyone stands over the stage clock (lib/formations.ts). Empty = each member's own placement. */
+  const [cues, setCues] = useState<Cue[]>([]);
+  const [transition, setTransition] = useState(DEFAULT_TRANSITION);
   /** Side by side and Video views: draw the character and the cast inside the recording, beside the person. */
   const [inVideo, setInVideo] = useState(true);
   /** Where the character stands in the video, metres to the person's screen-right — tied to the clip it was set for. */
@@ -193,8 +199,11 @@ export default function App() {
   const curBody = live ? liveFrame?.body ?? null : body;
   // What the stage draws for the current dancer: the same poses at the chosen size. Notation and exports use the unscaled ones.
   const stageBody = useMemo(() => (curBody ? scaleBody(curBody, size) : null), [curBody, size]);
-  const stagePose = useMemo(() => (snappedPose ? scalePose(snappedPose, size) : null), [snappedPose, size]);
-  const stageRaw = useMemo(() => (rawPose ? scalePose(rawPose, size) : null), [rawPose, size]);
+  // Formations, when there are any, say where everyone stands right now: the lead is index 0, then the cast in order.
+  const placements = useMemo(() => placementsAt(cues, 1 + cast.length, time, transition), [cues, cast.length, time, transition]);
+  const leadPlace = placements?.[0] ?? null;
+  const stagePose = useMemo(() => (snappedPose ? placePose(scalePose(snappedPose, size), leadPlace ?? NO_PLACE) : null), [snappedPose, size, leadPlace]);
+  const stageRaw = useMemo(() => (rawPose ? placePose(scalePose(rawPose, size), leadPlace ?? NO_PLACE) : null), [rawPose, size, leadPlace]);
   const overlay = live ? liveOverlay : analysis?.tracked[fi]?.image ?? null;
 
   /* ---------- the cast: dancers pinned onto the shared stage ---------- */
@@ -226,6 +235,24 @@ export default function App() {
     }, 500); // debounce slider drags
     return () => clearTimeout(id);
   }, [cast]);
+
+  const cuesLoaded = useRef(false);
+  useEffect(() => {
+    let alive = true;
+    idbGet<{ cues: unknown; transition: unknown }>(CUES_KEY).then((v) => {
+      if (!alive) return;
+      cuesLoaded.current = true;
+      const restored = sanitizeCues(v?.cues);
+      if (restored.length) setCues(restored);
+      if (typeof v?.transition === "number" && Number.isFinite(v.transition)) setTransition(Math.max(0, Math.min(10, v.transition)));
+    }).catch(() => { cuesLoaded.current = true; });
+    return () => { alive = false; };
+  }, []);
+  useEffect(() => {
+    if (!cuesLoaded.current) return;
+    const id = setTimeout(() => { idbSet(CUES_KEY, { cues, transition }).catch(() => {}); }, 500);
+    return () => clearTimeout(id);
+  }, [cues, transition]);
 
   /** Slots across the stage not yet taken, nearest the centre first: −1, 1, −2, 2 … metres. */
   const freeSlots = (taken: number[], n: number): number[] => {
@@ -347,12 +374,12 @@ export default function App() {
   );
   // Each member at the stage clock, through its devices, with its floor placement baked in.
   // Same track as the live figure (snapped or smooth), or the stage disagrees with itself.
-  const stageCast: StageCastMember[] = useMemo(() => cast.map((m) => {
+  const stageCast: StageCastMember[] = useMemo(() => cast.map((m, i) => {
     const track = motion === "smooth" ? m.score.raw : m.score.frames;
     const p = track[frameAt(m.score, clipTime(time, m.score.source.duration, m))];
-    const pose = scalePose(placePose(m.mirror ? mirrorPose(p) : p, m), m.size);
+    const pose = scalePose(placePose(m.mirror ? mirrorPose(p) : p, placements?.[i + 1] ?? m), m.size);
     return { id: m.id, pose, body: scaleBody(m.mirror ? mirrorBody(m.score.body) : m.score.body, m.size), avatarUrl: m.avatarUrl };
-  }), [cast, time, motion]);
+  }), [cast, time, motion, placements]);
 
   /* ---------- figures inside the video ---------- */
 
@@ -382,9 +409,11 @@ export default function App() {
     const self = selfDelay > 0 ? track[frameAt(score, clipTime(time, score.source.duration, { ...NO_DEVICES, delay: selfDelay }))] : live;
     const at = imageToWorld(anchor.u, anchor.floorV, anchor.mpu, videoAspect);
     const out: StageCastMember[] = [{ id: "self", pose: { ...self, x: at.x + beside + (self.x - live.x), z: 0, hipY: at.y + self.hipY * size }, body: scaleBody(body, size), avatarUrl: avatar ? avatarUrl : null }];
-    for (const m of stageCast) out.push({ ...m, pose: { ...m.pose, x: at.x + (m.pose.x - live.x), z: m.pose.z - live.z, hipY: at.y + m.pose.hipY } });
+    // The cast keeps its stage offsets from the lead — the lead's own formation placement included.
+    const lx = live.x + (leadPlace?.x ?? 0), lz = live.z + (leadPlace?.z ?? 0);
+    for (const m of stageCast) out.push({ ...m, pose: { ...m.pose, x: at.x + (m.pose.x - lx), z: m.pose.z - lz, hipY: at.y + m.pose.hipY } });
     return out;
-  }, [inVideo, anchor, score, body, size, fi, time, selfDelay, motion, videoAspect, beside, avatar, avatarUrl, stageCast]);
+  }, [inVideo, anchor, score, body, size, fi, time, selfDelay, motion, videoAspect, beside, avatar, avatarUrl, stageCast, leadPlace]);
 
   /* ---------- getting a clip in ---------- */
 
@@ -770,7 +799,7 @@ export default function App() {
             </div>
             <div className="sidebar-content">
               {(tab === "dancer" || tab === "grid") && <Controls panel={tab} grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis || !!live} showRaw={showRaw} onShowRaw={setShowRaw} kinesphere={kinesphere} onKinesphere={setKinesphere} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} motion={motion} onMotion={setMotion} size={size} onSize={setSize} inVideo={inVideo} onInVideo={setInVideo} beside={beside} onBeside={setBeside} selfDelay={selfDelay} onSelfDelay={setSelfDelay} />}
-              {tab === "cast" && <CastPanel lead={lead} cast={cast} beat={60 / bpm} onAdd={() => openModal("add")} onEditLead={() => setSettingsTab("dancer")} onLook={(id) => { setLookFor(id); openModal("look"); }} onDuplicate={duplicateCast} onRemove={removeCast} onUpdate={updateCast} />}
+              {tab === "cast" && <CastPanel lead={lead} cast={cast} beat={60 / bpm} cues={cues} onCues={setCues} transition={transition} onTransition={setTransition} time={time} total={stageDuration} placements={placements} onAdd={() => openModal("add")} onEditLead={() => setSettingsTab("dancer")} onLook={(id) => { setLookFor(id); openModal("look"); }} onDuplicate={duplicateCast} onRemove={removeCast} onUpdate={updateCast} />}
               {tab === "traces" && score && <>
                 <Section title="Traces">
                   <Switch label="Movement trails" hint="Follow the traced joints through space." checked={objects.traces} onChange={(traces) => setObjects({ ...objects, traces })} />
