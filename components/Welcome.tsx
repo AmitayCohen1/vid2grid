@@ -9,7 +9,7 @@ import { AVATAR_PRESETS } from "@/lib/avatars";
 
 const HeroDuet = dynamic(() => import("./HeroDuet"), { ssr: false, loading: () => <div className="duet" /> });
 
-const DEFAULT = AVATAR_PRESETS.find((a) => a.label === "Notation") ?? AVATAR_PRESETS[0];
+const DEFAULT = AVATAR_PRESETS.find((a) => a.label === "Sapphire") ?? AVATAR_PRESETS[0];
 
 export default function Welcome({ onStart, onDemo }: { onStart: () => void; onDemo: (phrase: DemoPhrase, avatarPresetUrl?: string) => void }) {
   const [avatar, setAvatar] = useState(DEFAULT);
