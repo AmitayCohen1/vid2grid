@@ -7,6 +7,7 @@ import { ArrowLeft, Box, Check, CircleHelp, Columns2, Download, Film, Grid2X2, M
 import Dialog from "./Dialog";
 import NewScore, { type DanceAlongChoice } from "./NewScore";
 import SaveScore from "./SaveScore";
+import Image from "next/image";
 import Welcome from "./Welcome";
 import { createDemo, type DemoPhrase } from "@/lib/demo";
 import { DEFAULT_AVATAR_URL } from "@/lib/avatars";
@@ -781,6 +782,10 @@ export default function App() {
           <span className="brand-name">visual<span>elbow</span></span>
           <span className="brand-descriptor">MOVEMENT<br />LANGUAGES</span>
         </button>
+        {welcome && <div className="memorial" aria-label="In memory of Gal Gorfung">
+          <Image src="/memorial/gal.jpg" alt="Gal Gorfung" width={80} height={80} />
+          <p><span>In memory of</span><strong>Gal Gorfung</strong></p>
+        </div>}
         {!welcome && <>
           <span className="project-chip" title={source?.name ?? undefined}>{live ? "Live take" : source?.name ?? "Creating your dance"}</span>
           <nav className="seg view-tabs" aria-label="Choose a view">
