@@ -40,6 +40,7 @@ import { BONE } from "@/lib/skeleton";
 import { type Crop, cropPixels, isFullCrop } from "@/lib/crop";
 import type { PersonPick } from "@/lib/follow";
 import { describeError } from "@/lib/errors";
+import { track } from "@/lib/analytics";
 import { estimateTempo } from "@/lib/tempo";
 import type { BoneId } from "@/lib/skeleton";
 import type { Body } from "@/lib/fk";
@@ -141,6 +142,7 @@ export default function App() {
 
   const openModal = (name: NonNullable<typeof modal>) => { setPlaying(false); setError(null); setModal(name); };
   const openNew = (mode: "upload" | "import" | "live" = "upload") => { setNewMode(mode); openModal("new"); };
+  useEffect(() => { track("app_open", { returning: !!localStorage.getItem(LS_KEY) }, { once: true }); }, []);
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 5000); return () => clearTimeout(id); }, [toast]);
 
   // Restore the last score (figure only; the video is not kept).
@@ -176,6 +178,7 @@ export default function App() {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
     setToast("Picture saved.");
+    track("picture_saved");
   }, [source]);
   const score: Score | null = useMemo(() => {
     if (!raw || !body || !source || !raw.length) return null;
@@ -303,6 +306,7 @@ export default function App() {
     const gap = gapBeats * 60 / bpm;
     addMembers(Array.from({ length: count }, (_, k) => ({ score, look, devices: { size, delay: Math.round((k + 1) * gap * 100) / 100 } })));
     showCast();
+    track("dancer_added", { from: "this", count, canon: gap > 0 });
     setToast(count > 1 ? `${count} dancers added${gap > 0 ? `, entering ${gap.toFixed(2)} s apart` : ", in unison"}.` : `${lookLabel(look.avatarUrl, look.avatarName)} is on the stage.`);
   }, [score, bpm, size, addMembers, showCast]);
   const addSaved = useCallback((file: File, look: Look) => {
@@ -311,6 +315,7 @@ export default function App() {
       const sc = parseScore(t);
       addMembers([{ score: sc, look }]);
       showCast();
+      track("dancer_added", { from: "saved", count: 1 });
       setToast(`${lookLabel(look.avatarUrl, look.avatarName)} is on the stage, dancing ${sc.source.name}.`);
     }).catch((e) => { setError(e instanceof Error ? e.message : "Could not open this dance."); });
   }, [addMembers, showCast]);
@@ -318,6 +323,7 @@ export default function App() {
     const sc = createDemo(phrase);
     addMembers([{ score: sc, look }]);
     showCast();
+    track("dancer_added", { from: "example", phrase, count: 1 });
     setToast(`${lookLabel(look.avatarUrl, look.avatarName)} is on the stage, dancing ${sc.source.name}.`);
   }, [addMembers, showCast]);
   /* Another video for a new dancer: tracked off screen, the dance on the stage untouched. */
@@ -343,10 +349,12 @@ export default function App() {
         place: k ? offsetBetween(people[0].tracked, a.tracked) : { x: 0, z: 0 },
       })));
       showCast();
+      track("dancer_added", { from: "video", count: people.length });
       setToast(people.length > 1 ? `${people.length} dancers are on the stage, dancing ${file.name}.` : `${lookLabel(look.avatarUrl, look.avatarName)} is on the stage, dancing ${file.name}.`);
     } catch (e) {
       if (ac.signal.aborted) return;
       setError(describeError(e));
+      track("dancer_add_failed", { error: describeError(e) });
     } finally {
       if (addAbortRef.current === ac) { addAbortRef.current = null; setAddProgress(null); }
     }
@@ -457,6 +465,7 @@ export default function App() {
     setPhase("loading");
     setModal("new");
     fileNameRef.current = file.name;
+    track("video_chosen", { mb: Math.round(file.size / 1e5) / 10, type: file.type || "unknown", cropped: !!crop && !isFullCrop(crop), people: follow?.length ?? 0 });
     setPendingCrop(crop && !isFullCrop(crop) ? crop : null);
     setPendingFollow(follow ?? []);
     setSrc(URL.createObjectURL(file));
@@ -488,6 +497,7 @@ export default function App() {
       await getLandmarker();
       if (ac.signal.aborted) return;
       setPhase("tracking");
+      const trackStart = performance.now();
       const fps = SAMPLE_FPS;
       const total = Math.floor(video.duration * fps);
       setProgress({ done: 0, total });
@@ -511,6 +521,7 @@ export default function App() {
       video.currentTime = 0;
       setTime(0);
       setPhase("ready");
+      track("dance_ready", { from: "video", seconds: Math.round(video.duration * 10) / 10, dancers: 1 + extras.length, cropped: !!crop, tracking_s: Math.round((performance.now() - trackStart) / 100) / 10 });
       if (previousRef.current?.src) URL.revokeObjectURL(previousRef.current.src);
       previousRef.current = null;
       setModal(null); setView("both");
@@ -518,6 +529,7 @@ export default function App() {
     } catch (e) {
       if (ac.signal.aborted) return; // superseded by a newer clip
       setError(describeError(e));
+      track("dance_failed", { from: "video", error: describeError(e) });
       setPhase("error");
     }
   }, [analysis, pendingCrop, pendingFollow, grid, smooth, lift, addMembers]);
@@ -562,12 +574,14 @@ export default function App() {
       setLive({ capture, stream });
       setPhase("live");
       setModal(null);
+      track("live_start", { along: !!choice, mirror: choice?.mirror ?? null });
       setToast(choice ? "You're live. Dance along — every limb is scored against the dance beside you." : "You're live. Move — the dance is written as you go.");
     }).catch((e) => {
       if (liveRef.current === capture) liveRef.current = null;
       setError(e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError")
         ? "The camera was not allowed. Give this page camera access, then try again."
         : describeError(e));
+      track("live_failed", { denied: e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError") });
       setPhase("error");
     });
   }, [analysis, imported, src, home, grid, smooth, lift, score, avatar, avatarUrl, cast]);
@@ -585,6 +599,7 @@ export default function App() {
     liveRef.current = null;
     setLive(null); setLiveFrame(null); setLiveOverlay(null); setFinishing(false);
     alongRef.current = null; setAlong(null); setMatchNow(null);
+    track("live_discard");
     restorePrevious();
   }, [restorePrevious]);
 
@@ -602,6 +617,7 @@ export default function App() {
     const tracked = resampleLive(result.samples, SAMPLE_FPS, result.duration);
     const seen = tracked.filter((f) => f.extraction).length;
     if (result.duration < 1 || seen < SAMPLE_FPS) {
+      track("live_too_short", { seconds: Math.round(result.duration * 10) / 10 });
       restorePrevious();
       setError("That take was too short. Go live again and dance for at least a second in full view.");
       setModal("new"); setNewMode("live"); setPhase("error");
@@ -614,6 +630,7 @@ export default function App() {
     setAnalysis({ tracked, source: { name, duration: tracked.length / SAMPLE_FPS, fps: SAMPLE_FPS, width: result.width, height: result.height } });
     setTime(0); timeRef.current = 0;
     setPhase("ready"); setView("both");
+    track("dance_ready", { from: "live", seconds: Math.round(result.duration * 10) / 10, along: !!summary, match: summary ? Math.round(summary.summary.score * 100) : null });
     if (summary) { setReport(summary); setModal("report"); }
     setToast(summary ? `Take kept. You matched ${Math.round(summary.summary.score * 100)}% of ${summary.dance}.` : "Take kept. The whole dance has been re-read from it — press Play to explore.");
   }, [restorePrevious]);
@@ -639,7 +656,11 @@ export default function App() {
     if (v && analysis) v.currentTime = Math.min(tt, v.duration);
   }, [stageDuration, analysis]);
 
-  const togglePlay = useCallback(() => { if (score) setPlaying((p) => !p); }, [score]);
+  const togglePlay = useCallback(() => {
+    if (!score) return;
+    if (!playing) track("play", { cast: cast.length });
+    setPlaying(!playing);
+  }, [score, playing, cast.length]);
 
   // A clock drives the stage (the cast may outlast the current clip); the
   // video plays alongside while it has frames left, then pauses.
@@ -707,6 +728,7 @@ export default function App() {
     a.download = `${name.replace(/[\\/:*?"<>|]/g, "-")}.vid2grid.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    track("dance_saved", { seconds: Math.round(score.source.duration * 10) / 10, cast: cast.length });
     setModal(null); setToast("Dance download started. Reopen it from New dance → Open dance.");
   };
   const importJson = (file: File) => {
@@ -718,6 +740,7 @@ export default function App() {
       previousRef.current = null;
       if (src) URL.revokeObjectURL(src);
       setSrc(null); setAnalysis(null); setImported(sc); setGrid(sc.grid); setSmooth(sc.smooth); setLift(sc.lift); setHome(false); timeRef.current = 0;
+      track("dance_ready", { from: "file", seconds: Math.round(sc.source.duration * 10) / 10 });
       setTime(0); setPlaying(false); setPhase("ready"); setError(null); setModal(null); setToast("Dance opened. Press Play to explore it.");
       setView((v) => (v === "both" || v === "video" ? "score" : v)); // those need a video
     }).catch((e) => { setError(e instanceof Error ? e.message : "Could not open this dance."); });
@@ -729,6 +752,7 @@ export default function App() {
     previousRef.current = null;
     if (src) URL.revokeObjectURL(src);
     const sc = createDemo(phrase);
+    track("dance_ready", { from: "example", phrase, character: avatarPresetUrl ? lookLabel(avatarPresetUrl) : null });
     setSrc(null); setAnalysis(null); setImported(sc); setGrid(sc.grid); setSmooth(sc.smooth); setLift(sc.lift);
     if (avatarPresetUrl) onAvatarPreset(avatarPresetUrl);
     timeRef.current = 0; setTime(0); setPlaying(false); setHome(false); setPhase("ready"); setError(null); setView("score"); setSelected(null); setModal(null);
@@ -736,6 +760,7 @@ export default function App() {
   };
 
   const cancelTracking = () => {
+    track("tracking_cancelled", { phase });
     abortRef.current?.abort();
     if (liveRef.current) { discardLive(); return; }
     if (src) URL.revokeObjectURL(src);
@@ -753,6 +778,7 @@ export default function App() {
     });
     setAvatarName(file.name.replace(/\.vrm$/i, ""));
     setAvatar(true);
+    track("character_uploaded");
   }, []);
   const onAvatarPreset = useCallback((url: string) => {
     setAvatarUrl((old) => {
@@ -761,6 +787,7 @@ export default function App() {
     });
     setAvatarName(null);
     setAvatar(true);
+    track("character_chosen", { look: lookLabel(url) });
   }, []);
 
   /* ---------- layout ---------- */
@@ -769,6 +796,8 @@ export default function App() {
   // The way back from the landing exists only once the studio has been open this visit; a score restored from storage waits quietly.
   const [studioSeen, setStudioSeen] = useState(false);
   if (!welcome && !studioSeen) setStudioSeen(true);
+  useEffect(() => { if (studioSeen) track("studio_open", {}, { once: true }); }, [studioSeen]);
+  useEffect(() => { if (!welcome) track("view", { view }); }, [view, welcome]);
   const tab = settingsTab === "traces" && view !== "objects" ? "dancer" : settingsTab;
   /** A recording or the camera to show; without one, only the stage and the traces make sense. */
   const hasVideo = !!src || !!live;
