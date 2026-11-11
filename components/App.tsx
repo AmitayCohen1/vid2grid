@@ -516,6 +516,7 @@ export default function App() {
       const px = crop ? cropPixels(crop, video.videoWidth, video.videoHeight) : { w: video.videoWidth, h: video.videoHeight };
       const source: SourceInfo = { name: fileNameRef.current, duration: video.duration, fps, width: px.w, height: px.h, crop };
       setAnalysis({ tracked, source });
+      setCast([]); // a new dance starts with an empty stage
       // The other people picked join the cast, standing where they stood beside the lead in the clip.
       const extras = others.filter((t) => t.some((f) => f.extraction));
       if (extras.length) addMembers(extras.map((t) => ({ score: buildScore(fillGaps(t, fps), source, grid, smooth, lift), place: offsetBetween(tracked, t) })), "centre");
@@ -750,7 +751,7 @@ export default function App() {
       if (previousRef.current?.src && previousRef.current.src !== src) URL.revokeObjectURL(previousRef.current.src);
       previousRef.current = null;
       if (src) URL.revokeObjectURL(src);
-      setSrc(null); setAnalysis(null); setImported(sc); setGrid(sc.grid); setSmooth(sc.smooth); setLift(sc.lift); setHome(false); timeRef.current = 0;
+      setSrc(null); setAnalysis(null); setCast([]); setImported(sc); setGrid(sc.grid); setSmooth(sc.smooth); setLift(sc.lift); setHome(false); timeRef.current = 0;
       track("dance_ready", { from: "file", seconds: Math.round(sc.source.duration * 10) / 10 });
       setTime(0); setPlaying(false); setPhase("ready"); setError(null); setModal(null); setToast("Dance opened. Press Play to explore it.");
       setView((v) => (v === "both" || v === "video" ? "score" : v)); // those need a video
@@ -764,7 +765,7 @@ export default function App() {
     if (src) URL.revokeObjectURL(src);
     const sc = createDemo(phrase);
     track("dance_ready", { from: "example", phrase, character: avatarPresetUrl ? lookLabel(avatarPresetUrl) : null });
-    setSrc(null); setAnalysis(null); setImported(sc); setGrid(sc.grid); setSmooth(sc.smooth); setLift(sc.lift);
+    setSrc(null); setAnalysis(null); setCast([]); setImported(sc); setGrid(sc.grid); setSmooth(sc.smooth); setLift(sc.lift);
     if (avatarPresetUrl) onAvatarPreset(avatarPresetUrl);
     timeRef.current = 0; setTime(0); setPlaying(false); setHome(false); setPhase("ready"); setError(null); setView("score"); setSelected(null); setModal(null);
     setToast(avatarPresetUrl ? "Your character is on stage. Press Play to see them move." : "Example ready. Press Play, then use the panel on the right to make it your own.");
@@ -780,7 +781,7 @@ export default function App() {
       if (src) URL.revokeObjectURL(src);
       fileNameRef.current = a.source.name;
       track("dance_ready", { from: "example", phrase: ex.id });
-      setImported(null); setAnalysis(a); setSrc(ex.video); setPendingCrop(null); setPendingFollow([]);
+      setCast([]); setImported(null); setAnalysis(a); setSrc(ex.video); setPendingCrop(null); setPendingFollow([]);
       timeRef.current = 0; setTime(0); setPlaying(false); setHome(false); setPhase("ready"); setError(null); setView("both"); setSelected(null); setModal(null);
       setToast("Example ready. Press Play to explore the movement.");
     }).catch((e) => { setError(e instanceof Error ? e.message : "This example could not be loaded."); });
