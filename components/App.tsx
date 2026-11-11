@@ -47,10 +47,10 @@ import type { Body } from "@/lib/fk";
 import type { Pose } from "@/lib/pose";
 
 const RAIL = [
-  { id: "dancer" as const, label: "Dancer", short: "Dancer", icon: <PersonStanding size={15} /> },
-  { id: "grid" as const, label: "Movement grid", short: "Grid", icon: <Grid2X2 size={15} /> },
-  { id: "cast" as const, label: "Cast", short: "Cast", icon: <Users size={15} /> },
-  { id: "traces" as const, label: "Traces", short: "Traces", icon: <ScanLine size={15} /> },
+  { id: "dancer" as const, label: "Dancer", short: "Dancer", icon: <PersonStanding size={18} /> },
+  { id: "grid" as const, label: "Movement grid", short: "Grid", icon: <Grid2X2 size={18} /> },
+  { id: "cast" as const, label: "Cast", short: "Cast", icon: <Users size={18} /> },
+  { id: "traces" as const, label: "Traces", short: "Traces", icon: <ScanLine size={18} /> },
 ];
 
 type Phase = "idle" | "loading" | "tracking" | "live" | "ready" | "error";
@@ -867,7 +867,7 @@ export default function App() {
                   </button>
                 ))}
               </div>
-              <button className="insp-icon" onClick={() => setSettingsOpen(false)} aria-label="Collapse settings" title="Collapse settings (Esc)"><PanelRightClose size={15} /></button>
+              <button className="insp-icon" onClick={() => setSettingsOpen(false)} aria-label="Collapse settings" title="Collapse settings (Esc)"><PanelRightClose size={18} /></button>
             </div>
             <div className="sidebar-content">
               {(tab === "dancer" || tab === "grid") && <Controls panel={tab} grid={grid} smooth={smooth} onGrid={setGrid} onSmooth={setSmooth} lift={lift} onLift={setLift} canLift={!!analysis || !!live} showRaw={showRaw} onShowRaw={setShowRaw} kinesphere={kinesphere} onKinesphere={setKinesphere} avatar={avatar} onAvatar={setAvatar} avatarUrl={avatarUrl} avatarName={avatarName} onAvatarFile={onAvatarFile} onAvatarPreset={onAvatarPreset} showOverlay={showOverlay} onShowOverlay={setShowOverlay} motion={motion} onMotion={setMotion} size={size} onSize={setSize} inVideo={inVideo} onInVideo={setInVideo} beside={beside} onBeside={setBeside} selfDelay={selfDelay} onSelfDelay={setSelfDelay} />}
@@ -881,24 +881,27 @@ export default function App() {
                   <Switch label="Density" hint="Reveal the areas where movement gathers." checked={objects.density} onChange={(density) => setObjects({ ...objects, density })} />
                   <Switch label="Video plate" hint={analysis ? "Show the recording behind the traces." : "Available when you add a video."} checked={objects.video} disabled={!analysis} onChange={(video) => setObjects({ ...objects, video })} />
                   <NumSlider label="Dim" hint="How much the picture is darkened so the drawing reads." value={traceStyle.dim} min={0} max={1} step={0.05} decimals={2} disabled={!analysis || !objects.video} onChange={(dim) => setTraceStyle({ ...traceStyle, dim })} />
-                  <Seg label="Ground" value={traceStyle.ground} onChange={(ground) => setTraceStyle({ ...traceStyle, ground })} options={[
+                  <Seg titled label="Ground" value={traceStyle.ground} onChange={(ground) => setTraceStyle({ ...traceStyle, ground })} options={[
                     { value: "night", label: "Night", hint: "Ink on black (when the video plate is off)." },
                     { value: "paper", label: "Paper", hint: "Ink on warm paper (when the video plate is off)." },
                   ]} />
                 </Section>
-                <Section title="Style" aside={<button className="insp-btn" onClick={() => setTraceStyle(DEFAULT_TRACE_STYLE)} disabled={traceStyle === DEFAULT_TRACE_STYLE}><RotateCcw size={11} /> Reset</button>}>
-                  <div className="insp-presets">
-                    {TRACE_PRESETS.map((p) => <button key={p.name} className="insp-btn" title={p.hint} onClick={() => setTraceStyle({ ...DEFAULT_TRACE_STYLE, ...p.style, dim: traceStyle.dim })}>{p.name}</button>)}
+                <Section title="Style" aside={<button className="insp-btn" onClick={() => setTraceStyle(DEFAULT_TRACE_STYLE)} disabled={traceStyle === DEFAULT_TRACE_STYLE}><RotateCcw size={14} /> Reset</button>}>
+                  <div className="insp-field">
+                    <span className="insp-label">Presets</span>
+                    <div className="insp-presets">
+                      {TRACE_PRESETS.map((p) => <button key={p.name} className="insp-btn" title={p.hint} onClick={() => setTraceStyle({ ...DEFAULT_TRACE_STYLE, ...p.style, dim: traceStyle.dim })}>{p.name}</button>)}
+                    </div>
                   </div>
                   <Chips label="Traced joints" value={traceStyle.groups} onChange={(groups) => setTraceStyle({ ...traceStyle, groups })} options={TRACE_GROUPS.map((g) => ({ value: g.id, label: g.label }))} />
-                  <Seg label="Colour" value={traceStyle.colour} onChange={(colour) => setTraceStyle({ ...traceStyle, colour })} options={[
+                  <Seg titled label="Colour" value={traceStyle.colour} onChange={(colour) => setTraceStyle({ ...traceStyle, colour })} options={[
                     { value: "sides", label: "Sides", hint: "Left side blue, right side pink, centre white." },
                     { value: "speed", label: "Speed", hint: "Cool when slow, hot when fast." },
                     { value: "time", label: "Time", hint: "The hue turns through the clip." },
                     { value: "ink", label: "Ink", hint: "One colour of your choosing." },
                   ]} />
                   {traceStyle.colour === "ink" && <Colour label="Ink" value={traceStyle.ink} onChange={(ink) => setTraceStyle({ ...traceStyle, ink })} />}
-                  <Seg label="Stroke" value={traceStyle.mark} onChange={(mark) => setTraceStyle({ ...traceStyle, mark })} options={[
+                  <Seg titled label="Stroke" value={traceStyle.mark} onChange={(mark) => setTraceStyle({ ...traceStyle, mark })} options={[
                     { value: "line", label: "Line", hint: "A continuous trail." },
                     { value: "dots", label: "Dots", hint: "One dot per frame." },
                   ]} />
@@ -907,14 +910,14 @@ export default function App() {
                   <Switch label="Smooth curves" hint="Bend the trail through the samples instead of joining them with straight lines." checked={traceStyle.curve} disabled={traceStyle.mark === "dots"} onChange={(curve) => setTraceStyle({ ...traceStyle, curve })} />
                   <NumSlider label="Glow" value={traceStyle.glow} min={0} max={1} step={0.05} decimals={2} onChange={(glow) => setTraceStyle({ ...traceStyle, glow })} />
                   <NumSlider label="Fade" hint="How much the tail of a trail fades out. 0 keeps everything." value={traceStyle.fade} min={0} max={1} step={0.05} decimals={2} onChange={(fade) => setTraceStyle({ ...traceStyle, fade })} />
-                  <Seg label="Ribbons" value={traceStyle.ribbons} onChange={(ribbons) => setTraceStyle({ ...traceStyle, ribbons })} options={[
+                  <Seg titled label="Ribbons" value={traceStyle.ribbons} onChange={(ribbons) => setTraceStyle({ ...traceStyle, ribbons })} options={[
                     { value: "off", label: "None" },
                     { value: "pairs", label: "Pairs", hint: "A string between left and right: hand to hand, foot to foot." },
                     { value: "web", label: "Web", hint: "Strings between every traced joint." },
                   ]} />
                   <Switch label="Position dots" hint="A marker on each joint's current position." checked={traceStyle.dots} onChange={(dots) => setTraceStyle({ ...traceStyle, dots })} />
                 </Section>
-                <Section title="Whole phrase" aside={<button className="insp-btn" onClick={savePicture} title="Save what is on the plate now as a PNG"><ImageDown size={11} /> Save picture</button>}>
+                <Section title="Whole phrase" aside={<button className="insp-btn" onClick={savePicture} title="Save what is on the plate now as a PNG"><ImageDown size={14} /> Save picture</button>}>
                   <div className="insp-drawing"><Drawing score={score} overlays={overlays} style={traceStyle} /></div>
                   <Note>Every trace of the clip at once, in the current style. The picture saved above is the plate as it stands: the playhead, the trails, the picture behind.</Note>
                 </Section>

@@ -84,7 +84,7 @@ export default function Controls(p: Props) {
       <NumSlider label="Follow" hint="Higher values respond faster to quick gestures." value={p.smooth.beta} min={0} max={3} step={0.05} decimals={2} disabled={!p.canLift} onChange={(beta) => p.onSmooth({ ...p.smooth, beta })} />
     </Disclosure>
     <div className="insp-actions">
-      <button className="insp-btn" onClick={() => { p.onGrid(DEFAULT_GRID); if (p.canLift) { p.onSmooth(DEFAULT_SMOOTH); p.onLift("anchored"); } }}><RotateCcw size={12} /> Reset to defaults</button>
+      <button className="insp-btn" onClick={() => { p.onGrid(DEFAULT_GRID); if (p.canLift) { p.onSmooth(DEFAULT_SMOOTH); p.onLift("anchored"); } }}><RotateCcw size={15} /> Reset to defaults</button>
     </div>
   </>;
 }

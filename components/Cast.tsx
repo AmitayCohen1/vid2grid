@@ -94,7 +94,7 @@ export default function CastPanel({ lead, cast, beat, onAdd, onEditLead, onLook,
               <div className="cast-head">
                 <Thumb url={lead.avatarUrl} />
                 <span className="cast-title"><strong>{lead.name}</strong><small>Lead · {lead.dance}</small></span>
-                <button className="insp-btn" onClick={onEditLead} title="The lead's look, size and overlays live in the Dancer tab"><Shirt size={12} /> Look</button>
+                <button className="insp-btn" onClick={onEditLead} title="The lead's look, size and overlays live in the Dancer tab"><Shirt size={15} /> Look</button>
               </div>
             </li>
           )}
@@ -104,16 +104,16 @@ export default function CastPanel({ lead, cast, beat, onAdd, onEditLead, onLook,
                 <summary className="cast-head">
                   <Thumb url={m.avatarUrl} />
                   <span className="cast-title"><strong><span className="mono">{i + 2}</span>{m.name}</strong><small>{describe(m, beat)}</small></span>
-                  <ChevronDown size={14} className="cast-chevron" />
+                  <ChevronDown size={17} className="cast-chevron" />
                 </summary>
                 <div className="cast-body">
                   <div className="cast-actions">
-                    <button className="insp-btn" onClick={() => onLook(m.id)} title="Choose another character"><Shirt size={12} /> Look</button>
-                    <button className="insp-btn" aria-pressed={m.mirror} onClick={() => onUpdate(m.id, { mirror: !m.mirror })} title="The audience's mirror image: left and right swapped"><FlipHorizontal2 size={12} /> Mirror</button>
-                    <button className="insp-btn" aria-pressed={m.reverse} onClick={() => onUpdate(m.id, { reverse: !m.reverse })} title="The clip runs backwards"><Rewind size={12} /> Reverse</button>
+                    <button className="insp-btn" onClick={() => onLook(m.id)} title="Choose another character"><Shirt size={15} /> Look</button>
+                    <button className="insp-btn" aria-pressed={m.mirror} onClick={() => onUpdate(m.id, { mirror: !m.mirror })} title="The audience's mirror image: left and right swapped"><FlipHorizontal2 size={15} /> Mirror</button>
+                    <button className="insp-btn" aria-pressed={m.reverse} onClick={() => onUpdate(m.id, { reverse: !m.reverse })} title="The clip runs backwards"><Rewind size={15} /> Reverse</button>
                     <span className="cast-spacer" />
-                    <button className="insp-icon" aria-label={`Duplicate ${m.name}`} title="Duplicate" onClick={() => onDuplicate(m.id)}><Copy size={13} /></button>
-                    <button className="insp-icon" aria-label={`Remove ${m.name}`} title="Remove from the stage" onClick={() => onRemove(m.id)}><X size={13} /></button>
+                    <button className="insp-icon" aria-label={`Duplicate ${m.name}`} title="Duplicate" onClick={() => onDuplicate(m.id)}><Copy size={16} /></button>
+                    <button className="insp-icon" aria-label={`Remove ${m.name}`} title="Remove from the stage" onClick={() => onRemove(m.id)}><X size={16} /></button>
                   </div>
                   <span className="cast-group">Timing</span>
                   <NumSlider label="Entrance" hint={`Waits in the first pose, then starts — ${beats(m.delay, beat)} at the current tempo`} min={0} max={8} step={0.05} decimals={2} unit="s" value={m.delay} onChange={(delay) => onUpdate(m.id, { delay })} />
@@ -140,21 +140,21 @@ export default function CastPanel({ lead, cast, beat, onAdd, onEditLead, onLook,
             const live = k === sortedCues.length - 1 ? time >= c.at : time >= c.at && time < sortedCues[k + 1].at;
             return <li key={c.id} className={`cue-card ${live ? "is-live" : ""}`}>
               <div className="cue-head">
-                <MapPin size={12} />
+                <MapPin size={15} />
                 <strong>{SHAPES.find((s) => s.id === c.shape)?.label}</strong>
                 <span className="mono">{c.at.toFixed(2)} s</span>
                 <span className="cast-spacer" />
-                <button className="insp-icon" aria-label="Remove this formation" title="Remove" onClick={() => onCues(cues.filter((x) => x.id !== c.id))}><X size={13} /></button>
+                <button className="insp-icon" aria-label="Remove this formation" title="Remove" onClick={() => onCues(cues.filter((x) => x.id !== c.id))}><X size={16} /></button>
               </div>
               <Select label="Shape" value={c.shape} options={SHAPES.map((s) => ({ value: s.id, label: s.label }))} onChange={(shape) => patchCue(c.id, { shape: shape as Cue["shape"] })} />
               <NumSlider label="At" hint="Stage seconds this formation is reached; the walk into it ends here" min={0} max={Math.max(1, Math.ceil(total))} step={0.05} decimals={2} unit="s" value={c.at} onChange={(at) => patchCue(c.id, { at })} />
               <NumSlider label="Spacing" hint="Metres between neighbours" min={0.3} max={4} step={0.1} decimals={1} unit="m" value={c.spacing} onChange={(spacing) => patchCue(c.id, { spacing })} />
-              <Seg label="Facing" value={c.facing} onChange={(facing) => patchCue(c.id, { facing })} options={FACINGS.map((f) => ({ value: f.id, label: f.label }))} />
+              <Seg titled label="Facing" value={c.facing} onChange={(facing) => patchCue(c.id, { facing })} options={FACINGS.map((f) => ({ value: f.id, label: f.label }))} />
             </li>;
           })}
         </ul>}
         <div className="insp-actions">
-          <button className="insp-btn" onClick={addCue} disabled={!lead && cast.length === 0} title="Cue a formation at the playhead"><MapPin size={12} /> Add formation at {time.toFixed(2)} s</button>
+          <button className="insp-btn" onClick={addCue} disabled={!lead && cast.length === 0} title="Cue a formation at the playhead"><MapPin size={15} /> Add formation at {time.toFixed(2)} s</button>
         </div>
         {cues.length > 0 && <NumSlider label="Walk" hint="Seconds everyone takes to walk from one formation into the next" min={0} max={10} step={0.25} decimals={2} unit="s" value={transition} onChange={onTransition} />}
         <Note>{cues.length === 0
@@ -171,7 +171,7 @@ export function Thumb({ url }: { url: string | null }) {
   const preset = url ? AVATAR_PRESETS.find((a) => a.url === url) : null;
   return (
     <span className="insp-thumb" title={lookLabel(url)}>
-      {preset ? <Image src={preset.portrait} alt="" width={60} height={80} sizes="30px" /> : url ? <User size={14} /> : <Activity size={14} />}
+      {preset ? <Image src={preset.portrait} alt="" width={60} height={80} sizes="33px" /> : url ? <User size={18} /> : <Activity size={18} />}
     </span>
   );
 }
