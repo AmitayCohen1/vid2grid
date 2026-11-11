@@ -10,7 +10,7 @@ import SaveScore from "./SaveScore";
 import Image from "next/image";
 import Welcome from "./Welcome";
 import { createDemo, type DemoPhrase } from "@/lib/demo";
-import { RECORDED_EXAMPLES, SCENES, exportingExamples, parseAnalysis, serializeAnalysis, type RecordedExample, type SceneId } from "@/lib/examples";
+import { RECORDED_EXAMPLES, SCENES, exportingExamples, parseAnalysis, serializeAnalysis, type RecordedExample, type Scene, type SceneId } from "@/lib/examples";
 import { DEFAULT_AVATAR_URL } from "@/lib/avatars";
 import CastPanel, { type CastMember, type CastPatch, type Lead } from "./Cast";
 import AddDancer, { type AddProgress, type Look, freshLook } from "./AddDancer";
@@ -20,7 +20,7 @@ import { AVATAR_PRESETS, avatarFile } from "@/lib/avatars";
 import type { StageCastMember } from "./Stage";
 import { type Devices, NO_DEVICES, clipTime, memberSpan, mirrorBody, mirrorPose, placePose, sanitizeDevices, scaleBody, scalePose } from "@/lib/devices";
 import { imageToWorld, videoAnchors } from "@/lib/invideo";
-import { type Cue, DEFAULT_TRANSITION, placementsAt, sanitizeCues } from "@/lib/formations";
+import { type Cue, DEFAULT_SPACING, DEFAULT_TRANSITION, placementsAt, sanitizeCues } from "@/lib/formations";
 import { idbGet, idbSet } from "@/lib/store";
 import VideoPane from "./VideoPane";
 import Timeline from "./Timeline";
@@ -79,7 +79,8 @@ export default function App({ scene }: { scene?: SceneId } = {}) {
   const [lookFor, setLookFor] = useState<string | null>(null);
   const [newMode, setNewMode] = useState<"upload" | "import" | "live">("upload");
   const [settingsTab, setSettingsTab] = useState<"dancer" | "grid" | "cast" | "traces">("dancer");
-  const [settingsOpen, setSettingsOpen] = useState(true);
+  // Open where it is a column of the workspace; where it would float over the stage (globals.css, below 900px) it starts as the rail.
+  const [settingsOpen, setSettingsOpen] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 900px)").matches);
   const [motion, setMotion] = useState<"stepped" | "smooth">("stepped");
   const [toast, setToast] = useState<string | null>(null);
 
@@ -823,7 +824,7 @@ export default function App({ scene }: { scene?: SceneId } = {}) {
   }, []);
 
   /* A scene link (/example/<id>): open its recorded example, then add its dancers once the dance exists. */
-  const sceneRef = useRef(scene ? SCENES[scene] : null);
+  const sceneRef = useRef<Scene | null>(scene ? SCENES[scene] : null);
   useEffect(() => {
     const sc = sceneRef.current;
     const ex = sc && RECORDED_EXAMPLES.find((e) => e.id === sc.example);
@@ -838,11 +839,16 @@ export default function App({ scene }: { scene?: SceneId } = {}) {
     if (sc.dancers.length) addMembers(sc.dancers.map((d) => ({
       score,
       look: { avatarUrl: AVATAR_PRESETS.find((a) => a.label === d.character)?.url ?? DEFAULT_AVATAR_URL, avatarName: null },
-      devices: { size, delay: Math.round(d.beats * 60 / bpm * 100) / 100 },
+      devices: { size: size * (d.size ?? 1), delay: Math.round(d.beats * 60 / bpm * 100) / 100, rate: d.rate ?? 1, mirror: !!d.mirror, reverse: !!d.reverse },
     })));
-    const lead = "lead" in sc && sc.lead ? AVATAR_PRESETS.find((a) => a.label === sc.lead)?.url : undefined;
+    const lead = sc.lead ? AVATAR_PRESETS.find((a) => a.label === sc.lead)?.url : undefined;
     if (lead) onAvatarPreset(lead);
-    if ("beside" in sc && typeof sc.beside === "number") setBeside(sc.beside);
+    if (typeof sc.beside === "number") setBeside(sc.beside);
+    setCues((sc.formations ?? []).map((f, i) => ({ id: `scene-${i}`, at: f.at, shape: f.shape, spacing: f.spacing ?? DEFAULT_SPACING, facing: f.facing ?? "audience" })));
+    setKinesphere(!!sc.kinesphere);
+    setMotion(sc.motion ?? "stepped");
+    if (sc.gridStep) { const step = sc.gridStep; setGrid((g) => ({ ...g, azStep: step, elStep: step })); }
+    if (sc.wholeTrace) setObjects((o) => ({ ...o, whole: true }));
     setView(sc.view); setToast(null);
     setPlaying(true);
   }, [score, analysis, videoEl, bpm, size, addMembers, onAvatarPreset, setBeside]);
@@ -882,15 +888,15 @@ export default function App({ scene }: { scene?: SceneId } = {}) {
           </nav>
         </>}
         <div className="header-actions">
-          {!welcome && <button className="btn" disabled={busy || !!live} onClick={() => openModal("add")} title="Put another dancer on the stage"><UserPlus size={17} /><span className="tool-label">Add dancer</span></button>}
-          {!welcome && <button className="btn" disabled={!score} onClick={() => openModal("details")}><List size={17} /><span className="tool-label">Notation</span></button>}
-          <button className="btn" onClick={() => openModal("help")}><CircleHelp size={17} /><span className="help-label">Help</span></button>
+          {!welcome && <button className="btn" disabled={busy || !!live} onClick={() => openModal("add")} aria-label="Add dancer" title="Add dancer: put another dancer on the stage"><UserPlus size={17} /><span className="tool-label">Add dancer</span></button>}
+          {!welcome && <button className="btn" disabled={!score} onClick={() => openModal("details")} aria-label="Notation" title="Notation"><List size={17} /><span className="tool-label">Notation</span></button>}
+          <button className="btn" onClick={() => openModal("help")} aria-label="Help" title="Help"><CircleHelp size={17} /><span className="help-label">Help</span></button>
           {welcome ? <>
             {studioSeen && score && <button className="btn" onClick={() => setHome(false)}><ArrowLeft size={17} />Back to studio</button>}
             <button className="btn" onClick={() => openNew("import")}>Open dance</button>
           </> : <>
-            <button className="btn" onClick={() => openNew()} disabled={busy || !!live}><Plus size={17} /><span className="tool-label">New dance</span></button>
-            <button className="btn primary" onClick={() => openModal("save")} disabled={!score}><Download size={17} /><span className="tool-label">Save</span></button>
+            <button className="btn" onClick={() => openNew()} disabled={busy || !!live} aria-label="New dance" title="New dance"><Plus size={17} /><span className="tool-label">New dance</span></button>
+            <button className="btn primary" onClick={() => openModal("save")} disabled={!score} aria-label="Save" title="Save"><Download size={17} /><span className="tool-label">Save</span></button>
           </>}
         </div>
       </header>
@@ -984,7 +990,7 @@ export default function App({ scene }: { scene?: SceneId } = {}) {
             <div className="sidebar-rail">
               {RAIL.filter((r) => r.id !== "traces" || view === "objects").map((r) => (
                 <button key={r.id} title={r.label} aria-label={r.label}
-                  onClick={() => { setSettingsTab(r.id); setSettingsOpen(true); }}>{r.icon}</button>
+                  onClick={() => { setSettingsTab(r.id); setSettingsOpen(true); }}>{r.icon}<span>{r.short}</span></button>
               ))}
             </div>
             )}

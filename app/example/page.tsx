@@ -3,11 +3,12 @@ import { SCENES } from "@/lib/examples";
 
 export const metadata = {
   title: "Examples",
-  description: "Gal Gorfung's dance, five ways: solo, group, canon, traces, and inside the video.",
+  description: "Gal Gorfung's dance, many ways: solo, group, canon, mirror, retrograde, formations, traces and more.",
 };
 
 /** /example — every scene, each opening straight into the studio. */
 export default function ExamplesIndex() {
+  const scenes = Object.entries(SCENES);
   return (
     <main className="ex-index">
       <style>{`
@@ -36,11 +37,11 @@ export default function ExamplesIndex() {
           <Link href="/">Create your own dance</Link>
         </nav>
         <header className="ex-head">
-          <h1>One dance, five ways.</h1>
-          <p>Gal Gorfung dancing in his living room, tracked once and opened five ways. Each one opens in the studio, ready to play.</p>
+          <h1>One dance, {scenes.length} ways.</h1>
+          <p>Gal Gorfung dancing in his living room, tracked once and seen {scenes.length} ways — the devices choreographers use, and a few only software can. Each opens in the studio, ready to play.</p>
         </header>
         <div className="ex-grid">
-          {Object.entries(SCENES).map(([id, s]) => (
+          {scenes.map(([id, s]) => (
             <Link key={id} href={`/example/${id}`} className="ex-card">
               <div className="ex-shot">
                 {/* eslint-disable-next-line @next/next/no-img-element -- static screenshots */}

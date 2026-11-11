@@ -87,9 +87,20 @@ export interface Scene {
   lead?: string;
   /** How far beside the person the character stands in the video, metres (+ right). */
   beside?: number;
-  /** Extra dancers doing the same dance: character label and entrance in beats after the lead. */
-  dancers: { character: string; beats: number }[];
+  /** Extra dancers doing the same dance: character label and entrance in beats after the lead,
+      plus the choreographic devices — speed, mirror, retrograde, scale. */
+  dancers: { character: string; beats: number; rate?: number; mirror?: boolean; reverse?: boolean; size?: number }[];
+  /** Formations over the stage clock: seconds, shape, metres between neighbours, facing. */
+  formations?: { at: number; shape: "line" | "column" | "diagonal" | "vee" | "circle" | "pairs" | "cluster"; spacing?: number; facing?: "audience" | "centre" | "outward" }[];
+  motion?: "stepped" | "smooth";
+  kinesphere?: boolean;
+  /** Notation grid, degrees per step. */
+  gridStep?: number;
+  /** Traces: draw the whole phrase instead of a short trail. */
+  wholeTrace?: boolean;
 }
+
+const many = (characters: string[], beats: (i: number) => number) => characters.map((character, i) => ({ character, beats: beats(i) }));
 
 export const SCENES = {
   solo: { title: "Solo", detail: "Gal's video beside the 3D figure his movement drives.", example: "gal-apartment", view: "both", dancers: [] },
@@ -97,6 +108,17 @@ export const SCENES = {
   canon: { title: "Canon", detail: "The same phrase, entering one beat after another.", example: "gal-apartment", view: "score", dancers: [{ character: "Neon", beats: 1 }, { character: "Kai", beats: 2 }, { character: "Sapphire", beats: 3 }] },
   traces: { title: "Traces", detail: "The paths his joints draw through space.", example: "gal-apartment", view: "objects", dancers: [] },
   video: { title: "In the video", detail: "A character dancing his phrase, inside his living room.", example: "gal-apartment", view: "video", lead: "Vivi", beside: 0.28, dancers: [] },
+  mirror: { title: "Mirror", detail: "Left and right swapped: a partner dancing his mirror image.", example: "gal-apartment", view: "score", dancers: [{ character: "Ivy", beats: 0, mirror: true }] },
+  backwards: { title: "Backwards", detail: "Retrograde: the same phrase, danced from its end to its start.", example: "gal-apartment", view: "score", dancers: [{ character: "Ren", beats: 0, reverse: true }] },
+  tempo: { title: "Fast & slow", detail: "One dancer at double speed, one at half — the phrase stretched and squeezed.", example: "gal-apartment", view: "score", dancers: [{ character: "Mizu", beats: 0, rate: 2 }, { character: "Kai", beats: 0, rate: 0.5 }] },
+  circle: { title: "Circle", detail: "Seven dancers in a ring, facing in, all on the same breath.", example: "gal-apartment", view: "score", dancers: many(["Hikari", "Neon", "Kai", "Vivi", "Ren", "Sora"], () => 0), formations: [{ at: 0, shape: "circle", spacing: 1.3, facing: "centre" }] },
+  formations: { title: "Formations", detail: "A line, then a V, then a circle — the dancers walk between them.", example: "gal-apartment", view: "score", dancers: many(["Mannequin", "Ebony", "Hikari", "Neon"], () => 0), formations: [{ at: 0, shape: "line", spacing: 1.2 }, { at: 5, shape: "vee", spacing: 1.2 }, { at: 10, shape: "circle", spacing: 1.3, facing: "centre" }] },
+  scale: { title: "Giant & small", detail: "The same dance, larger than life and half his size.", example: "gal-apartment", view: "score", dancers: [{ character: "Mannequin", beats: 0, size: 1.35 }, { character: "Ebony", beats: 0, size: 0.5 }] },
+  echo: { title: "Echo", detail: "Glass figures trailing him half a beat apart, like after-images.", example: "gal-apartment", view: "score", dancers: many(["Glass", "Sapphire", "Glass", "Sapphire"], (i) => (i + 1) * 0.5), formations: [{ at: 0, shape: "column", spacing: 0.6 }] },
+  wave: { title: "Wave", detail: "Eight dancers in two lines, each a quarter beat after the last.", example: "gal-apartment", view: "score", dancers: many(["Hikari", "Neon", "Kai", "Vivi", "Ren", "Sora", "Momo"], (i) => (i + 1) * 0.25), formations: [{ at: 0, shape: "pairs", spacing: 1.1 }] },
+  kinesphere: { title: "Kinesphere", detail: "Laban's icosahedron: the reach of his body, in space.", example: "gal-apartment", view: "score", dancers: [], kinesphere: true, motion: "smooth" },
+  grid: { title: "Coarse grid", detail: "His movement snapped to 90° steps — the notation's view, made visible.", example: "gal-apartment", view: "score", lead: "Robot", dancers: [], gridStep: 90 },
+  drawing: { title: "Full drawing", detail: "Every path of the whole phrase at once.", example: "gal-apartment", view: "objects", dancers: [], wholeTrace: true },
 } satisfies Record<string, Scene>;
 
 export type SceneId = keyof typeof SCENES;
