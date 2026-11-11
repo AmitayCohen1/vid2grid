@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
@@ -879,7 +880,16 @@ export default function App({ scene }: { scene?: SceneId } = {}) {
           <p><span>In memory of</span><strong>Gal Gorfung</strong></p>
         </div>}
         {!welcome && <>
-          <span className="project-chip" title={source?.name ?? undefined}>{live ? "Live take" : source?.name ?? "Creating your dance"}</span>
+          {scene ? (
+            // A scene link: name the scene and say what it shows, with the way back to the others.
+            <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0, maxWidth: 520, borderLeft: "1px solid var(--border)", paddingLeft: 14 }}>
+              <Link href="/example" style={{ fontSize: 12, color: "var(--muted-foreground)", whiteSpace: "nowrap", flexShrink: 0 }}>← Examples</Link>
+              <div style={{ minWidth: 0 }}>
+                <strong style={{ display: "block", fontSize: 16, fontWeight: 600, lineHeight: 1.2 }}>{SCENES[scene].title}</strong>
+                <span style={{ display: "block", fontSize: 12, color: "var(--muted-foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={SCENES[scene].detail}>{SCENES[scene].detail}</span>
+              </div>
+            </div>
+          ) : <span className="project-chip" title={source?.name ?? undefined}>{live ? "Live take" : source?.name ?? "Creating your dance"}</span>}
           <nav className="seg view-tabs" aria-label="Choose a view">
             <button aria-pressed={view === "both"} onClick={() => hasVideo ? setView("both") : openModal("compare")} title="The video and the stage together"><Columns2 size={18} />Side by side</button>
             <button aria-pressed={view === "video"} onClick={() => hasVideo ? setView("video") : openModal("compare")} title="Only the video, with the characters inside it"><Film size={18} />Video</button>
