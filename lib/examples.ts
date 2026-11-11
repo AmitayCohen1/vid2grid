@@ -68,3 +68,36 @@ export function parseAnalysis(text: string): Analysis {
     })),
   };
 }
+
+/* ------------------------------------------------------------------
+   Scenes: a recorded example set up a particular way, each with its own
+   link (/example/<id>) so it can be shown directly — a solo, a group in
+   unison, a canon, the traces. Dancers are named by their character.
+   ------------------------------------------------------------------ */
+
+export type SceneView = "both" | "video" | "score" | "objects";
+
+export interface Scene {
+  title: string;
+  /** One line for the index page. */
+  detail: string;
+  example: string;
+  view: SceneView;
+  /** The lead's character (default: the skeleton). The video view draws only the lead. */
+  lead?: string;
+  /** How far beside the person the character stands in the video, metres (+ right). */
+  beside?: number;
+  /** Extra dancers doing the same dance: character label and entrance in beats after the lead. */
+  dancers: { character: string; beats: number }[];
+}
+
+export const SCENES = {
+  solo: { title: "Solo", detail: "Gal's video beside the 3D figure his movement drives.", example: "gal-apartment", view: "both", dancers: [] },
+  group: { title: "Group", detail: "Three more dancers take his phrase, all in unison.", example: "gal-apartment", view: "score", dancers: [{ character: "Vivi", beats: 0 }, { character: "Mannequin", beats: 0 }, { character: "Ren", beats: 0 }] },
+  canon: { title: "Canon", detail: "The same phrase, entering one beat after another.", example: "gal-apartment", view: "score", dancers: [{ character: "Neon", beats: 1 }, { character: "Kai", beats: 2 }, { character: "Sapphire", beats: 3 }] },
+  traces: { title: "Traces", detail: "The paths his joints draw through space.", example: "gal-apartment", view: "objects", dancers: [] },
+  video: { title: "In the video", detail: "A character dancing his phrase, inside his living room.", example: "gal-apartment", view: "video", lead: "Vivi", beside: 0.28, dancers: [] },
+} satisfies Record<string, Scene>;
+
+export type SceneId = keyof typeof SCENES;
+export const isSceneId = (s: string): s is SceneId => Object.prototype.hasOwnProperty.call(SCENES, s);

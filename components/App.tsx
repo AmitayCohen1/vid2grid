@@ -10,7 +10,7 @@ import SaveScore from "./SaveScore";
 import Image from "next/image";
 import Welcome from "./Welcome";
 import { createDemo, type DemoPhrase } from "@/lib/demo";
-import { exportingExamples, parseAnalysis, serializeAnalysis, type RecordedExample } from "@/lib/examples";
+import { RECORDED_EXAMPLES, SCENES, exportingExamples, parseAnalysis, serializeAnalysis, type RecordedExample, type SceneId } from "@/lib/examples";
 import { DEFAULT_AVATAR_URL } from "@/lib/avatars";
 import CastPanel, { type CastMember, type CastPatch, type Lead } from "./Cast";
 import AddDancer, { type AddProgress, type Look, freshLook } from "./AddDancer";
@@ -67,7 +67,7 @@ const Stage = dynamic(() => import("./Stage"), {
 });
 const VideoStage = dynamic(() => import("./VideoStage"), { ssr: false });
 
-export default function App() {
+export default function App({ scene }: { scene?: SceneId } = {}) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [src, setSrc] = useState<string | null>(null);
@@ -148,6 +148,7 @@ export default function App() {
 
   // Restore the last score (figure only; the video is not kept).
   useEffect(() => {
+    if (scene) return; // a scene link opens its own dance
     let sc: Score | null = null;
     try {
       const s = localStorage.getItem(LS_KEY);
@@ -158,7 +159,7 @@ export default function App() {
     // Deferred so the restore is a subscription-style update, not a synchronous cascade.
     const id = setTimeout(() => { setImported(restored); setGrid(restored.grid); setSmooth(restored.smooth); setLift(restored.lift); setPhase("ready"); }, 0);
     return () => clearTimeout(id);
-  }, []);
+  }, [scene]);
 
   /* ---------- derive the score ---------- */
 
@@ -226,6 +227,7 @@ export default function App() {
   // so the cast lives in IndexedDB, not localStorage.
   const castLoaded = useRef(false);
   useEffect(() => {
+    if (scene) { castLoaded.current = true; return; } // a scene brings its own cast
     let alive = true;
     idbGet<CastMember[]>(CAST_KEY).then((members) => {
       if (!alive) return;
@@ -237,7 +239,7 @@ export default function App() {
       if (ok.length) setCast(ok);
     }).catch(() => { castLoaded.current = true; });
     return () => { alive = false; };
-  }, []);
+  }, [scene]);
   useEffect(() => {
     if (!castLoaded.current) return; // don't clobber the stored cast before it's read
     const id = setTimeout(() => {
@@ -669,7 +671,8 @@ export default function App() {
   useEffect(() => {
     if (!playing || !score) return;
     const v = videoRef.current;
-    const hasVideo = !!(v && analysis);
+    // Until its metadata has loaded a video has no duration; the stage plays alone until then.
+    const hasVideo = !!(v && analysis && Number.isFinite(v.duration));
     let raf = 0;
     let t0 = performance.now();
     let start = timeRef.current >= stageDuration - 1e-3 ? 0 : timeRef.current;
@@ -787,6 +790,7 @@ export default function App() {
     }).catch((e) => { setError(e instanceof Error ? e.message : "This example could not be loaded."); });
   };
 
+
   const cancelTracking = () => {
     track("tracking_cancelled", { phase });
     abortRef.current?.abort();
@@ -817,6 +821,31 @@ export default function App() {
     setAvatar(true);
     track("character_chosen", { look: lookLabel(url) });
   }, []);
+
+  /* A scene link (/example/<id>): open its recorded example, then add its dancers once the dance exists. */
+  const sceneRef = useRef(scene ? SCENES[scene] : null);
+  useEffect(() => {
+    const sc = sceneRef.current;
+    const ex = sc && RECORDED_EXAMPLES.find((e) => e.id === sc.example);
+    if (ex) loadRecorded(ex);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
+  }, []);
+  useEffect(() => {
+    const sc = sceneRef.current;
+    // Wait for the clip itself too, so playback starts with the picture in step.
+    if (!sc || !score || !analysis || !videoEl || !Number.isFinite(videoEl.duration)) return;
+    sceneRef.current = null;
+    if (sc.dancers.length) addMembers(sc.dancers.map((d) => ({
+      score,
+      look: { avatarUrl: AVATAR_PRESETS.find((a) => a.label === d.character)?.url ?? DEFAULT_AVATAR_URL, avatarName: null },
+      devices: { size, delay: Math.round(d.beats * 60 / bpm * 100) / 100 },
+    })));
+    const lead = "lead" in sc && sc.lead ? AVATAR_PRESETS.find((a) => a.label === sc.lead)?.url : undefined;
+    if (lead) onAvatarPreset(lead);
+    if ("beside" in sc && typeof sc.beside === "number") setBeside(sc.beside);
+    setView(sc.view); setToast(null);
+    setPlaying(true);
+  }, [score, analysis, videoEl, bpm, size, addMembers, onAvatarPreset, setBeside]);
 
   /* ---------- layout ---------- */
 
