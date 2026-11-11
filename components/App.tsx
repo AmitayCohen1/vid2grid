@@ -10,6 +10,7 @@ import SaveScore from "./SaveScore";
 import Image from "next/image";
 import Welcome from "./Welcome";
 import { createDemo, type DemoPhrase } from "@/lib/demo";
+import { exportingExamples, parseAnalysis, serializeAnalysis, type RecordedExample } from "@/lib/examples";
 import { DEFAULT_AVATAR_URL } from "@/lib/avatars";
 import CastPanel, { type CastMember, type CastPatch, type Lead } from "./Cast";
 import AddDancer, { type AddProgress, type Look, freshLook } from "./AddDancer";
@@ -722,10 +723,20 @@ export default function App() {
 
   const exportJson = (name: string) => {
     if (!score) return;
+    const safe = name.replace(/[\\/:*?"<>|]/g, "-");
+    // With ?examples (local development), Save writes the clip's tracking to public/examples/ instead (lib/examples.ts).
+    if (analysis && exportingExamples()) {
+      const id = safe.toLowerCase().replace(/\.[a-z0-9]+$/, "").replace(/[^a-z0-9-]+/g, "-");
+      fetch(`/api/dev-example?name=${encodeURIComponent(id)}`, { method: "POST", body: serializeAnalysis(analysis) })
+        .then((r) => r.ok ? r.json() : Promise.reject(new Error(`Saving the example failed (${r.status}).`)))
+        .then((d: { file: string }) => { setModal(null); setToast(`Example saved to public${d.file}.`); })
+        .catch((e) => setError(e instanceof Error ? e.message : "Saving the example failed."));
+      return;
+    }
     const blob = new Blob([serializeScore(score)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${name.replace(/[\\/:*?"<>|]/g, "-")}.vid2grid.json`;
+    a.download = `${safe}.vid2grid.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     track("dance_saved", { seconds: Math.round(score.source.duration * 10) / 10, cast: cast.length });
@@ -757,6 +768,22 @@ export default function App() {
     if (avatarPresetUrl) onAvatarPreset(avatarPresetUrl);
     timeRef.current = 0; setTime(0); setPlaying(false); setHome(false); setPhase("ready"); setError(null); setView("score"); setSelected(null); setModal(null);
     setToast(avatarPresetUrl ? "Your character is on stage. Press Play to see them move." : "Example ready. Press Play, then use the panel on the right to make it your own.");
+  };
+
+  /** A recorded example: the clip and its tracking arrive together, so nothing is tracked again. */
+  const loadRecorded = (ex: RecordedExample) => {
+    abortRef.current?.abort();
+    fetch(ex.tracking).then((r) => { if (!r.ok) throw new Error("This example could not be loaded."); return r.text(); }).then((t) => {
+      const a = parseAnalysis(t);
+      if (previousRef.current?.src && previousRef.current.src !== src) URL.revokeObjectURL(previousRef.current.src);
+      previousRef.current = null;
+      if (src) URL.revokeObjectURL(src);
+      fileNameRef.current = a.source.name;
+      track("dance_ready", { from: "example", phrase: ex.id });
+      setImported(null); setAnalysis(a); setSrc(ex.video); setPendingCrop(null); setPendingFollow([]);
+      timeRef.current = 0; setTime(0); setPlaying(false); setHome(false); setPhase("ready"); setError(null); setView("both"); setSelected(null); setModal(null);
+      setToast("Example ready. Press Play to explore the movement.");
+    }).catch((e) => { setError(e instanceof Error ? e.message : "This example could not be loaded."); });
   };
 
   const cancelTracking = () => {
@@ -939,7 +966,7 @@ export default function App() {
 
       <Dialog open={modal === "new"} title={busy ? "Creating your dance" : "Start a new dance"} description={busy ? "Your video is being processed on this device." : "A video, a recording, or a saved dance. Choose where to begin."} onClose={closeNew} locked={busy}>
         {error && <p className="inline-error" role="alert">{error}</p>}
-        <NewScore initialMode={newMode} onFile={onFile} onImport={importJson} onDemo={loadDemo} onLive={startLive} danceName={score && !live ? score.source.name.replace(/\.[^.]+$/, "") : null} busy={busy} progress={progress} loading={phase === "loading"} onCancel={cancelTracking} />
+        <NewScore initialMode={newMode} onFile={onFile} onImport={importJson} onDemo={loadDemo} onRecorded={loadRecorded} onLive={startLive} danceName={score && !live ? score.source.name.replace(/\.[^.]+$/, "") : null} busy={busy} progress={progress} loading={phase === "loading"} onCancel={cancelTracking} />
       </Dialog>
       <Dialog open={modal === "save"} title="Save your movement" description="Download a reusable copy of this dance." onClose={() => setModal(null)}>
         {score && <SaveScore key={score.source.name} score={score} onSave={exportJson} />}

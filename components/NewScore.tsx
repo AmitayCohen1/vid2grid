@@ -5,13 +5,14 @@ import { ArrowUpRight, Camera, FileUp, Play, Radio, ShieldCheck, Target, UploadC
 import Source from "./Source";
 import { Switch } from "./Inspector";
 import { DEMO_PHRASES, type DemoPhrase } from "@/lib/demo";
+import { RECORDED_EXAMPLES, type RecordedExample } from "@/lib/examples";
 import type { Crop } from "@/lib/crop";
 import type { PersonPick } from "@/lib/follow";
 
 export interface DanceAlongChoice { mirror: boolean }
 
-export default function NewScore({ onFile, onImport, onDemo, onLive, danceName, busy, progress, loading, onCancel, initialMode = "upload" }: {
-  onFile: (f: File, crop?: Crop, follow?: PersonPick[]) => void; onImport: (f: File) => void; onDemo: (p: DemoPhrase) => void;
+export default function NewScore({ onFile, onImport, onDemo, onRecorded, onLive, danceName, busy, progress, loading, onCancel, initialMode = "upload" }: {
+  onFile: (f: File, crop?: Crop, follow?: PersonPick[]) => void; onImport: (f: File) => void; onDemo: (p: DemoPhrase) => void; onRecorded: (e: RecordedExample) => void;
   /** Open the studio on the camera and score the movement as it happens — along to the current dance, when asked. */
   onLive: (along: DanceAlongChoice | null) => void;
   /** The dance on the stage now, offered as something to dance along to. */
@@ -55,7 +56,7 @@ export default function NewScore({ onFile, onImport, onDemo, onLive, danceName, 
       </button>
     </div>}
     {mode === "import" && <div className="import-score-flow"><p>Pick a previously downloaded Visual Elbow dance to continue exploring it. The original video is not included in a dance file.</p><label className="upload-zone"><FileUp size={30} /><strong>Open a saved dance</strong><span>Choose a .vid2grid.json file · up to 25 MB</span><input aria-label="Open saved dance" type="file" accept=".json,application/json" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) onImport(f); e.currentTarget.value = ""; }} /></label></div>}
-    {mode === "examples" && <div><p className="dialog-note">No video needed. Choose a movement study to try the studio.</p>{DEMO_PHRASES.map((p) => <button key={p.id} className="example-row" onClick={() => onDemo(p.id)}><Play size={18} /><span className="example-name">{p.name}<small>{p.detail}</small></span><span>{p.duration}</span><ArrowUpRight size={18} /></button>)}</div>}
+    {mode === "examples" && <div><p className="dialog-note">Real dances, already tracked — they open instantly.</p>{RECORDED_EXAMPLES.map((e) => <button key={e.id} className="example-row" onClick={() => onRecorded(e)}><Play size={18} /><span className="example-name">{e.name}<small>{e.detail}</small></span><span>{e.duration}</span><ArrowUpRight size={18} /></button>)}<p className="dialog-note">Or a movement study, no video needed.</p>{DEMO_PHRASES.map((p) => <button key={p.id} className="example-row" onClick={() => onDemo(p.id)}><Play size={18} /><span className="example-name">{p.name}<small>{p.detail}</small></span><span>{p.duration}</span><ArrowUpRight size={18} /></button>)}</div>}
     {!framing && <p className="dialog-privacy"><ShieldCheck size={16} /> Private by design. Your files stay on this device.</p>}
   </>;
 }
